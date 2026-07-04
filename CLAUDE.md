@@ -63,7 +63,7 @@ src/
 
 ## Current status
 
-Checkpoint 2 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a synthesized placeholder click (Node-generated decaying sine beep), not a real recording — swap it for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
+Checkpoint 3 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a synthesized placeholder click (Node-generated decaying sine beep), not a real recording — swap it for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
 
 ## Decisions log
 
@@ -73,3 +73,6 @@ Checkpoint 2 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a syn
 - Audio via Three.js native AudioListener/PositionalAudio, no external library.
 - Weapon fire sound is non-positional (`SoundDef.positional: false`): heard the same regardless of player position since it's always the local player firing; positional audio is deferred to checkpoint 4 (zombie growls), the first sound that actually needs a 3D source.
 - Placeholder fire sound is a synthesized WAV (short decaying sine click), generated programmatically since no real audio asset was available — flagged for replacement, not meant to ship.
+- `MapLoader.loadMap()` exposes raw wall meshes (`walls: THREE.Mesh[]`) alongside `wallBoxes` (checkpoint 2): a `Box3` isn't raycastable, so `WeaponSystem` needed the actual scene objects to hit-test against. `InteractSystem` (checkpoint 3) reuses the same `walls` array for its own raycast, combined with whatever interactables are in range — one shared list of "things that can occlude or receive a ray," no duplicate wall representation.
+- Interactable objects are tagged via `mesh.userData.interactable = true`, not by name/convention matching, so `InteractSystem`'s check is a plain property lookup regardless of what the object is named.
+- Line-of-sight blocking for interact/hitscan comes for free from raycasting against a combined target list (walls + interactables) and taking the nearest hit — no separate occlusion check needed.

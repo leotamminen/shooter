@@ -1,17 +1,22 @@
+import * as THREE from "three";
 import { SceneManager } from "./core/Scene";
 import { loadMap } from "./core/MapLoader";
 import { PlayerController } from "./core/PlayerController";
 import { WeaponSystem } from "./core/WeaponSystem";
 import { AudioSystem } from "./core/AudioSystem";
+import { InteractSystem } from "./core/InteractSystem";
 import { GameState } from "./state/GameState";
 import type { Weapon, SoundDef } from "./types";
 
+// Interior pillar at row 4, col 2 doubles as a line-of-sight blocker for
+// testing InteractSystem: it sits directly between the spawn point and the
+// placeholder interactable box.
 const TEST_GRID: number[][] = [
   [1, 1, 1, 1, 1, 1, 1, 1],
   [1, 0, 0, 0, 0, 0, 0, 1],
   [1, 0, 0, 0, 0, 0, 0, 1],
   [1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 1],
+  [1, 0, 1, 0, 0, 0, 0, 1],
   [1, 0, 0, 0, 0, 0, 0, 1],
   [1, 0, 0, 0, 0, 0, 0, 1],
   [1, 1, 1, 1, 1, 1, 1, 1],
@@ -65,6 +70,20 @@ const weaponSystem = new WeaponSystem(
   gameState,
 );
 weaponSystem.setTargets(map.walls);
+
+// Placeholder interactable, hardcoded here until map entities (doors,
+// buttons, pickups) are added in checkpoint 6.
+const interactableBox = new THREE.Mesh(
+  new THREE.BoxGeometry(0.6, 0.6, 0.6),
+  new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x552200 }),
+);
+interactableBox.name = "placeholder box";
+interactableBox.userData.interactable = true;
+interactableBox.position.set(2, 0.3, 8);
+sceneManager.scene.add(interactableBox);
+
+const interactSystem = new InteractSystem(sceneManager.camera, gameState);
+interactSystem.setTargets([...map.walls, interactableBox]);
 
 canvas.addEventListener("click", () => {
   playerController.controls.lock();
