@@ -52,14 +52,19 @@ export class WeaponSystem {
     if (this.isReloading) {
       this.reloadTimeRemaining -= delta;
       if (this.reloadTimeRemaining <= 0) this.finishReload();
-      return;
+    } else if (
+      !this.gameState.paused &&
+      this.firing &&
+      this.currentAmmo > 0 &&
+      this.timeSinceLastShot >= this.weapon.fireRate
+    ) {
+      this.fire();
     }
 
-    if (this.gameState.paused || !this.firing) return;
-    if (this.currentAmmo <= 0) return;
-    if (this.timeSinceLastShot < this.weapon.fireRate) return;
-
-    this.fire();
+    this.gameState.weaponName = this.weapon.name;
+    this.gameState.currentAmmo = this.currentAmmo;
+    this.gameState.reserveAmmo = this.reserveAmmo;
+    this.gameState.isReloading = this.isReloading;
   }
 
   private fire(): void {
@@ -67,7 +72,6 @@ export class WeaponSystem {
     this.currentAmmo -= 1;
     this.raycast.fromCamera(this.camera, this.targets);
     this.audioSystem.play(this.weapon.fireSoundId);
-    console.log(`fired ${this.weapon.id}: ${this.currentAmmo}/${this.reserveAmmo}`);
   }
 
   private startReload(): void {
@@ -77,7 +81,6 @@ export class WeaponSystem {
 
     this.isReloading = true;
     this.reloadTimeRemaining = this.weapon.reloadTime;
-    console.log(`reloading ${this.weapon.id}...`);
   }
 
   private finishReload(): void {
@@ -86,7 +89,6 @@ export class WeaponSystem {
     this.currentAmmo += loaded;
     this.reserveAmmo -= loaded;
     this.isReloading = false;
-    console.log(`reloaded ${this.weapon.id}: ${this.currentAmmo}/${this.reserveAmmo}`);
   }
 
   private readonly handleMouseDown = (event: MouseEvent): void => {

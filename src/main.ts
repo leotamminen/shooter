@@ -5,6 +5,7 @@ import { PlayerController } from "./core/PlayerController";
 import { WeaponSystem } from "./core/WeaponSystem";
 import { AudioSystem } from "./core/AudioSystem";
 import { InteractSystem } from "./core/InteractSystem";
+import { HUD } from "./ui/HUD";
 import { GameState } from "./state/GameState";
 import type { Weapon, SoundDef } from "./types";
 
@@ -26,6 +27,7 @@ const TEST_GRID: number[][] = [
 // content/sounds.ts are populated in checkpoint 5.
 const PLACEHOLDER_WEAPON: Weapon = {
   id: "pistol",
+  name: "M1911",
   damage: 10,
   fireRate: 0.3,
   magSize: 12,
@@ -85,6 +87,8 @@ sceneManager.scene.add(interactableBox);
 const interactSystem = new InteractSystem(sceneManager.camera, gameState);
 interactSystem.setTargets([...map.walls, interactableBox]);
 
+const hud = new HUD(gameState);
+
 canvas.addEventListener("click", () => {
   playerController.controls.lock();
 });
@@ -97,6 +101,8 @@ function animate(): void {
   requestAnimationFrame(animate);
   playerController.update();
   weaponSystem.update();
+  interactSystem.update();
+  hud.update();
   sceneManager.render();
 }
 

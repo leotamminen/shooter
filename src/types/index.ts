@@ -1,5 +1,6 @@
 export interface Weapon {
   id: string;
+  name: string; // player-facing display text, e.g. "M1911" (id stays the lookup key)
   damage: number;
   fireRate: number; // seconds between shots
   magSize: number;

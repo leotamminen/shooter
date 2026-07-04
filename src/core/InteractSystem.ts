@@ -22,6 +22,19 @@ export class InteractSystem {
     this.targets = targets;
   }
 
+  update(): void {
+    this.gameState.canInteract = !this.gameState.paused && this.isLookingAtInteractable();
+  }
+
+  isLookingAtInteractable(): boolean {
+    const hit = this.raycast.fromCamera(
+      this.camera,
+      this.targets,
+      INTERACT_DISTANCE,
+    );
+    return hit !== null && hit.object.userData.interactable === true;
+  }
+
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (event.code !== "KeyE" || event.repeat) return;
     if (this.gameState.paused) return;
@@ -29,14 +42,9 @@ export class InteractSystem {
   };
 
   private tryInteract(): void {
-    const hit = this.raycast.fromCamera(
-      this.camera,
-      this.targets,
-      INTERACT_DISTANCE,
-    );
-    if (!hit) return;
-    if (hit.object.userData.interactable !== true) return;
-
-    console.log(`interacted with ${hit.object.name || "placeholder"}`);
+    if (!this.isLookingAtInteractable()) return;
+    // Placeholder action: checkpoint 6 wires this to real map entities
+    // (doors/buttons/pickups). The HUD prompt is the only visible feedback
+    // for now.
   }
 }

@@ -44,7 +44,9 @@ src/
     ShootingRange.ts            [8]
   state/
     GameState.ts                [1]
-  ui/                           [9]
+  ui/
+    HUD.ts                      [3.5, gameplay overlay: crosshair/ammo/reload/interact prompts]
+                                 [9 adds separate menu screens here: mode select, loadout, enemy select]
   types/
     index.ts                    [1]
 ```
@@ -54,6 +56,7 @@ src/
 1. Vite+TS+Three.js scaffold, box room, PointerLockControls, WASD + manual radius-vs-wall collision
 2. Hitscan shooting (mouse1, raycast) + ammo/reload state + weapon fire sound (AudioSystem)
 3. E-interact raycast
+3.5. HUD (crosshair, ammo display, reload/interact prompts)
 4. One hardcoded zombie: state machine + line-of-sight raycast + zombie sounds
 5. content/ files (weapons.ts, enemies.ts, maps.ts, sounds.ts) + id-lookup; move zombie/weapon/map from hardcoded to data-driven
 6. Map schema extended with entities (doors, buttons, pickups)
@@ -63,7 +66,7 @@ src/
 
 ## Current status
 
-Checkpoint 3 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a synthesized placeholder click (Node-generated decaying sine beep), not a real recording — swap it for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
+Checkpoint 3.5 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a synthesized placeholder click (Node-generated decaying sine beep), not a real recording — swap it for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
 
 ## Decisions log
 
@@ -76,3 +79,6 @@ Checkpoint 3 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a syn
 - `MapLoader.loadMap()` exposes raw wall meshes (`walls: THREE.Mesh[]`) alongside `wallBoxes` (checkpoint 2): a `Box3` isn't raycastable, so `WeaponSystem` needed the actual scene objects to hit-test against. `InteractSystem` (checkpoint 3) reuses the same `walls` array for its own raycast, combined with whatever interactables are in range — one shared list of "things that can occlude or receive a ray," no duplicate wall representation.
 - Interactable objects are tagged via `mesh.userData.interactable = true`, not by name/convention matching, so `InteractSystem`'s check is a plain property lookup regardless of what the object is named.
 - Line-of-sight blocking for interact/hitscan comes for free from raycasting against a combined target list (walls + interactables) and taking the nearest hit — no separate occlusion check needed.
+- `Weapon.name` added as a separate field from `Weapon.id` — id is the data lookup key, name is player-facing display text.
+- HUD (`ui/HUD.ts`) is a plain DOM overlay, not part of the Three.js scene: absolutely positioned, `pointer-events: none` so it never steals clicks from the canvas (pointer lock, firing, interact all still work). It reads only from `GameState`; `WeaponSystem`/`InteractSystem` write their relevant fields to `GameState` every frame. This replaces the checkpoint-2/3 `console.log` observability, which has been removed now that the same information is visible on screen.
+- The 1-second delay before showing "Press R to reload" is tracked inside `HUD.ts` itself (a local `emptySince` timestamp), not in `WeaponSystem` or `GameState` — it's presentation timing, not a gameplay rule, so it belongs with the thing that renders it.
