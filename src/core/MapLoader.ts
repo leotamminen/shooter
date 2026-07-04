@@ -5,11 +5,13 @@ const WALL_HEIGHT = 3;
 
 export interface LoadedMap {
   group: THREE.Group;
+  walls: THREE.Mesh[];
   wallBoxes: THREE.Box3[];
 }
 
 export function loadMap(grid: number[][]): LoadedMap {
   const group = new THREE.Group();
+  const walls: THREE.Mesh[] = [];
   const wallBoxes: THREE.Box3[] = [];
 
   const rows = grid.length;
@@ -35,9 +37,10 @@ export function loadMap(grid: number[][]): LoadedMap {
       const wall = new THREE.Mesh(wallGeometry, wallMaterial);
       wall.position.set(col * CELL_SIZE, WALL_HEIGHT / 2, row * CELL_SIZE);
       group.add(wall);
+      walls.push(wall);
       wallBoxes.push(new THREE.Box3().setFromObject(wall));
     }
   }
 
-  return { group, wallBoxes };
+  return { group, walls, wallBoxes };
 }

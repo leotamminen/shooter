@@ -63,7 +63,7 @@ src/
 
 ## Current status
 
-Checkpoint 1 complete
+Checkpoint 2 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a synthesized placeholder click (Node-generated decaying sine beep), not a real recording — swap it for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
 
 ## Decisions log
 
@@ -71,3 +71,5 @@ Checkpoint 1 complete
 - Hitscan only, no projectile physics, for simplicity.
 - Player collision is radius-based, not box-based: simpler wall resolution, reusable later as a general distance-from-player check.
 - Audio via Three.js native AudioListener/PositionalAudio, no external library.
+- Weapon fire sound is non-positional (`SoundDef.positional: false`): heard the same regardless of player position since it's always the local player firing; positional audio is deferred to checkpoint 4 (zombie growls), the first sound that actually needs a 3D source.
+- Placeholder fire sound is a synthesized WAV (short decaying sine click), generated programmatically since no real audio asset was available — flagged for replacement, not meant to ship.
