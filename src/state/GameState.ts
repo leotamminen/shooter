@@ -43,4 +43,12 @@ export class GameState {
   // Keyed by enemy id so multiple simultaneous enemies (checkpoint 7+) don't
   // need a rewrite here.
   enemyHealth: Record<string, EnemyHealthEntry> = {};
+
+  // Snapshot of the active GameMode's getSummaryLines(), taken once at the
+  // moment playerState transitions to "dead" (see main.ts's onDeath wiring),
+  // not read live every frame — this is what keeps the death panel's numbers
+  // from shifting under the player while it's displayed. Deliberately a
+  // plain string array, not a mode-specific field, so HUD stays ignorant of
+  // which GameMode is active.
+  deathSummaryLines: string[] = [];
 }

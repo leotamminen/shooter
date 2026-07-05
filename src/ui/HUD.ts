@@ -314,7 +314,7 @@ export class HUD {
     this.deathPanelEl.style.display = dead ? "flex" : "none";
     if (dead) {
       this.deathScoreEl.textContent = `Score: ${this.gameState.score}`;
-      this.deathSummaryEl.textContent = this.gameMode.getSummaryLines().join("\n");
+      this.deathSummaryEl.textContent = this.gameState.deathSummaryLines.join("\n");
     }
   }
 

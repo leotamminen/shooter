@@ -38,13 +38,21 @@ const playerController = new PlayerController(
   canvas,
   gameState,
 );
+// gameMode is assigned further down (it needs the map/weapon systems built
+// first) but this callback only ever runs later, once the player has
+// actually died, by which point construction has long finished.
+let gameMode: GameMode;
 // Releasing pointer lock on death is what makes the death-panel buttons
 // clickable — PlayerState owns the alive/dead transition but not the DOM/
 // pointer-lock machinery, so it's handed this as a callback rather than
-// reaching into PlayerController directly.
-const playerState = new PlayerState(gameState, () =>
-  playerController.controls.unlock(),
-);
+// reaching into PlayerController directly. It also snapshots the active
+// mode's summary lines into GameState once, at the exact moment of death,
+// so the death panel can't change under the player if the mode's own state
+// happens to advance in the background before Respawn is clicked.
+const playerState = new PlayerState(gameState, () => {
+  playerController.controls.unlock();
+  gameState.deathSummaryLines = gameMode.getSummaryLines();
+});
 const runManager = new RunManager(gameState, playerState);
 
 const mapDef = findById(MAPS, "test-grid");
@@ -108,7 +116,7 @@ const targetPoints = mapDef.entities
   .filter((entity) => entity.type === "target")
   .map((entity) => new THREE.Vector3(...entity.position));
 
-const gameMode: GameMode =
+gameMode =
   ACTIVE_MODE === "zombie"
     ? new ZombieSurvival(
         findById(ENEMIES, "zombie"),
