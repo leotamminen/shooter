@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { SceneManager } from "./core/Scene";
-import { loadMap } from "./core/MapLoader";
+import { loadMap, getSpawnPosition } from "./core/MapLoader";
 import { PlayerController } from "./core/PlayerController";
 import { WeaponSystem } from "./core/WeaponSystem";
 import { AudioSystem } from "./core/AudioSystem";
@@ -10,74 +10,11 @@ import { PlayerState } from "./core/PlayerState";
 import { RunManager } from "./core/RunManager";
 import { HUD } from "./ui/HUD";
 import { GameState } from "./state/GameState";
-import type { Weapon, SoundDef, EnemyDef } from "./types";
-
-// Interior pillar at row 4, col 2 doubles as a line-of-sight blocker for
-// testing InteractSystem: it sits directly between the spawn point and the
-// placeholder interactable box.
-const TEST_GRID: number[][] = [
-  [1, 1, 1, 1, 1, 1, 1, 1],
-  [1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 1, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 0, 0, 0, 0, 0, 0, 1],
-  [1, 1, 1, 1, 1, 1, 1, 1],
-];
-
-// Placeholder weapon/sound, hardcoded here until content/weapons.ts and
-// content/sounds.ts are populated in checkpoint 5.
-const PLACEHOLDER_WEAPON: Weapon = {
-  id: "pistol",
-  name: "M1911",
-  damage: 10,
-  fireRate: 0.3,
-  magSize: 12,
-  reloadTime: 1.5,
-  fireSoundId: "pistol_fire",
-};
-
-const PLACEHOLDER_RESERVE_AMMO = 48;
-
-const PLACEHOLDER_FIRE_SOUND: SoundDef = {
-  id: "pistol_fire",
-  path: "/sounds/pistol_fire.wav",
-  volume: 0.5,
-  positional: false,
-  loop: false,
-};
-
-// Placeholder enemy/sounds, hardcoded here until content/enemies.ts and
-// content/sounds.ts are populated in checkpoint 5.
-const PLACEHOLDER_ZOMBIE: EnemyDef = {
-  id: "zombie",
-  health: 100,
-  speed: 1.6,
-  meleeDamage: 10,
-  attackInterval: 1,
-  growlSoundId: "zombie_growl",
-  deathSoundId: "zombie_death",
-};
-
-const PLACEHOLDER_GROWL_SOUND: SoundDef = {
-  id: "zombie_growl",
-  path: "/sounds/zombie_growl.wav",
-  volume: 0.6,
-  positional: true,
-  loop: false,
-};
-
-const PLACEHOLDER_DEATH_SOUND: SoundDef = {
-  id: "zombie_death",
-  path: "/sounds/zombie_death.wav",
-  volume: 0.7,
-  positional: true,
-  loop: false,
-};
-
-const SPAWN_X = 8;
-const SPAWN_Z = 8;
+import { findById } from "./core/utils/Lookup";
+import { WEAPONS } from "./content/weapons";
+import { ENEMIES } from "./content/enemies";
+import { SOUNDS } from "./content/sounds";
+import { MAPS } from "./content/maps";
 
 const canvas = document.createElement("canvas");
 document.body.appendChild(canvas);
@@ -98,20 +35,21 @@ const playerState = new PlayerState(gameState, () =>
 );
 const runManager = new RunManager(gameState, playerState);
 
-const map = loadMap(TEST_GRID);
+const mapDef = findById(MAPS, "test-grid");
+const map = loadMap(mapDef.grid);
 sceneManager.scene.add(map.group);
 playerController.setWallBoxes(map.wallBoxes);
-playerController.setSpawn(SPAWN_X, SPAWN_Z);
+const spawnPosition = getSpawnPosition(mapDef);
+playerController.setSpawn(spawnPosition.x, spawnPosition.z);
 
 const audioSystem = new AudioSystem(sceneManager.camera);
-void audioSystem.load(PLACEHOLDER_FIRE_SOUND);
-void audioSystem.load(PLACEHOLDER_GROWL_SOUND);
-void audioSystem.load(PLACEHOLDER_DEATH_SOUND);
+void audioSystem.load(findById(SOUNDS, "pistol_fire"));
+void audioSystem.load(findById(SOUNDS, "zombie_growl"));
+void audioSystem.load(findById(SOUNDS, "zombie_death"));
 
 const weaponSystem = new WeaponSystem(
   sceneManager.camera,
-  PLACEHOLDER_WEAPON,
-  PLACEHOLDER_RESERVE_AMMO,
+  findById(WEAPONS, "pistol"),
   audioSystem,
   gameState,
   runManager,
@@ -131,8 +69,9 @@ sceneManager.scene.add(interactableBox);
 const interactSystem = new InteractSystem(sceneManager.camera, gameState);
 interactSystem.setTargets([...map.walls, interactableBox]);
 
-// Placeholder zombie, hardcoded here until content/enemies.ts is populated
-// in checkpoint 5.
+// Zombie stats now come from content/enemies.ts; its mesh and spawn position
+// are still hardcoded here until map entities gain an "enemy" type
+// (checkpoint 6/7).
 const zombieMesh = new THREE.Mesh(
   new THREE.CapsuleGeometry(0.4, 1, 4, 8),
   new THREE.MeshStandardMaterial({ color: 0x4a6741 }),
@@ -142,7 +81,7 @@ sceneManager.scene.add(zombieMesh);
 
 const zombie = new EnemyAI(
   "zombie-1",
-  PLACEHOLDER_ZOMBIE,
+  findById(ENEMIES, "zombie"),
   zombieMesh,
   sceneManager.camera,
   audioSystem,
@@ -156,7 +95,7 @@ weaponSystem.setTargets([...map.walls, interactableBox, zombieMesh]);
 
 function startNewRun(): void {
   runManager.startNewRun();
-  playerController.setSpawn(SPAWN_X, SPAWN_Z);
+  playerController.setSpawn(spawnPosition.x, spawnPosition.z);
   playerController.controls.lock();
 }
 

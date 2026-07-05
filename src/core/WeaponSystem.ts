@@ -22,12 +22,10 @@ export class WeaponSystem {
   private readonly weapon: Weapon;
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
-  private readonly startingReserveAmmo: number;
 
   constructor(
     camera: THREE.Camera,
     weapon: Weapon,
-    reserveAmmo: number,
     audioSystem: AudioSystem,
     gameState: GameState,
     runManager: RunManager,
@@ -35,8 +33,7 @@ export class WeaponSystem {
     this.camera = camera;
     this.weapon = weapon;
     this.currentAmmo = weapon.magSize;
-    this.reserveAmmo = reserveAmmo;
-    this.startingReserveAmmo = reserveAmmo;
+    this.reserveAmmo = weapon.startingReserveAmmo;
     this.audioSystem = audioSystem;
     this.gameState = gameState;
 
@@ -53,7 +50,7 @@ export class WeaponSystem {
 
   reset(): void {
     this.currentAmmo = this.weapon.magSize;
-    this.reserveAmmo = this.startingReserveAmmo;
+    this.reserveAmmo = this.weapon.startingReserveAmmo;
     this.isReloading = false;
     this.reloadTimeRemaining = 0;
     this.timeSinceLastShot = Infinity;

@@ -5,6 +5,7 @@ export interface Weapon {
   fireRate: number; // seconds between shots
   magSize: number;
   reloadTime: number; // seconds
+  startingReserveAmmo: number;
   fireSoundId: string; // references SoundDef.id
   model?: string; // path to .glb, added when 3D models exist
 }
@@ -15,6 +16,9 @@ export interface EnemyDef {
   speed: number;
   meleeDamage: number;
   attackInterval: number; // seconds between melee attacks
+  sightRange: number;
+  meleeRange: number;
+  growlInterval: number; // seconds between growls while chasing
   growlSoundId: string; // references SoundDef.id
   deathSoundId: string; // references SoundDef.id
   model?: string;

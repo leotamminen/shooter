@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { MapDef } from "../types";
 
 export const CELL_SIZE = 2;
 const WALL_HEIGHT = 3;
@@ -43,4 +44,12 @@ export function loadMap(grid: number[][]): LoadedMap {
   }
 
   return { group, walls, wallBoxes };
+}
+
+export function getSpawnPosition(map: MapDef): { x: number; y: number; z: number } {
+  const spawn = map.entities.find((entity) => entity.type === "spawn");
+  if (!spawn) throw new Error(`Map "${map.id}" has no spawn entity`);
+
+  const [x, y, z] = spawn.position;
+  return { x, y, z };
 }

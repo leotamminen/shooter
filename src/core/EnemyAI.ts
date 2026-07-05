@@ -10,9 +10,6 @@ import type { RunManager } from "./RunManager";
 
 type ZombieState = "idle" | "chase" | "attack";
 
-const SIGHT_RANGE = 15;
-const MELEE_RANGE = 1.5;
-const GROWL_INTERVAL = 3; // seconds between growls while chasing
 const LABEL_HEIGHT_OFFSET = 1;
 const SCORE_PER_HIT = 10;
 const SCORE_PER_KILL = 50;
@@ -96,9 +93,9 @@ export class EnemyAI {
     const distance = this.mesh.position.distanceTo(this.camera.position);
     const hasLineOfSight = this.hasLineOfSight();
 
-    if (distance <= MELEE_RANGE && hasLineOfSight) {
+    if (distance <= this.def.meleeRange && hasLineOfSight) {
       this.stateMachine.transition("attack");
-    } else if (distance <= SIGHT_RANGE && hasLineOfSight) {
+    } else if (distance <= this.def.sightRange && hasLineOfSight) {
       this.stateMachine.transition("chase");
     } else {
       this.stateMachine.transition("idle");
@@ -150,7 +147,7 @@ export class EnemyAI {
     }
 
     this.timeSinceGrowl += delta;
-    if (this.timeSinceGrowl >= GROWL_INTERVAL) {
+    if (this.timeSinceGrowl >= this.def.growlInterval) {
       this.timeSinceGrowl = 0;
       this.audioSystem.playAt(this.def.growlSoundId, this.mesh);
     }

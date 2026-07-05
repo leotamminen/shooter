@@ -30,7 +30,7 @@ src/
   core/
     Scene.ts                    [1]
     PlayerController.ts         [1]
-    MapLoader.ts                [1]
+    MapLoader.ts                [1, getSpawnPosition() added at 5]
     WeaponSystem.ts             [2]
     InteractSystem.ts           [3]
     EnemyAI.ts                  [4]
@@ -41,6 +41,7 @@ src/
       Raycast.ts                [1]
       StateMachine.ts           [4]
       Health.ts                 [4.5]
+      Lookup.ts                 [5, generic findById<T>() for content arrays]
   modes/
     GameMode.ts                 [8]
     ZombieSurvival.ts           [7]
@@ -73,9 +74,11 @@ src/
 
 ## Current status
 
-Checkpoint 4.8 complete. The fire sound (`public/sounds/pistol_fire.wav`) and the zombie growl/death sounds (`public/sounds/zombie_growl.wav`, `zombie_death.wav`) are all synthesized placeholders (Node-generated tones), not real recordings — swap them for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
+Checkpoint 5 complete. The fire sound (`public/sounds/pistol_fire.wav`) and the zombie growl/death sounds (`public/sounds/zombie_growl.wav`, `zombie_death.wav`) are all synthesized placeholders (Node-generated tones), not real recordings — swap them for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
 
 Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) didn't explicitly cover damage/kill mechanics, and no later checkpoint claimed them either, so they were added at checkpoint 4 rather than left to silently expand checkpoint 7's scope. Player death is now fully playable end-to-end: health hits 0 → `playerState` flips to `"dead"` → pointer lock releases → HUD shows a death panel (score + Respawn/Main Menu buttons) → clicking either starts a new run (score/pointsBalance reset to 0, weapon ammo restored, the zombie restored to full health and idle) and restores full health, alive state, and spawn position, and gameplay resumes with no page reload. What's still deferred: "Main Menu" is currently just an alias for "Respawn" (checkpoint 9 gives it real behavior). See the decisions log and "Future mechanics" below.
+
+The weapon (M1911), enemy (zombie), map (`test-grid`), and sound definitions are now all data in `content/*.ts`, looked up by id from `main.ts` (the composition root) via `findById()` — `core/` still has zero imports from `content/`. The zombie's mesh/geometry and its spawn position in the scene are still hardcoded in `main.ts`, since map entities don't have an "enemy" type yet (checkpoint 6/7 territory). See the decisions log for the `SoundDef.positional`/`AudioSystem` note below — it was already correctly implemented before this checkpoint, not a gap introduced or closed here.
 
 ## Decisions log
 
@@ -106,6 +109,11 @@ Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) d
 - `PlayerState` takes an optional `onDeath` callback (invoked from inside the same `applyDamage()` zero-crossing that flips `playerState` to `"dead"`) rather than importing `PlayerController` directly. `main.ts` wires it to `playerController.controls.unlock()` — releasing pointer lock is what makes the death panel's buttons clickable, but `PlayerState` has no business knowing about pointer-lock/DOM concerns, so it's handed in as a hook instead of reaching across.
 - HUD's death panel is the one part of the HUD tree with `pointer-events: auto` (everything else stays `none`, per the checkpoint-3.5 decision) — it's only visible while dead, so enabling clicks on it never risks stealing input from gameplay.
 - On death, `HUD` doesn't just let the death panel visually cover the crosshair/ammo/interact prompt — it actively hides the crosshair (`display: none`) and clears the other elements' text content, skipping their normal per-frame update methods entirely while `playerState !== "alive"`. This was an explicit requirement (elements must not render at all, not just be behind the death screen), and matters in practice because those elements have no background — without this they'd visibly show through/around the semi-transparent death panel.
+- `core/utils/Lookup.ts`'s `findById<T extends { id: string }>(list, id)` is the one shared lookup for every content array (`WEAPONS`, `ENEMIES`, `SOUNDS`, `MAPS`) — same reuse rule as `Raycast.ts`/`StateMachine.ts`/`Health.ts`, so there's no per-content-type lookup function. It throws (naming the missing id) rather than returning `undefined`, since a silent `undefined` would surface later as a confusing null-reference error far from the actual mistake (a typo'd id in `main.ts`).
+- Player spawn position moved from standalone `SPAWN_X`/`SPAWN_Z` constants in `main.ts` into `MapDef.entities` as a `{ type: "spawn", position: [...] }` entry (checkpoint 5), read back out via `MapLoader.getSpawnPosition()`, which throws if a map has no spawn entity rather than silently defaulting to the origin. This reuses `MapEntity`'s existing type (already had `"spawn"` in its union since checkpoint 1) instead of adding a second, parallel way to declare spawn data.
+- `Weapon.startingReserveAmmo` was added so `WeaponSystem`'s starting/reset reserve ammo is weapon data, not a `main.ts` constant passed in alongside the `Weapon` object — this also meant dropping the separate `reserveAmmo` constructor parameter `WeaponSystem` used to take, since it would otherwise be a second, redundant way to say the same number.
+- `EnemyDef` gained `sightRange`, `meleeRange`, and `growlInterval` (joining the existing `meleeDamage`/`attackInterval`) so all of `EnemyAI`'s combat tuning is per-enemy-type data instead of file-level constants — a second enemy type (checkpoint 7+) can now redefine any of these without touching `EnemyAI.ts`. The debug health-label's `LABEL_HEIGHT_OFFSET` and the scoring constants (`SCORE_PER_HIT`/`SCORE_PER_KILL`) stayed as `EnemyAI.ts` constants: they're rendering/scoring-system concerns, not enemy combat stats, and weren't part of what checkpoint 5 asked to move.
+- `SoundDef.positional` was already correctly consumed by `AudioSystem` before checkpoint 5 (positional sounds get a `THREE.PositionalAudio` pool played via `playAt()`, attached to the emitting object; non-positional sounds get a `THREE.Audio` pool played via `play()`) — this was built at checkpoint 4 for the zombie growl/death sounds. Checkpoint 5 only moved the `SoundDef` instances themselves into `content/sounds.ts`; there was no `AudioSystem` gap to close or log here.
 
 ## Future mechanics (documented, not built)
 
