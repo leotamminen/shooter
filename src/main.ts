@@ -7,6 +7,7 @@ import { AudioSystem } from "./core/AudioSystem";
 import { InteractSystem } from "./core/InteractSystem";
 import { EnemyAI } from "./core/EnemyAI";
 import { PlayerState } from "./core/PlayerState";
+import { RunManager } from "./core/RunManager";
 import { HUD } from "./ui/HUD";
 import { GameState } from "./state/GameState";
 import type { Weapon, SoundDef, EnemyDef } from "./types";
@@ -95,6 +96,7 @@ const playerController = new PlayerController(
 const playerState = new PlayerState(gameState, () =>
   playerController.controls.unlock(),
 );
+const runManager = new RunManager(gameState, playerState);
 
 const map = loadMap(TEST_GRID);
 sceneManager.scene.add(map.group);
@@ -112,6 +114,7 @@ const weaponSystem = new WeaponSystem(
   PLACEHOLDER_RESERVE_AMMO,
   audioSystem,
   gameState,
+  runManager,
 );
 
 // Placeholder interactable, hardcoded here until map entities (doors,
@@ -145,20 +148,21 @@ const zombie = new EnemyAI(
   audioSystem,
   gameState,
   playerState,
+  runManager,
 );
 zombie.setWallTargets(map.walls);
 
 weaponSystem.setTargets([...map.walls, interactableBox, zombieMesh]);
 
-function respawn(): void {
-  playerState.respawn();
+function startNewRun(): void {
+  runManager.startNewRun();
   playerController.setSpawn(SPAWN_X, SPAWN_Z);
   playerController.controls.lock();
 }
 
-// "Main Menu" is a placeholder alias for respawn() until checkpoint 9 gives
-// it a real menu to return to.
-const hud = new HUD(gameState, sceneManager.camera, respawn, respawn);
+// "Main Menu" is a placeholder alias for startNewRun() until checkpoint 9
+// gives it a real menu to return to.
+const hud = new HUD(gameState, sceneManager.camera, startNewRun, startNewRun);
 hud.setOcclusionTargets(map.walls);
 
 canvas.addEventListener("click", () => {

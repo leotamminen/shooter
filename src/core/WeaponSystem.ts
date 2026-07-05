@@ -3,6 +3,7 @@ import { Raycast } from "./utils/Raycast";
 import type { AudioSystem } from "./AudioSystem";
 import type { Weapon } from "../types";
 import type { GameState } from "../state/GameState";
+import type { RunManager } from "./RunManager";
 
 export class WeaponSystem {
   currentAmmo: number;
@@ -21,6 +22,7 @@ export class WeaponSystem {
   private readonly weapon: Weapon;
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
+  private readonly startingReserveAmmo: number;
 
   constructor(
     camera: THREE.Camera,
@@ -28,21 +30,33 @@ export class WeaponSystem {
     reserveAmmo: number,
     audioSystem: AudioSystem,
     gameState: GameState,
+    runManager: RunManager,
   ) {
     this.camera = camera;
     this.weapon = weapon;
     this.currentAmmo = weapon.magSize;
     this.reserveAmmo = reserveAmmo;
+    this.startingReserveAmmo = reserveAmmo;
     this.audioSystem = audioSystem;
     this.gameState = gameState;
 
     window.addEventListener("mousedown", this.handleMouseDown);
     window.addEventListener("mouseup", this.handleMouseUp);
     window.addEventListener("keydown", this.handleKeyDown);
+
+    runManager.registerResettable(() => this.reset());
   }
 
   setTargets(targets: THREE.Object3D[]): void {
     this.targets = targets;
+  }
+
+  reset(): void {
+    this.currentAmmo = this.weapon.magSize;
+    this.reserveAmmo = this.startingReserveAmmo;
+    this.isReloading = false;
+    this.reloadTimeRemaining = 0;
+    this.timeSinceLastShot = Infinity;
   }
 
   update(): void {

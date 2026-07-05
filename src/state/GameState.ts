@@ -35,6 +35,11 @@ export class GameState {
     this.pointsBalance += amount;
   }
 
+  resetScore(): void {
+    this.score = 0;
+    this.pointsBalance = 0;
+  }
+
   // Keyed by enemy id so multiple simultaneous enemies (checkpoint 7+) don't
   // need a rewrite here.
   enemyHealth: Record<string, EnemyHealthEntry> = {};

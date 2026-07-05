@@ -6,6 +6,7 @@ import type { AudioSystem } from "./AudioSystem";
 import type { PlayerState } from "./PlayerState";
 import type { EnemyDef } from "../types";
 import type { GameState } from "../state/GameState";
+import type { RunManager } from "./RunManager";
 
 type ZombieState = "idle" | "chase" | "attack";
 
@@ -31,6 +32,7 @@ export class EnemyAI {
   private readonly raycast = new Raycast();
   private readonly clock = new THREE.Clock();
   private readonly moveDirection = new THREE.Vector3();
+  private readonly spawnPosition: THREE.Vector3;
   private readonly stateMachine: StateMachine<ZombieState, EnemyAI>;
 
   private wallTargets: THREE.Object3D[] = [];
@@ -46,6 +48,7 @@ export class EnemyAI {
     audioSystem: AudioSystem,
     gameState: GameState,
     playerState: PlayerState,
+    runManager: RunManager,
   ) {
     this.id = id;
     this.def = def;
@@ -55,6 +58,7 @@ export class EnemyAI {
     this.gameState = gameState;
     this.playerState = playerState;
     this.health = def.health;
+    this.spawnPosition = mesh.position.clone();
 
     mesh.userData.onHit = (damage: number): void => this.takeDamage(damage);
 
@@ -77,6 +81,8 @@ export class EnemyAI {
       },
       this,
     );
+
+    runManager.registerResettable(() => this.reset());
   }
 
   setWallTargets(targets: THREE.Object3D[]): void {
@@ -171,7 +177,21 @@ export class EnemyAI {
   private die(): void {
     this.dead = true;
     this.audioSystem.playAt(this.def.deathSoundId, this.mesh);
-    this.mesh.parent?.remove(this.mesh);
+    // Hidden rather than removed from the scene graph: reset() needs to be
+    // able to bring the enemy back without recreating geometry/material, and
+    // Raycast.ts's visibility filter already excludes hidden meshes from
+    // hitscan/line-of-sight/occlusion checks.
+    this.mesh.visible = false;
     delete this.gameState.enemyHealth[this.id];
+  }
+
+  private reset(): void {
+    this.dead = false;
+    this.health = this.def.health;
+    this.mesh.visible = true;
+    this.mesh.position.copy(this.spawnPosition);
+    this.timeSinceGrowl = 0;
+    this.timeSinceAttack = 0;
+    this.stateMachine.transition("idle");
   }
 }
