@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { EnemyAI } from "../core/EnemyAI";
+import type { GameMode } from "./GameMode";
 import type { AudioSystem } from "../core/AudioSystem";
 import type { PlayerState } from "../core/PlayerState";
 import type { WeaponSystem } from "../core/WeaponSystem";
@@ -14,13 +15,11 @@ const ROUND_TRANSITION_DELAY = 3; // seconds after the last zombie dies before t
 // second mode proves the shape is right — checkpoint 8's ShootingRange).
 // Owns the enemy lifecycle entirely: main.ts just constructs this once and
 // calls update() every frame; it doesn't touch EnemyAI directly.
-export class ZombieSurvival {
+export class ZombieSurvival implements GameMode {
   currentRound = 1;
 
   private activeEnemies: EnemyAI[] = [];
   private roundTransitionTimer: number | null = null;
-
-  private readonly clock = new THREE.Clock();
 
   private readonly enemyDef: EnemyDef;
   private readonly spawnPoints: THREE.Vector3[];
@@ -59,17 +58,17 @@ export class ZombieSurvival {
     this.wallTargets = wallTargets;
 
     runManager.registerResettable(() => this.resetRun());
+  }
 
+  start(): void {
     this.startRound();
   }
 
-  update(): void {
-    const delta = this.clock.getDelta();
-
+  update(deltaTime: number): void {
     for (const enemy of this.activeEnemies) enemy.update();
 
     if (this.roundTransitionTimer !== null) {
-      this.roundTransitionTimer -= delta;
+      this.roundTransitionTimer -= deltaTime;
       if (this.roundTransitionTimer <= 0) {
         this.roundTransitionTimer = null;
         this.currentRound += 1;
@@ -86,13 +85,19 @@ export class ZombieSurvival {
     }
   }
 
+  getStatusLine(): string {
+    return `Round: ${this.currentRound}`;
+  }
+
+  getSummaryLines(): string[] {
+    return [`Survived ${this.currentRound} rounds`];
+  }
+
   private zombiesForRound(round: number): number {
     return round;
   }
 
   private startRound(): void {
-    this.gameState.currentRound = this.currentRound;
-
     const count = this.zombiesForRound(this.currentRound);
     this.activeEnemies = [];
 

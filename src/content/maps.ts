@@ -30,6 +30,13 @@ export const MAPS: MapDef[] = [
       { id: "pickup_1", type: "pickup", position: [10, 0.3, 10] },
       { id: "enemy_spawn_1", type: "enemy_spawn", position: [10, 0.9, 6] },
       { id: "enemy_spawn_2", type: "enemy_spawn", position: [4, 0.9, 10] },
+      // Shooting Range targets: two share space with the enemy_spawn points
+      // above (only one mode is ever active at a time) plus two more of
+      // their own, for four total.
+      { id: "target_1", type: "target", position: [10, 0.9, 6] },
+      { id: "target_2", type: "target", position: [4, 0.9, 10] },
+      { id: "target_3", type: "target", position: [10, 0.9, 12] },
+      { id: "target_4", type: "target", position: [2, 0.9, 12] },
     ],
   },
 ];

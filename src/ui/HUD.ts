@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Raycast } from "../core/utils/Raycast";
 import type { GameState } from "../state/GameState";
+import type { GameMode } from "../modes/GameMode";
 
 const RELOAD_PROMPT_DELAY_MS = 1000;
 
@@ -34,6 +35,7 @@ function createButton(
 
 export class HUD {
   private readonly gameState: GameState;
+  private readonly gameMode: GameMode;
   private readonly camera: THREE.Camera;
   private readonly root: HTMLDivElement;
 
@@ -44,10 +46,10 @@ export class HUD {
   private readonly interactEl: HTMLDivElement;
   private readonly healthEl: HTMLDivElement;
   private readonly scoreEl: HTMLDivElement;
-  private readonly roundEl: HTMLDivElement;
+  private readonly modeStatusEl: HTMLDivElement;
   private readonly deathPanelEl: HTMLDivElement;
   private readonly deathScoreEl: HTMLDivElement;
-  private readonly deathRoundsEl: HTMLDivElement;
+  private readonly deathSummaryEl: HTMLDivElement;
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
   private readonly raycast = new Raycast();
@@ -57,11 +59,13 @@ export class HUD {
 
   constructor(
     gameState: GameState,
+    gameMode: GameMode,
     camera: THREE.Camera,
     onRespawn: () => void,
     onMainMenu: () => void,
   ) {
     this.gameState = gameState;
+    this.gameMode = gameMode;
     this.camera = camera;
 
     const root = createDiv({
@@ -131,14 +135,14 @@ export class HUD {
     });
     root.appendChild(this.scoreEl);
 
-    this.roundEl = createDiv({
+    this.modeStatusEl = createDiv({
       position: "absolute",
       top: "24px",
       left: "24px",
       fontSize: "16px",
       fontWeight: "bold",
     });
-    root.appendChild(this.roundEl);
+    root.appendChild(this.modeStatusEl);
 
     this.deathPanelEl = createDiv({
       position: "absolute",
@@ -165,7 +169,7 @@ export class HUD {
     heading.textContent = "YOU DIED";
 
     this.deathScoreEl = createDiv({ fontSize: "18px" });
-    this.deathRoundsEl = createDiv({ fontSize: "18px" });
+    this.deathSummaryEl = createDiv({ fontSize: "18px", whiteSpace: "pre-line" });
 
     const buttonRow = createDiv({ display: "flex", gap: "16px" });
     const respawnButton = createButton(
@@ -185,7 +189,7 @@ export class HUD {
 
     this.deathPanelEl.appendChild(heading);
     this.deathPanelEl.appendChild(this.deathScoreEl);
-    this.deathPanelEl.appendChild(this.deathRoundsEl);
+    this.deathPanelEl.appendChild(this.deathSummaryEl);
     this.deathPanelEl.appendChild(buttonRow);
     root.appendChild(this.deathPanelEl);
 
@@ -242,7 +246,7 @@ export class HUD {
     }
 
     this.updateScore();
-    this.updateRound();
+    this.updateModeStatus();
     this.updateEnemyLabels();
     this.updateDeathPanel();
   }
@@ -301,8 +305,8 @@ export class HUD {
     this.scoreEl.textContent = `Score: ${this.gameState.score}`;
   }
 
-  private updateRound(): void {
-    this.roundEl.textContent = `Round: ${this.gameState.currentRound}`;
+  private updateModeStatus(): void {
+    this.modeStatusEl.textContent = this.gameMode.getStatusLine();
   }
 
   private updateDeathPanel(): void {
@@ -310,7 +314,7 @@ export class HUD {
     this.deathPanelEl.style.display = dead ? "flex" : "none";
     if (dead) {
       this.deathScoreEl.textContent = `Score: ${this.gameState.score}`;
-      this.deathRoundsEl.textContent = `Survived ${this.gameState.roundsSurvived} rounds`;
+      this.deathSummaryEl.textContent = this.gameMode.getSummaryLines().join("\n");
     }
   }
 

@@ -8,7 +8,9 @@ import { InteractSystem } from "./core/InteractSystem";
 import { PlayerState } from "./core/PlayerState";
 import { RunManager } from "./core/RunManager";
 import { MapEntitySystem } from "./core/MapEntitySystem";
+import type { GameMode } from "./modes/GameMode";
 import { ZombieSurvival } from "./modes/ZombieSurvival";
+import { ShootingRange } from "./modes/ShootingRange";
 import { HUD } from "./ui/HUD";
 import { GameState } from "./state/GameState";
 import { findById } from "./core/utils/Lookup";
@@ -16,6 +18,15 @@ import { WEAPONS } from "./content/weapons";
 import { ENEMIES } from "./content/enemies";
 import { SOUNDS } from "./content/sounds";
 import { MAPS } from "./content/maps";
+
+// Placeholder mode selection until checkpoint 9's mode-select menu replaces
+// this with a real runtime choice — do not build runtime mode-switching now.
+// The `as` cast matters: without it, TS narrows this to the literal type of
+// whatever's assigned (even under the wider annotation, since the variable
+// is never reassigned), which turns the ACTIVE_MODE === "zombie" check below
+// into a compile error ("no overlap") whenever this is set to "range".
+type ModeName = "zombie" | "range";
+const ACTIVE_MODE = "zombie" as ModeName;
 
 const canvas = document.createElement("canvas");
 document.body.appendChild(canvas);
@@ -27,21 +38,13 @@ const playerController = new PlayerController(
   canvas,
   gameState,
 );
-// zombieSurvival is assigned further down (it needs the map/weapon systems
-// built first) but this callback only ever runs later, once the player has
-// actually died, by which point construction has long finished.
-let zombieSurvival: ZombieSurvival;
 // Releasing pointer lock on death is what makes the death-panel buttons
 // clickable — PlayerState owns the alive/dead transition but not the DOM/
 // pointer-lock machinery, so it's handed this as a callback rather than
-// reaching into PlayerController directly. It also snapshots the round
-// number at the moment of death into GameState.roundsSurvived, kept
-// separate from the live currentRound so the death panel can't change
-// under the player if a round happens to advance in the background.
-const playerState = new PlayerState(gameState, () => {
-  playerController.controls.unlock();
-  gameState.roundsSurvived = zombieSurvival.currentRound;
-});
+// reaching into PlayerController directly.
+const playerState = new PlayerState(gameState, () =>
+  playerController.controls.unlock(),
+);
 const runManager = new RunManager(gameState, playerState);
 
 const mapDef = findById(MAPS, "test-grid");
@@ -101,18 +104,32 @@ const enemySpawnPoints = mapDef.entities
   .filter((entity) => entity.type === "enemy_spawn")
   .map((entity) => new THREE.Vector3(...entity.position));
 
-zombieSurvival = new ZombieSurvival(
-  findById(ENEMIES, "zombie"),
-  enemySpawnPoints,
-  sceneManager.scene,
-  sceneManager.camera,
-  audioSystem,
-  gameState,
-  playerState,
-  weaponSystem,
-  [...map.walls, ...mapEntitySystem.doorMeshes],
-  runManager,
-);
+const targetPoints = mapDef.entities
+  .filter((entity) => entity.type === "target")
+  .map((entity) => new THREE.Vector3(...entity.position));
+
+const gameMode: GameMode =
+  ACTIVE_MODE === "zombie"
+    ? new ZombieSurvival(
+        findById(ENEMIES, "zombie"),
+        enemySpawnPoints,
+        sceneManager.scene,
+        sceneManager.camera,
+        audioSystem,
+        gameState,
+        playerState,
+        weaponSystem,
+        [...map.walls, ...mapEntitySystem.doorMeshes],
+        runManager,
+      )
+    : new ShootingRange(
+        targetPoints,
+        sceneManager.scene,
+        weaponSystem,
+        gameState,
+        runManager,
+      );
+gameMode.start();
 
 function startNewRun(): void {
   runManager.startNewRun();
@@ -122,7 +139,13 @@ function startNewRun(): void {
 
 // "Main Menu" is a placeholder alias for startNewRun() until checkpoint 9
 // gives it a real menu to return to.
-const hud = new HUD(gameState, sceneManager.camera, startNewRun, startNewRun);
+const hud = new HUD(
+  gameState,
+  gameMode,
+  sceneManager.camera,
+  startNewRun,
+  startNewRun,
+);
 hud.setOcclusionTargets([...map.walls, ...mapEntitySystem.doorMeshes]);
 
 canvas.addEventListener("click", () => {
@@ -133,12 +156,14 @@ document.addEventListener("pointerlockchange", () => {
   gameState.paused = document.pointerLockElement !== canvas;
 });
 
+const modeClock = new THREE.Clock();
+
 function animate(): void {
   requestAnimationFrame(animate);
   playerController.update();
   weaponSystem.update();
   interactSystem.update();
-  zombieSurvival.update();
+  gameMode.update(modeClock.getDelta());
   hud.update();
   sceneManager.render();
 }
