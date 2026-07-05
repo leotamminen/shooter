@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { CELL_SIZE, WALL_HEIGHT } from "./MapLoader";
+import { computeCollisionBox } from "./utils/CollisionBox";
 import type { MapDef, MapEntity } from "../types";
 import type { WeaponSystem } from "./WeaponSystem";
 import type { RunManager } from "./RunManager";
+import type { RaycastRegistry } from "./RaycastRegistry";
 
 const DOOR_COLOR = 0x8b5a2b;
 const BUTTON_COLOR = 0xcc2222;
@@ -27,20 +29,29 @@ export class MapEntitySystem {
   readonly doors: DoorEntry[] = [];
   readonly interactables: THREE.Mesh[] = [];
 
-  constructor(mapDef: MapDef, weaponSystem: WeaponSystem, runManager: RunManager) {
+  constructor(
+    mapDef: MapDef,
+    weaponSystem: WeaponSystem,
+    runManager: RunManager,
+    raycastRegistry: RaycastRegistry,
+    onDoorStateChanged: () => void,
+  ) {
     const doorMeshById = new Map<string, THREE.Mesh>();
 
     for (const entity of mapDef.entities) {
       if (entity.type === "door") {
-        doorMeshById.set(entity.id, this.createDoor(entity, runManager));
+        doorMeshById.set(
+          entity.id,
+          this.createDoor(entity, runManager, raycastRegistry, onDoorStateChanged),
+        );
       }
     }
 
     for (const entity of mapDef.entities) {
       if (entity.type === "button") {
-        this.createButton(entity, doorMeshById);
+        this.createButton(entity, doorMeshById, raycastRegistry, onDoorStateChanged);
       } else if (entity.type === "pickup") {
-        this.createPickup(entity, weaponSystem, runManager);
+        this.createPickup(entity, weaponSystem, runManager, raycastRegistry);
       }
     }
   }
@@ -49,19 +60,26 @@ export class MapEntitySystem {
     return this.doors.map((door) => door.mesh);
   }
 
-  private createDoor(entity: MapEntity, runManager: RunManager): THREE.Mesh {
+  private createDoor(
+    entity: MapEntity,
+    runManager: RunManager,
+    raycastRegistry: RaycastRegistry,
+    onDoorStateChanged: () => void,
+  ): THREE.Mesh {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE),
       new THREE.MeshStandardMaterial({ color: DOOR_COLOR }),
     );
     mesh.position.set(...entity.position);
     this.group.add(mesh);
+    raycastRegistry.register(mesh);
 
-    const box = new THREE.Box3().setFromObject(mesh);
+    const box = computeCollisionBox(mesh);
     this.doors.push({ mesh, box });
 
     runManager.registerResettable(() => {
       mesh.visible = true;
+      onDoorStateChanged();
     });
 
     return mesh;
@@ -70,6 +88,8 @@ export class MapEntitySystem {
   private createButton(
     entity: MapEntity,
     doorMeshById: Map<string, THREE.Mesh>,
+    raycastRegistry: RaycastRegistry,
+    onDoorStateChanged: () => void,
   ): void {
     const door = entity.linkedTo ? doorMeshById.get(entity.linkedTo) : undefined;
     if (!door) {
@@ -90,16 +110,19 @@ export class MapEntitySystem {
     mesh.userData.onInteract = (): void => {
       if (!door.visible) return; // idempotent: door already open
       door.visible = false;
+      onDoorStateChanged();
     };
 
     this.group.add(mesh);
     this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
   }
 
   private createPickup(
     entity: MapEntity,
     weaponSystem: WeaponSystem,
     runManager: RunManager,
+    raycastRegistry: RaycastRegistry,
   ): void {
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(PICKUP_SIZE, PICKUP_SIZE, PICKUP_SIZE),
@@ -118,6 +141,7 @@ export class MapEntitySystem {
 
     this.group.add(mesh);
     this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
 
     runManager.registerResettable(() => {
       mesh.visible = true;

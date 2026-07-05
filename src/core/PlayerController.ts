@@ -29,6 +29,7 @@ export class PlayerController {
   private readonly clock = new THREE.Clock();
   private wallBoxes: THREE.Box3[] = [];
   private doors: DoorEntry[] = [];
+  private collisionBoxes: THREE.Box3[] = [];
 
   private readonly forward = new THREE.Vector3();
   private readonly right = new THREE.Vector3();
@@ -53,10 +54,23 @@ export class PlayerController {
 
   setWallBoxes(wallBoxes: THREE.Box3[]): void {
     this.wallBoxes = wallBoxes;
+    this.rebuildCollisionBoxes();
   }
 
   setDoors(doors: DoorEntry[]): void {
     this.doors = doors;
+    this.rebuildCollisionBoxes();
+  }
+
+  // Recomputes the cached closed-door-plus-wall collision list. Called once
+  // whenever wallBoxes/doors are (re)assigned, and again by MapEntitySystem's
+  // onDoorStateChanged hook every time a door's visibility actually changes
+  // (button press, or a RunManager reset reopening it) — not every frame,
+  // since door state changes are rare compared to the movement update rate.
+  rebuildCollisionBoxes(): void {
+    this.collisionBoxes = this.wallBoxes.concat(
+      this.doors.filter((door) => door.mesh.visible).map((door) => door.box),
+    );
   }
 
   setSpawn(x: number, z: number): void {
@@ -83,15 +97,8 @@ export class PlayerController {
     let x = this.camera.position.x + this.moveDirection.x * step;
     let z = this.camera.position.z + this.moveDirection.z * step;
 
-    // Closed (visible) doors collide the same as walls; an opened door is
-    // just excluded from this list for the frame, no separate open/closed
-    // bookkeeping needed here.
-    const boxes = this.wallBoxes.concat(
-      this.doors.filter((door) => door.mesh.visible).map((door) => door.box),
-    );
-
     for (let pass = 0; pass < COLLISION_PASSES; pass++) {
-      for (const box of boxes) {
+      for (const box of this.collisionBoxes) {
         ({ x, z } = this.resolveAgainstBox(x, z, box));
       }
     }

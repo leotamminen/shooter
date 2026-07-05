@@ -4,6 +4,7 @@ import type { AudioSystem } from "./AudioSystem";
 import type { Weapon } from "../types";
 import type { GameState } from "../state/GameState";
 import type { RunManager } from "./RunManager";
+import type { RaycastRegistry } from "./RaycastRegistry";
 
 export class WeaponSystem {
   currentAmmo: number;
@@ -12,7 +13,7 @@ export class WeaponSystem {
 
   private readonly raycast = new Raycast();
   private readonly clock = new THREE.Clock();
-  private targets: THREE.Object3D[] = [];
+  private readonly raycastRegistry: RaycastRegistry;
 
   private timeSinceLastShot = Infinity;
   private reloadTimeRemaining = 0;
@@ -29,6 +30,7 @@ export class WeaponSystem {
     audioSystem: AudioSystem,
     gameState: GameState,
     runManager: RunManager,
+    raycastRegistry: RaycastRegistry,
   ) {
     this.camera = camera;
     this.weapon = weapon;
@@ -36,6 +38,7 @@ export class WeaponSystem {
     this.reserveAmmo = weapon.startingReserveAmmo;
     this.audioSystem = audioSystem;
     this.gameState = gameState;
+    this.raycastRegistry = raycastRegistry;
 
     window.addEventListener("mousedown", this.handleMouseDown);
     window.addEventListener("mouseup", this.handleMouseUp);
@@ -44,20 +47,16 @@ export class WeaponSystem {
     runManager.registerResettable(() => this.reset());
   }
 
-  setTargets(targets: THREE.Object3D[]): void {
-    this.targets = targets;
-  }
-
-  // Lets a dynamically spawned/despawned object (e.g. a ZombieSurvival enemy)
-  // join or leave the raycast target list without WeaponSystem needing to
-  // know about rounds/spawning — it just tracks whatever it's told to.
+  // Lets a dynamically spawned/despawned object (e.g. a ZombieSurvival enemy
+  // or a ShootingRange target) join or leave the shared raycast registry
+  // without WeaponSystem needing to know about rounds/spawning — it just
+  // delegates to the one shared registry every raycasting system reads from.
   addTarget(target: THREE.Object3D): void {
-    this.targets.push(target);
+    this.raycastRegistry.register(target);
   }
 
   removeTarget(target: THREE.Object3D): void {
-    const index = this.targets.indexOf(target);
-    if (index !== -1) this.targets.splice(index, 1);
+    this.raycastRegistry.unregister(target);
   }
 
   addReserveAmmo(amount: number): void {
@@ -70,6 +69,7 @@ export class WeaponSystem {
     this.isReloading = false;
     this.reloadTimeRemaining = 0;
     this.timeSinceLastShot = Infinity;
+    this.firing = false;
   }
 
   update(): void {
@@ -99,7 +99,7 @@ export class WeaponSystem {
     this.timeSinceLastShot = 0;
     this.currentAmmo -= 1;
 
-    const hit = this.raycast.fromCamera(this.camera, this.targets);
+    const hit = this.raycast.fromCamera(this.camera, this.raycastRegistry.getAll());
     const onHit = hit?.object.userData.onHit as
       | ((damage: number) => void)
       | undefined;

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Raycast } from "../core/utils/Raycast";
 import type { GameState } from "../state/GameState";
 import type { GameMode } from "../modes/GameMode";
+import type { RaycastRegistry } from "../core/RaycastRegistry";
 
 const RELOAD_PROMPT_DELAY_MS = 1000;
 
@@ -37,6 +38,7 @@ export class HUD {
   private readonly gameState: GameState;
   private readonly gameMode: GameMode;
   private readonly camera: THREE.Camera;
+  private readonly raycastRegistry: RaycastRegistry;
   private readonly root: HTMLDivElement;
 
   private readonly crosshairEl: HTMLDivElement;
@@ -53,7 +55,6 @@ export class HUD {
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
   private readonly raycast = new Raycast();
-  private occlusionTargets: THREE.Object3D[] = [];
 
   private emptySince: number | null = null;
 
@@ -63,10 +64,12 @@ export class HUD {
     camera: THREE.Camera,
     onRespawn: () => void,
     onMainMenu: () => void,
+    raycastRegistry: RaycastRegistry,
   ) {
     this.gameState = gameState;
     this.gameMode = gameMode;
     this.camera = camera;
+    this.raycastRegistry = raycastRegistry;
 
     const root = createDiv({
       position: "fixed",
@@ -194,10 +197,6 @@ export class HUD {
     root.appendChild(this.deathPanelEl);
 
     document.body.appendChild(root);
-  }
-
-  setOcclusionTargets(targets: THREE.Object3D[]): void {
-    this.occlusionTargets = targets;
   }
 
   private buildCrosshair(): HTMLDivElement {
@@ -347,7 +346,7 @@ export class HUD {
       );
       const screen = this.projectToScreen(worldPos);
 
-      if (screen === null || this.isOccluded(worldPos)) {
+      if (screen === null || this.isOccluded(worldPos, id)) {
         label.style.display = "none";
         continue;
       }
@@ -379,19 +378,26 @@ export class HUD {
     };
   }
 
-  private isOccluded(worldPos: THREE.Vector3): boolean {
+  // excludeEnemyId leaves the labeled enemy's own mesh out of its occlusion
+  // check: the label sits only slightly above the enemy's own model, so
+  // without this a close/steep viewing angle could clip the enemy's own head
+  // and falsely report itself as occluding its own label. This is a string
+  // comparison against each enemy's own unique id (tagged onto its mesh as
+  // userData.enemyId in EnemyAI's constructor), not a shared type/tag — ids
+  // are guaranteed unique per live enemy (the same invariant
+  // gameState.enemyHealth's dictionary keys already rely on), so this can
+  // never exclude a different enemy's mesh from the occlusion check.
+  private isOccluded(worldPos: THREE.Vector3, excludeEnemyId: string): boolean {
     const origin = this.camera.position;
     const toTarget = worldPos.clone().sub(origin);
     const distance = toTarget.length();
     if (distance < 1e-6) return false;
 
     const direction = toTarget.normalize();
-    const hit = this.raycast.fromOrigin(
-      origin,
-      direction,
-      this.occlusionTargets,
-      distance,
-    );
+    const targets = this.raycastRegistry
+      .getAll()
+      .filter((object) => object.userData.enemyId !== excludeEnemyId);
+    const hit = this.raycast.fromOrigin(origin, direction, targets, distance);
     return hit !== null;
   }
 }

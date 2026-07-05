@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { EnemyAI } from "../core/EnemyAI";
+import { Countdown } from "../core/utils/Countdown";
 import type { GameMode } from "./GameMode";
 import type { AudioSystem } from "../core/AudioSystem";
 import type { PlayerState } from "../core/PlayerState";
-import type { WeaponSystem } from "../core/WeaponSystem";
+import type { RaycastRegistry } from "../core/RaycastRegistry";
 import type { RunManager } from "../core/RunManager";
 import type { GameState } from "../state/GameState";
 import type { EnemyDef } from "../types";
@@ -19,7 +20,7 @@ export class ZombieSurvival implements GameMode {
   currentRound = 1;
 
   private activeEnemies: EnemyAI[] = [];
-  private roundTransitionTimer: number | null = null;
+  private readonly roundTransitionCountdown = new Countdown();
 
   private readonly enemyDef: EnemyDef;
   private readonly spawnPoints: THREE.Vector3[];
@@ -28,8 +29,7 @@ export class ZombieSurvival implements GameMode {
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
   private readonly playerState: PlayerState;
-  private readonly weaponSystem: WeaponSystem;
-  private readonly wallTargets: THREE.Object3D[];
+  private readonly raycastRegistry: RaycastRegistry;
 
   constructor(
     enemyDef: EnemyDef,
@@ -39,8 +39,7 @@ export class ZombieSurvival implements GameMode {
     audioSystem: AudioSystem,
     gameState: GameState,
     playerState: PlayerState,
-    weaponSystem: WeaponSystem,
-    wallTargets: THREE.Object3D[],
+    raycastRegistry: RaycastRegistry,
     runManager: RunManager,
   ) {
     if (spawnPoints.length === 0) {
@@ -54,8 +53,7 @@ export class ZombieSurvival implements GameMode {
     this.audioSystem = audioSystem;
     this.gameState = gameState;
     this.playerState = playerState;
-    this.weaponSystem = weaponSystem;
-    this.wallTargets = wallTargets;
+    this.raycastRegistry = raycastRegistry;
 
     runManager.registerResettable(() => this.resetRun());
   }
@@ -67,13 +65,11 @@ export class ZombieSurvival implements GameMode {
   update(deltaTime: number): void {
     for (const enemy of this.activeEnemies) enemy.update();
 
-    if (this.roundTransitionTimer !== null) {
-      this.roundTransitionTimer -= deltaTime;
-      if (this.roundTransitionTimer <= 0) {
-        this.roundTransitionTimer = null;
+    if (this.roundTransitionCountdown.active) {
+      this.roundTransitionCountdown.update(deltaTime, () => {
         this.currentRound += 1;
         this.startRound();
-      }
+      });
       return;
     }
 
@@ -81,7 +77,7 @@ export class ZombieSurvival implements GameMode {
       this.activeEnemies.length > 0 &&
       this.activeEnemies.every((enemy) => enemy.dead)
     ) {
-      this.roundTransitionTimer = ROUND_TRANSITION_DELAY;
+      this.roundTransitionCountdown.start(ROUND_TRANSITION_DELAY);
     }
   }
 
@@ -112,8 +108,7 @@ export class ZombieSurvival implements GameMode {
         this.audioSystem,
         this.gameState,
         this.playerState,
-        this.weaponSystem,
-        this.wallTargets,
+        this.raycastRegistry,
       );
       this.activeEnemies.push(enemy);
     }
@@ -122,7 +117,7 @@ export class ZombieSurvival implements GameMode {
   private resetRun(): void {
     for (const enemy of this.activeEnemies) enemy.destroy();
     this.activeEnemies = [];
-    this.roundTransitionTimer = null;
+    this.roundTransitionCountdown.stop();
     this.currentRound = 1;
     this.startRound();
   }

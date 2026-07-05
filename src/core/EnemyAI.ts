@@ -4,7 +4,7 @@ import { StateMachine } from "./utils/StateMachine";
 import { applyDamage } from "./utils/Health";
 import type { AudioSystem } from "./AudioSystem";
 import type { PlayerState } from "./PlayerState";
-import type { WeaponSystem } from "./WeaponSystem";
+import type { RaycastRegistry } from "./RaycastRegistry";
 import type { EnemyDef } from "../types";
 import type { GameState } from "../state/GameState";
 
@@ -30,8 +30,7 @@ export class EnemyAI {
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
   private readonly playerState: PlayerState;
-  private readonly weaponSystem: WeaponSystem;
-  private readonly wallTargets: THREE.Object3D[];
+  private readonly raycastRegistry: RaycastRegistry;
 
   private readonly raycast = new Raycast();
   private readonly clock = new THREE.Clock();
@@ -50,8 +49,7 @@ export class EnemyAI {
     audioSystem: AudioSystem,
     gameState: GameState,
     playerState: PlayerState,
-    weaponSystem: WeaponSystem,
-    wallTargets: THREE.Object3D[],
+    raycastRegistry: RaycastRegistry,
   ) {
     this.id = id;
     this.def = def;
@@ -60,8 +58,7 @@ export class EnemyAI {
     this.audioSystem = audioSystem;
     this.gameState = gameState;
     this.playerState = playerState;
-    this.weaponSystem = weaponSystem;
-    this.wallTargets = wallTargets;
+    this.raycastRegistry = raycastRegistry;
     this.health = def.health;
 
     this.mesh = new THREE.Mesh(
@@ -70,8 +67,9 @@ export class EnemyAI {
     );
     this.mesh.position.copy(spawnPosition);
     this.mesh.userData.onHit = (damage: number): void => this.takeDamage(damage);
+    this.mesh.userData.enemyId = this.id;
     this.scene.add(this.mesh);
-    this.weaponSystem.addTarget(this.mesh);
+    this.raycastRegistry.register(this.mesh);
 
     this.stateMachine = new StateMachine<ZombieState, EnemyAI>(
       "idle",
@@ -130,7 +128,7 @@ export class EnemyAI {
     if (this.dead) return;
     this.dead = true;
     delete this.gameState.enemyHealth[this.id];
-    this.weaponSystem.removeTarget(this.mesh);
+    this.raycastRegistry.unregister(this.mesh);
     this.scene.remove(this.mesh);
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
@@ -146,12 +144,18 @@ export class EnemyAI {
     if (distance < 1e-6) return true;
 
     const direction = toPlayer.normalize();
-    const hit = this.raycast.fromOrigin(
-      origin,
-      direction,
-      this.wallTargets,
-      distance,
-    );
+    // Excludes this enemy's own mesh by object reference: the ray originates
+    // at its center, so without this filter it could immediately
+    // re-intersect its own geometry and report itself as blocking its own
+    // line of sight. This is a reference check against this.mesh — the
+    // unique THREE.Mesh this instance created for itself — so it can never
+    // exclude a different EnemyAI instance's mesh. Other enemies are
+    // deliberately left in: one zombie standing in front of another is a
+    // legitimate line-of-sight blocker now that both share the registry.
+    const targets = this.raycastRegistry
+      .getAll()
+      .filter((object) => object !== this.mesh);
+    const hit = this.raycast.fromOrigin(origin, direction, targets, distance);
     return hit === null;
   }
 

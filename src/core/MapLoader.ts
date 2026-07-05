@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import type { MapDef } from "../types";
+import type { RaycastRegistry } from "./RaycastRegistry";
+import { computeCollisionBox } from "./utils/CollisionBox";
 
 export const CELL_SIZE = 2;
 export const WALL_HEIGHT = 3;
@@ -10,7 +12,7 @@ export interface LoadedMap {
   wallBoxes: THREE.Box3[];
 }
 
-export function loadMap(grid: number[][]): LoadedMap {
+export function loadMap(grid: number[][], raycastRegistry: RaycastRegistry): LoadedMap {
   const group = new THREE.Group();
   const walls: THREE.Mesh[] = [];
   const wallBoxes: THREE.Box3[] = [];
@@ -39,7 +41,8 @@ export function loadMap(grid: number[][]): LoadedMap {
       wall.position.set(col * CELL_SIZE, WALL_HEIGHT / 2, row * CELL_SIZE);
       group.add(wall);
       walls.push(wall);
-      wallBoxes.push(new THREE.Box3().setFromObject(wall));
+      wallBoxes.push(computeCollisionBox(wall));
+      raycastRegistry.register(wall);
     }
   }
 

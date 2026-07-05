@@ -8,6 +8,7 @@ import { InteractSystem } from "./core/InteractSystem";
 import { PlayerState } from "./core/PlayerState";
 import { RunManager } from "./core/RunManager";
 import { MapEntitySystem } from "./core/MapEntitySystem";
+import { RaycastRegistry } from "./core/RaycastRegistry";
 import type { GameMode } from "./modes/GameMode";
 import { ZombieSurvival } from "./modes/ZombieSurvival";
 import { ShootingRange } from "./modes/ShootingRange";
@@ -55,8 +56,15 @@ const playerState = new PlayerState(gameState, () => {
 });
 const runManager = new RunManager(gameState, playerState);
 
+// The single shared "what can be hit/occluded by a ray" registry — every
+// solid or interactable object (walls, doors, buttons, pickups, the
+// placeholder interactable, enemies) registers itself here once, and every
+// raycasting system (WeaponSystem's fire, EnemyAI's line-of-sight,
+// InteractSystem's interact ray, HUD's label occlusion) reads the same list.
+const raycastRegistry = new RaycastRegistry();
+
 const mapDef = findById(MAPS, "test-grid");
-const map = loadMap(mapDef.grid);
+const map = loadMap(mapDef.grid, raycastRegistry);
 sceneManager.scene.add(map.group);
 playerController.setWallBoxes(map.wallBoxes);
 const spawnPosition = getSpawnPosition(mapDef);
@@ -73,9 +81,16 @@ const weaponSystem = new WeaponSystem(
   audioSystem,
   gameState,
   runManager,
+  raycastRegistry,
 );
 
-const mapEntitySystem = new MapEntitySystem(mapDef, weaponSystem, runManager);
+const mapEntitySystem = new MapEntitySystem(
+  mapDef,
+  weaponSystem,
+  runManager,
+  raycastRegistry,
+  () => playerController.rebuildCollisionBoxes(),
+);
 sceneManager.scene.add(mapEntitySystem.group);
 playerController.setDoors(mapEntitySystem.doors);
 
@@ -93,20 +108,9 @@ interactableBox.userData.onInteract = (): void => {
 };
 interactableBox.position.set(2, 0.3, 8);
 sceneManager.scene.add(interactableBox);
+raycastRegistry.register(interactableBox);
 
-const interactSystem = new InteractSystem(sceneManager.camera, gameState);
-interactSystem.setTargets([
-  ...map.walls,
-  ...mapEntitySystem.doorMeshes,
-  interactableBox,
-  ...mapEntitySystem.interactables,
-]);
-
-weaponSystem.setTargets([
-  ...map.walls,
-  ...mapEntitySystem.doorMeshes,
-  interactableBox,
-]);
+const interactSystem = new InteractSystem(sceneManager.camera, gameState, raycastRegistry);
 
 const enemySpawnPoints = mapDef.entities
   .filter((entity) => entity.type === "enemy_spawn")
@@ -126,8 +130,7 @@ gameMode =
         audioSystem,
         gameState,
         playerState,
-        weaponSystem,
-        [...map.walls, ...mapEntitySystem.doorMeshes],
+        raycastRegistry,
         runManager,
       )
     : new ShootingRange(
@@ -153,8 +156,8 @@ const hud = new HUD(
   sceneManager.camera,
   startNewRun,
   startNewRun,
+  raycastRegistry,
 );
-hud.setOcclusionTargets([...map.walls, ...mapEntitySystem.doorMeshes]);
 
 canvas.addEventListener("click", () => {
   playerController.controls.lock();
@@ -171,7 +174,13 @@ function animate(): void {
   playerController.update();
   weaponSystem.update();
   interactSystem.update();
-  gameMode.update(modeClock.getDelta());
+  // Always drain the clock so its internal reference stays fresh — otherwise
+  // the frame gameplay resumes after death would report one huge deltaTime
+  // spike (elapsed dead-screen time) into whichever mode is active.
+  const delta = modeClock.getDelta();
+  if (gameState.playerState === "alive") {
+    gameMode.update(delta);
+  }
   hud.update();
   sceneManager.render();
 }

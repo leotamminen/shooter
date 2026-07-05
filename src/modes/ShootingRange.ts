@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { Countdown } from "../core/utils/Countdown";
 import type { GameMode } from "./GameMode";
 import type { WeaponSystem } from "../core/WeaponSystem";
 import type { RunManager } from "../core/RunManager";
@@ -11,7 +12,7 @@ const TARGET_COLOR = 0xdddddd;
 
 interface TargetEntry {
   mesh: THREE.Mesh;
-  cooldownRemaining: number;
+  cooldown: Countdown;
 }
 
 // Hardcoded on purpose, like ZombieSurvival — the second mode implementing
@@ -40,7 +41,7 @@ export class ShootingRange implements GameMode {
       scene.add(mesh);
       weaponSystem.addTarget(mesh);
 
-      const entry: TargetEntry = { mesh, cooldownRemaining: 0 };
+      const entry: TargetEntry = { mesh, cooldown: new Countdown() };
       mesh.userData.onHit = (): void => this.hitTarget(entry);
       this.targets.push(entry);
     }
@@ -54,13 +55,9 @@ export class ShootingRange implements GameMode {
 
   update(deltaTime: number): void {
     for (const target of this.targets) {
-      if (target.cooldownRemaining <= 0) continue;
-
-      target.cooldownRemaining -= deltaTime;
-      if (target.cooldownRemaining <= 0) {
-        target.cooldownRemaining = 0;
+      target.cooldown.update(deltaTime, () => {
         target.mesh.visible = true;
-      }
+      });
     }
   }
 
@@ -79,13 +76,13 @@ export class ShootingRange implements GameMode {
 
     this.gameState.addScore(TARGET_SCORE);
     target.mesh.visible = false;
-    target.cooldownRemaining = TARGET_COOLDOWN;
+    target.cooldown.start(TARGET_COOLDOWN);
   }
 
   private resetRun(): void {
     for (const target of this.targets) {
       target.mesh.visible = true;
-      target.cooldownRemaining = 0;
+      target.cooldown.stop();
     }
   }
 }

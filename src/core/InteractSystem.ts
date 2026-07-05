@@ -1,25 +1,23 @@
 import * as THREE from "three";
 import { Raycast } from "./utils/Raycast";
 import type { GameState } from "../state/GameState";
+import type { RaycastRegistry } from "./RaycastRegistry";
 
 const INTERACT_DISTANCE = 4;
 
 export class InteractSystem {
   private readonly raycast = new Raycast();
-  private targets: THREE.Object3D[] = [];
+  private readonly raycastRegistry: RaycastRegistry;
 
   private readonly camera: THREE.Camera;
   private readonly gameState: GameState;
 
-  constructor(camera: THREE.Camera, gameState: GameState) {
+  constructor(camera: THREE.Camera, gameState: GameState, raycastRegistry: RaycastRegistry) {
     this.camera = camera;
     this.gameState = gameState;
+    this.raycastRegistry = raycastRegistry;
 
     window.addEventListener("keydown", this.handleKeyDown);
-  }
-
-  setTargets(targets: THREE.Object3D[]): void {
-    this.targets = targets;
   }
 
   update(): void {
@@ -29,7 +27,7 @@ export class InteractSystem {
   isLookingAtInteractable(): boolean {
     const hit = this.raycast.fromCamera(
       this.camera,
-      this.targets,
+      this.raycastRegistry.getAll(),
       INTERACT_DISTANCE,
     );
     return hit !== null && hit.object.userData.interactable === true;
@@ -44,12 +42,12 @@ export class InteractSystem {
   private tryInteract(): void {
     const hit = this.raycast.fromCamera(
       this.camera,
-      this.targets,
+      this.raycastRegistry.getAll(),
       INTERACT_DISTANCE,
     );
-    const onInteract = hit?.object.userData.onInteract as
-      | (() => void)
-      | undefined;
+    if (!hit || hit.object.userData.interactable !== true) return;
+
+    const onInteract = hit.object.userData.onInteract as (() => void) | undefined;
     onInteract?.();
   }
 }
