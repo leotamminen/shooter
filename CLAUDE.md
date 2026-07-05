@@ -66,7 +66,9 @@ src/
 
 ## Current status
 
-Checkpoint 3.5 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a synthesized placeholder click (Node-generated decaying sine beep), not a real recording — swap it for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
+Checkpoint 4 complete. The fire sound (`public/sounds/pistol_fire.wav`) and the new zombie growl/death sounds (`public/sounds/zombie_growl.wav`, `zombie_death.wav`) are all synthesized placeholders (Node-generated tones), not real recordings — swap them for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
+
+Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) didn't explicitly cover damage/kill mechanics, and no later checkpoint claimed them either, so they were added here rather than left to silently expand checkpoint 7's scope. Player death/reset handling is explicitly deferred — see decisions log.
 
 ## Decisions log
 
@@ -82,3 +84,6 @@ Checkpoint 3.5 complete. The fire sound (`public/sounds/pistol_fire.wav`) is a s
 - `Weapon.name` added as a separate field from `Weapon.id` — id is the data lookup key, name is player-facing display text.
 - HUD (`ui/HUD.ts`) is a plain DOM overlay, not part of the Three.js scene: absolutely positioned, `pointer-events: none` so it never steals clicks from the canvas (pointer lock, firing, interact all still work). It reads only from `GameState`; `WeaponSystem`/`InteractSystem` write their relevant fields to `GameState` every frame. This replaces the checkpoint-2/3 `console.log` observability, which has been removed now that the same information is visible on screen.
 - The 1-second delay before showing "Press R to reload" is tracked inside `HUD.ts` itself (a local `emptySince` timestamp), not in `WeaponSystem` or `GameState` — it's presentation timing, not a gameplay rule, so it belongs with the thing that renders it.
+- Damage sources use a generic `userData.onHit(damage)` callback on the target mesh, the same pattern as `userData.interactable` — `WeaponSystem` calls whatever hook exists on the object it hit and never imports `EnemyAI`. Any future damageable object (barrels, other enemies) plugs into `WeaponSystem` for free by setting this one field.
+- Player death is explicitly out of scope for checkpoint 4: `GameState.playerHealth` clamps at 0 and just sits there — no respawn, no game-over screen, no round-reset. Deciding what "death" means (respawn? end the round? which game mode owns that?) is a game-mode concern, so it's deferred to whichever of checkpoints 7–9 defines that mode's rules, rather than guessed at here.
+- The floating enemy health label (current/max, projected above the enemy's head via `camera.project()`) is a debug/test aid for verifying damage and state transitions, not a final UI choice — it should be replaced with a real health bar, hidden, or otherwise redesigned once the game is closer to presentable. Noted here so it isn't mistaken for a deliberate design decision later.

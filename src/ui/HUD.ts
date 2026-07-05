@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import type { GameState } from "../state/GameState";
 
 const RELOAD_PROMPT_DELAY_MS = 1000;
@@ -10,16 +11,22 @@ function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
 
 export class HUD {
   private readonly gameState: GameState;
+  private readonly camera: THREE.Camera;
+  private readonly root: HTMLDivElement;
 
   private readonly weaponNameEl: HTMLDivElement;
   private readonly ammoCountEl: HTMLDivElement;
   private readonly statusEl: HTMLDivElement;
   private readonly interactEl: HTMLDivElement;
+  private readonly healthEl: HTMLDivElement;
+
+  private readonly enemyLabels = new Map<string, HTMLDivElement>();
 
   private emptySince: number | null = null;
 
-  constructor(gameState: GameState) {
+  constructor(gameState: GameState, camera: THREE.Camera) {
     this.gameState = gameState;
+    this.camera = camera;
 
     const root = createDiv({
       position: "fixed",
@@ -31,6 +38,7 @@ export class HUD {
       textShadow: "0 1px 2px rgba(0, 0, 0, 0.8)",
       userSelect: "none",
     });
+    this.root = root;
 
     root.appendChild(this.buildCrosshair());
 
@@ -66,6 +74,16 @@ export class HUD {
     ammoBox.appendChild(this.weaponNameEl);
     ammoBox.appendChild(this.ammoCountEl);
     root.appendChild(ammoBox);
+
+    this.healthEl = createDiv({
+      position: "absolute",
+      bottom: "24px",
+      left: "50%",
+      transform: "translateX(-50%)",
+      fontSize: "18px",
+      fontWeight: "bold",
+    });
+    root.appendChild(this.healthEl);
 
     document.body.appendChild(root);
   }
@@ -106,6 +124,8 @@ export class HUD {
     this.updateAmmo();
     this.updateStatusPrompt();
     this.updateInteractPrompt();
+    this.updateHealth();
+    this.updateEnemyLabels();
   }
 
   private updateAmmo(): void {
@@ -144,5 +164,70 @@ export class HUD {
     this.interactEl.textContent = this.gameState.canInteract
       ? "Press E to interact"
       : "";
+  }
+
+  private updateHealth(): void {
+    this.healthEl.textContent = `HP: ${this.gameState.playerHealth}`;
+  }
+
+  // Debug/test aid: floating current/max labels above each enemy, projected
+  // from world space every frame. Not meant to ship as-is — replace with a
+  // real health bar (or hide entirely) once the game is closer to
+  // presentable.
+  private updateEnemyLabels(): void {
+    const seen = new Set<string>();
+
+    for (const [id, entry] of Object.entries(this.gameState.enemyHealth)) {
+      seen.add(id);
+
+      let label = this.enemyLabels.get(id);
+      if (!label) {
+        label = createDiv({
+          position: "absolute",
+          transform: "translate(-50%, -100%)",
+          fontSize: "12px",
+          whiteSpace: "nowrap",
+        });
+        this.enemyLabels.set(id, label);
+        this.root.appendChild(label);
+      }
+
+      const worldPos = new THREE.Vector3(
+        entry.position.x,
+        entry.position.y,
+        entry.position.z,
+      );
+      const screen = this.projectToScreen(worldPos);
+
+      if (screen === null) {
+        label.style.display = "none";
+        continue;
+      }
+
+      label.style.display = "block";
+      label.style.left = `${screen.x}px`;
+      label.style.top = `${screen.y}px`;
+      label.textContent = `${entry.current}/${entry.max}`;
+    }
+
+    for (const [id, label] of this.enemyLabels) {
+      if (!seen.has(id)) {
+        label.remove();
+        this.enemyLabels.delete(id);
+      }
+    }
+  }
+
+  private projectToScreen(worldPos: THREE.Vector3): { x: number; y: number } | null {
+    const toTarget = worldPos.clone().sub(this.camera.position);
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+    if (toTarget.dot(forward) <= 0) return null;
+
+    const ndc = worldPos.clone().project(this.camera);
+    return {
+      x: (ndc.x * 0.5 + 0.5) * window.innerWidth,
+      y: (-ndc.y * 0.5 + 0.5) * window.innerHeight,
+    };
   }
 }

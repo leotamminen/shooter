@@ -13,6 +13,8 @@ export interface EnemyDef {
   id: string;
   health: number;
   speed: number;
+  meleeDamage: number;
+  attackInterval: number; // seconds between melee attacks
   growlSoundId: string; // references SoundDef.id
   deathSoundId: string; // references SoundDef.id
   model?: string;

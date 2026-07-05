@@ -70,7 +70,13 @@ export class WeaponSystem {
   private fire(): void {
     this.timeSinceLastShot = 0;
     this.currentAmmo -= 1;
-    this.raycast.fromCamera(this.camera, this.targets);
+
+    const hit = this.raycast.fromCamera(this.camera, this.targets);
+    const onHit = hit?.object.userData.onHit as
+      | ((damage: number) => void)
+      | undefined;
+    onHit?.(this.weapon.damage);
+
     this.audioSystem.play(this.weapon.fireSoundId);
   }
 
