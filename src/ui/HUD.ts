@@ -20,6 +20,7 @@ export class HUD {
   private readonly statusEl: HTMLDivElement;
   private readonly interactEl: HTMLDivElement;
   private readonly healthEl: HTMLDivElement;
+  private readonly scoreEl: HTMLDivElement;
   private readonly deathOverlayEl: HTMLDivElement;
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
@@ -89,6 +90,15 @@ export class HUD {
     });
     root.appendChild(this.healthEl);
 
+    this.scoreEl = createDiv({
+      position: "absolute",
+      top: "24px",
+      right: "24px",
+      fontSize: "16px",
+      fontWeight: "bold",
+    });
+    root.appendChild(this.scoreEl);
+
     this.deathOverlayEl = createDiv({
       position: "absolute",
       top: "50%",
@@ -146,6 +156,7 @@ export class HUD {
     this.updateStatusPrompt();
     this.updateInteractPrompt();
     this.updateHealth();
+    this.updateScore();
     this.updateEnemyLabels();
     this.updateDeathOverlay();
   }
@@ -190,6 +201,10 @@ export class HUD {
 
   private updateHealth(): void {
     this.healthEl.textContent = `HP: ${this.gameState.playerHealth}`;
+  }
+
+  private updateScore(): void {
+    this.scoreEl.textContent = `Score: ${this.gameState.score}`;
   }
 
   private updateDeathOverlay(): void {

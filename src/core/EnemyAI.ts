@@ -13,6 +13,8 @@ const SIGHT_RANGE = 15;
 const MELEE_RANGE = 1.5;
 const GROWL_INTERVAL = 3; // seconds between growls while chasing
 const LABEL_HEIGHT_OFFSET = 1;
+const SCORE_PER_HIT = 10;
+const SCORE_PER_KILL = 50;
 
 export class EnemyAI {
   readonly id: string;
@@ -159,7 +161,11 @@ export class EnemyAI {
   private takeDamage(damage: number): void {
     if (this.dead) return;
 
-    this.health = applyDamage(this.health, damage, () => this.die());
+    this.gameState.score += SCORE_PER_HIT;
+    this.health = applyDamage(this.health, damage, () => {
+      this.gameState.score += SCORE_PER_KILL;
+      this.die();
+    });
   }
 
   private die(): void {

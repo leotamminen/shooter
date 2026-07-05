@@ -22,6 +22,8 @@ export class GameState {
   playerHealth = 100;
   playerState: PlayerLifeState = "alive";
 
+  score = 0;
+
   // Keyed by enemy id so multiple simultaneous enemies (checkpoint 7+) don't
   // need a rewrite here.
   enemyHealth: Record<string, EnemyHealthEntry> = {};

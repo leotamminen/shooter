@@ -61,6 +61,7 @@ src/
 3.5. HUD (crosshair, ammo display, reload/interact prompts)
 4. One hardcoded zombie: state machine + line-of-sight raycast + zombie sounds
 4.5. Enemy health-label occlusion fix + player death handling (alive/dead state)
+4.6. Points system (score for hits and kills, displayed in HUD)
 5. content/ files (weapons.ts, enemies.ts, maps.ts, sounds.ts) + id-lookup; move zombie/weapon/map from hardcoded to data-driven
 6. Map schema extended with entities (doors, buttons, pickups)
 7. ZombieSurvival mode, hardcoded, as its own module in modes/
@@ -69,7 +70,7 @@ src/
 
 ## Current status
 
-Checkpoint 4.5 complete. The fire sound (`public/sounds/pistol_fire.wav`) and the zombie growl/death sounds (`public/sounds/zombie_growl.wav`, `zombie_death.wav`) are all synthesized placeholders (Node-generated tones), not real recordings — swap them for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
+Checkpoint 4.6 complete. The fire sound (`public/sounds/pistol_fire.wav`) and the zombie growl/death sounds (`public/sounds/zombie_growl.wav`, `zombie_death.wav`) are all synthesized placeholders (Node-generated tones), not real recordings — swap them for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
 
 Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) didn't explicitly cover damage/kill mechanics, and no later checkpoint claimed them either, so they were added at checkpoint 4 rather than left to silently expand checkpoint 7's scope. Player death is now handled (checkpoint 4.5: `playerState` flips to `"dead"`, freezing movement/firing, "YOU DIED" shown). Respawn/reset and anything past "YOU DIED" are still deferred — see the decisions log and the new "Future mechanics" section below.
 
@@ -92,6 +93,7 @@ Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) d
 - `core/utils/Health.ts` centralizes "clamp damage at 0, fire a callback exactly once on crossing to zero" as a plain function (`applyDamage(current, amount, onZero?) → number`), not a class — it doesn't own any state itself, the caller still stores the returned value. This is the same reuse reasoning as `Raycast.ts`/`StateMachine.ts`: both the enemy's own health (in `EnemyAI`) and the player's health (in `PlayerState`) route through it instead of duplicating "clamp and detect zero" twice.
 - `GameState.playerState` is a string union (`"alive" | "dead"`), not a boolean, because a future `"downed"` value (perk-gated revive, not built yet) sits between them — a boolean would force a breaking type change later. See "Future mechanics" below.
 - Player health/lifecycle logic lives in its own file, `core/PlayerState.ts`, rather than in `PlayerController` or `WeaponSystem`: those two are movement-only and firing-only per the single-responsibility rule, and "what happens when health hits zero" isn't either of those things. `PlayerController` and `WeaponSystem` only read `gameState.playerState` to decide whether to no-op; only `PlayerState.applyDamage()` (called by whatever deals the damage, e.g. `EnemyAI`) is allowed to change it.
+- Score (`gameState.score`) is awarded from inside `EnemyAI.takeDamage()` — the same method that already routes through `applyDamage()` — rather than from `WeaponSystem`'s generic `onHit` call site: `WeaponSystem` fires the hook on anything with `userData.onHit` (currently only the zombie) and has no notion of "this hit was worth points," so scoring stays with the thing that knows it died, not the thing that pulled the trigger. +10 is applied unconditionally on every processed hit; +50 is applied inside the same `applyDamage()` call's `onZero` callback, so a killing shot stacks both in one `takeDamage()` invocation rather than the two being alternatives.
 
 ## Future mechanics (documented, not built)
 
@@ -101,3 +103,4 @@ Ideas that came up while implementing checkpoint 4.5 but are deliberately out of
 - **Equivalent downed ("crawler") state for enemies**: an enemy that, below some health threshold, becomes slower and weaker instead of dying outright — reusing the same state-union pattern as the player's.
 - **Perk system framework**: not designed yet. The downed/revive mechanic above depends on it existing first.
 - **Post-death flow beyond "YOU DIED"**: spectate mode, a "you survived N rounds" summary screen, restart/respawn. All of this depends on game-mode/wave logic that doesn't exist until checkpoint 7 (`ZombieSurvival`), so it can't be designed concretely yet.
+- **Spending points**: weapon wall-buys and paid interacts, extending `MapEntity`'s existing `"button"`/`"pickup"` types with a cost field. Not designed yet — depends on the map-entity work in checkpoint 6 and the content-driven weapons from checkpoint 5 both being in place first.
