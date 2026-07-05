@@ -48,6 +48,10 @@ export class WeaponSystem {
     this.targets = targets;
   }
 
+  addReserveAmmo(amount: number): void {
+    this.reserveAmmo += amount;
+  }
+
   reset(): void {
     this.currentAmmo = this.weapon.magSize;
     this.reserveAmmo = this.weapon.startingReserveAmmo;

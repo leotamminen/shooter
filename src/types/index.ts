@@ -25,6 +25,7 @@ export interface EnemyDef {
 }
 
 export interface MapEntity {
+  id: string;
   type: "door" | "button" | "pickup" | "spawn" | "objective";
   position: [number, number, number];
   linkedTo?: string; // e.g. a door linked to the button that opens it

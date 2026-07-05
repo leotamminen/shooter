@@ -42,9 +42,14 @@ export class InteractSystem {
   };
 
   private tryInteract(): void {
-    if (!this.isLookingAtInteractable()) return;
-    // Placeholder action: checkpoint 6 wires this to real map entities
-    // (doors/buttons/pickups). The HUD prompt is the only visible feedback
-    // for now.
+    const hit = this.raycast.fromCamera(
+      this.camera,
+      this.targets,
+      INTERACT_DISTANCE,
+    );
+    const onInteract = hit?.object.userData.onInteract as
+      | (() => void)
+      | undefined;
+    onInteract?.();
   }
 }

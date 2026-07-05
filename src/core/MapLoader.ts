@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { MapDef } from "../types";
 
 export const CELL_SIZE = 2;
-const WALL_HEIGHT = 3;
+export const WALL_HEIGHT = 3;
 
 export interface LoadedMap {
   group: THREE.Group;

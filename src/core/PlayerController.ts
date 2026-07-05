@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
 import type { GameState } from "../state/GameState";
+import type { DoorEntry } from "./MapEntitySystem";
 
 export const PLAYER_RADIUS = 0.4;
 const EYE_HEIGHT = 1.7;
@@ -27,6 +28,7 @@ export class PlayerController {
 
   private readonly clock = new THREE.Clock();
   private wallBoxes: THREE.Box3[] = [];
+  private doors: DoorEntry[] = [];
 
   private readonly forward = new THREE.Vector3();
   private readonly right = new THREE.Vector3();
@@ -53,6 +55,10 @@ export class PlayerController {
     this.wallBoxes = wallBoxes;
   }
 
+  setDoors(doors: DoorEntry[]): void {
+    this.doors = doors;
+  }
+
   setSpawn(x: number, z: number): void {
     this.camera.position.set(x, EYE_HEIGHT, z);
   }
@@ -77,8 +83,15 @@ export class PlayerController {
     let x = this.camera.position.x + this.moveDirection.x * step;
     let z = this.camera.position.z + this.moveDirection.z * step;
 
+    // Closed (visible) doors collide the same as walls; an opened door is
+    // just excluded from this list for the frame, no separate open/closed
+    // bookkeeping needed here.
+    const boxes = this.wallBoxes.concat(
+      this.doors.filter((door) => door.mesh.visible).map((door) => door.box),
+    );
+
     for (let pass = 0; pass < COLLISION_PASSES; pass++) {
-      for (const box of this.wallBoxes) {
+      for (const box of boxes) {
         ({ x, z } = this.resolveAgainstBox(x, z, box));
       }
     }

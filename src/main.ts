@@ -8,6 +8,7 @@ import { InteractSystem } from "./core/InteractSystem";
 import { EnemyAI } from "./core/EnemyAI";
 import { PlayerState } from "./core/PlayerState";
 import { RunManager } from "./core/RunManager";
+import { MapEntitySystem } from "./core/MapEntitySystem";
 import { HUD } from "./ui/HUD";
 import { GameState } from "./state/GameState";
 import { findById } from "./core/utils/Lookup";
@@ -55,19 +56,32 @@ const weaponSystem = new WeaponSystem(
   runManager,
 );
 
-// Placeholder interactable, hardcoded here until map entities (doors,
-// buttons, pickups) are added in checkpoint 6.
+const mapEntitySystem = new MapEntitySystem(mapDef, weaponSystem, runManager);
+sceneManager.scene.add(mapEntitySystem.group);
+playerController.setDoors(mapEntitySystem.doors);
+
+// Placeholder interactable: still hardcoded here, not a real MapEntity type —
+// it predates doors/buttons/pickups (checkpoint 3) and has no map-entity
+// shape of its own to migrate into.
 const interactableBox = new THREE.Mesh(
   new THREE.BoxGeometry(0.6, 0.6, 0.6),
   new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x552200 }),
 );
 interactableBox.name = "placeholder box";
 interactableBox.userData.interactable = true;
+interactableBox.userData.onInteract = (): void => {
+  console.log("Interacted with placeholder box");
+};
 interactableBox.position.set(2, 0.3, 8);
 sceneManager.scene.add(interactableBox);
 
 const interactSystem = new InteractSystem(sceneManager.camera, gameState);
-interactSystem.setTargets([...map.walls, interactableBox]);
+interactSystem.setTargets([
+  ...map.walls,
+  ...mapEntitySystem.doorMeshes,
+  interactableBox,
+  ...mapEntitySystem.interactables,
+]);
 
 // Zombie stats now come from content/enemies.ts; its mesh and spawn position
 // are still hardcoded here until map entities gain an "enemy" type
@@ -76,7 +90,7 @@ const zombieMesh = new THREE.Mesh(
   new THREE.CapsuleGeometry(0.4, 1, 4, 8),
   new THREE.MeshStandardMaterial({ color: 0x4a6741 }),
 );
-zombieMesh.position.set(10, 0.9, 4);
+zombieMesh.position.set(10, 0.9, 6);
 sceneManager.scene.add(zombieMesh);
 
 const zombie = new EnemyAI(
@@ -89,9 +103,14 @@ const zombie = new EnemyAI(
   playerState,
   runManager,
 );
-zombie.setWallTargets(map.walls);
+zombie.setWallTargets([...map.walls, ...mapEntitySystem.doorMeshes]);
 
-weaponSystem.setTargets([...map.walls, interactableBox, zombieMesh]);
+weaponSystem.setTargets([
+  ...map.walls,
+  ...mapEntitySystem.doorMeshes,
+  interactableBox,
+  zombieMesh,
+]);
 
 function startNewRun(): void {
   runManager.startNewRun();
@@ -102,7 +121,7 @@ function startNewRun(): void {
 // "Main Menu" is a placeholder alias for startNewRun() until checkpoint 9
 // gives it a real menu to return to.
 const hud = new HUD(gameState, sceneManager.camera, startNewRun, startNewRun);
-hud.setOcclusionTargets(map.walls);
+hud.setOcclusionTargets([...map.walls, ...mapEntitySystem.doorMeshes]);
 
 canvas.addEventListener("click", () => {
   playerController.controls.lock();
