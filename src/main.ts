@@ -5,10 +5,10 @@ import { PlayerController } from "./core/PlayerController";
 import { WeaponSystem } from "./core/WeaponSystem";
 import { AudioSystem } from "./core/AudioSystem";
 import { InteractSystem } from "./core/InteractSystem";
-import { EnemyAI } from "./core/EnemyAI";
 import { PlayerState } from "./core/PlayerState";
 import { RunManager } from "./core/RunManager";
 import { MapEntitySystem } from "./core/MapEntitySystem";
+import { ZombieSurvival } from "./modes/ZombieSurvival";
 import { HUD } from "./ui/HUD";
 import { GameState } from "./state/GameState";
 import { findById } from "./core/utils/Lookup";
@@ -27,13 +27,21 @@ const playerController = new PlayerController(
   canvas,
   gameState,
 );
+// zombieSurvival is assigned further down (it needs the map/weapon systems
+// built first) but this callback only ever runs later, once the player has
+// actually died, by which point construction has long finished.
+let zombieSurvival: ZombieSurvival;
 // Releasing pointer lock on death is what makes the death-panel buttons
 // clickable — PlayerState owns the alive/dead transition but not the DOM/
 // pointer-lock machinery, so it's handed this as a callback rather than
-// reaching into PlayerController directly.
-const playerState = new PlayerState(gameState, () =>
-  playerController.controls.unlock(),
-);
+// reaching into PlayerController directly. It also snapshots the round
+// number at the moment of death into GameState.roundsSurvived, kept
+// separate from the live currentRound so the death panel can't change
+// under the player if a round happens to advance in the background.
+const playerState = new PlayerState(gameState, () => {
+  playerController.controls.unlock();
+  gameState.roundsSurvived = zombieSurvival.currentRound;
+});
 const runManager = new RunManager(gameState, playerState);
 
 const mapDef = findById(MAPS, "test-grid");
@@ -83,34 +91,28 @@ interactSystem.setTargets([
   ...mapEntitySystem.interactables,
 ]);
 
-// Zombie stats now come from content/enemies.ts; its mesh and spawn position
-// are still hardcoded here until map entities gain an "enemy" type
-// (checkpoint 6/7).
-const zombieMesh = new THREE.Mesh(
-  new THREE.CapsuleGeometry(0.4, 1, 4, 8),
-  new THREE.MeshStandardMaterial({ color: 0x4a6741 }),
-);
-zombieMesh.position.set(10, 0.9, 6);
-sceneManager.scene.add(zombieMesh);
-
-const zombie = new EnemyAI(
-  "zombie-1",
-  findById(ENEMIES, "zombie"),
-  zombieMesh,
-  sceneManager.camera,
-  audioSystem,
-  gameState,
-  playerState,
-  runManager,
-);
-zombie.setWallTargets([...map.walls, ...mapEntitySystem.doorMeshes]);
-
 weaponSystem.setTargets([
   ...map.walls,
   ...mapEntitySystem.doorMeshes,
   interactableBox,
-  zombieMesh,
 ]);
+
+const enemySpawnPoints = mapDef.entities
+  .filter((entity) => entity.type === "enemy_spawn")
+  .map((entity) => new THREE.Vector3(...entity.position));
+
+zombieSurvival = new ZombieSurvival(
+  findById(ENEMIES, "zombie"),
+  enemySpawnPoints,
+  sceneManager.scene,
+  sceneManager.camera,
+  audioSystem,
+  gameState,
+  playerState,
+  weaponSystem,
+  [...map.walls, ...mapEntitySystem.doorMeshes],
+  runManager,
+);
 
 function startNewRun(): void {
   runManager.startNewRun();
@@ -136,7 +138,7 @@ function animate(): void {
   playerController.update();
   weaponSystem.update();
   interactSystem.update();
-  zombie.update();
+  zombieSurvival.update();
   hud.update();
   sceneManager.render();
 }

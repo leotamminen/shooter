@@ -44,8 +44,10 @@ export class HUD {
   private readonly interactEl: HTMLDivElement;
   private readonly healthEl: HTMLDivElement;
   private readonly scoreEl: HTMLDivElement;
+  private readonly roundEl: HTMLDivElement;
   private readonly deathPanelEl: HTMLDivElement;
   private readonly deathScoreEl: HTMLDivElement;
+  private readonly deathRoundsEl: HTMLDivElement;
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
   private readonly raycast = new Raycast();
@@ -129,6 +131,15 @@ export class HUD {
     });
     root.appendChild(this.scoreEl);
 
+    this.roundEl = createDiv({
+      position: "absolute",
+      top: "24px",
+      left: "24px",
+      fontSize: "16px",
+      fontWeight: "bold",
+    });
+    root.appendChild(this.roundEl);
+
     this.deathPanelEl = createDiv({
       position: "absolute",
       top: "50%",
@@ -154,6 +165,7 @@ export class HUD {
     heading.textContent = "YOU DIED";
 
     this.deathScoreEl = createDiv({ fontSize: "18px" });
+    this.deathRoundsEl = createDiv({ fontSize: "18px" });
 
     const buttonRow = createDiv({ display: "flex", gap: "16px" });
     const respawnButton = createButton(
@@ -173,6 +185,7 @@ export class HUD {
 
     this.deathPanelEl.appendChild(heading);
     this.deathPanelEl.appendChild(this.deathScoreEl);
+    this.deathPanelEl.appendChild(this.deathRoundsEl);
     this.deathPanelEl.appendChild(buttonRow);
     root.appendChild(this.deathPanelEl);
 
@@ -229,6 +242,7 @@ export class HUD {
     }
 
     this.updateScore();
+    this.updateRound();
     this.updateEnemyLabels();
     this.updateDeathPanel();
   }
@@ -287,11 +301,16 @@ export class HUD {
     this.scoreEl.textContent = `Score: ${this.gameState.score}`;
   }
 
+  private updateRound(): void {
+    this.roundEl.textContent = `Round: ${this.gameState.currentRound}`;
+  }
+
   private updateDeathPanel(): void {
     const dead = this.gameState.playerState === "dead";
     this.deathPanelEl.style.display = dead ? "flex" : "none";
     if (dead) {
       this.deathScoreEl.textContent = `Score: ${this.gameState.score}`;
+      this.deathRoundsEl.textContent = `Survived ${this.gameState.roundsSurvived} rounds`;
     }
   }
 

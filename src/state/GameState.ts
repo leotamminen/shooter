@@ -30,6 +30,15 @@ export class GameState {
   score = 0;
   pointsBalance = 0;
 
+  // Mirrored from ZombieSurvival.currentRound every time it changes, so HUD
+  // can read it like every other stat (systems write to GameState, HUD only
+  // reads). roundsSurvived is a separate snapshot taken once at the moment
+  // of death (see main.ts's onDeath wiring) — kept distinct from the live
+  // currentRound so the death panel can't change mid-display if a round
+  // happens to advance in the background while the death panel is up.
+  currentRound = 1;
+  roundsSurvived = 1;
+
   addScore(amount: number): void {
     this.score += amount;
     this.pointsBalance += amount;

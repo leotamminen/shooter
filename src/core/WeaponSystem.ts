@@ -48,6 +48,18 @@ export class WeaponSystem {
     this.targets = targets;
   }
 
+  // Lets a dynamically spawned/despawned object (e.g. a ZombieSurvival enemy)
+  // join or leave the raycast target list without WeaponSystem needing to
+  // know about rounds/spawning — it just tracks whatever it's told to.
+  addTarget(target: THREE.Object3D): void {
+    this.targets.push(target);
+  }
+
+  removeTarget(target: THREE.Object3D): void {
+    const index = this.targets.indexOf(target);
+    if (index !== -1) this.targets.splice(index, 1);
+  }
+
   addReserveAmmo(amount: number): void {
     this.reserveAmmo += amount;
   }

@@ -28,6 +28,8 @@ export const MAPS: MapDef[] = [
         position: [6, 0.3, 6],
       },
       { id: "pickup_1", type: "pickup", position: [10, 0.3, 10] },
+      { id: "enemy_spawn_1", type: "enemy_spawn", position: [10, 0.9, 6] },
+      { id: "enemy_spawn_2", type: "enemy_spawn", position: [4, 0.9, 10] },
     ],
   },
 ];

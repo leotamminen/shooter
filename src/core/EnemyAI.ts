@@ -4,9 +4,9 @@ import { StateMachine } from "./utils/StateMachine";
 import { applyDamage } from "./utils/Health";
 import type { AudioSystem } from "./AudioSystem";
 import type { PlayerState } from "./PlayerState";
+import type { WeaponSystem } from "./WeaponSystem";
 import type { EnemyDef } from "../types";
 import type { GameState } from "../state/GameState";
-import type { RunManager } from "./RunManager";
 
 type ZombieState = "idle" | "chase" | "attack";
 
@@ -14,50 +14,64 @@ const LABEL_HEIGHT_OFFSET = 1;
 const SCORE_PER_HIT = 10;
 const SCORE_PER_KILL = 50;
 
+// One instance per spawned enemy — ZombieSurvival creates and destroys these
+// per round, so each instance owns its own mesh, health, and state machine
+// independently rather than being a single hardcoded singleton.
 export class EnemyAI {
   readonly id: string;
   readonly mesh: THREE.Mesh;
 
   health: number;
+  dead = false;
 
   private readonly def: EnemyDef;
+  private readonly scene: THREE.Scene;
   private readonly camera: THREE.Camera;
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
   private readonly playerState: PlayerState;
+  private readonly weaponSystem: WeaponSystem;
+  private readonly wallTargets: THREE.Object3D[];
 
   private readonly raycast = new Raycast();
   private readonly clock = new THREE.Clock();
   private readonly moveDirection = new THREE.Vector3();
-  private readonly spawnPosition: THREE.Vector3;
   private readonly stateMachine: StateMachine<ZombieState, EnemyAI>;
 
-  private wallTargets: THREE.Object3D[] = [];
   private timeSinceGrowl = 0;
   private timeSinceAttack = 0;
-  private dead = false;
 
   constructor(
     id: string,
     def: EnemyDef,
-    mesh: THREE.Mesh,
+    spawnPosition: THREE.Vector3,
+    scene: THREE.Scene,
     camera: THREE.Camera,
     audioSystem: AudioSystem,
     gameState: GameState,
     playerState: PlayerState,
-    runManager: RunManager,
+    weaponSystem: WeaponSystem,
+    wallTargets: THREE.Object3D[],
   ) {
     this.id = id;
     this.def = def;
-    this.mesh = mesh;
+    this.scene = scene;
     this.camera = camera;
     this.audioSystem = audioSystem;
     this.gameState = gameState;
     this.playerState = playerState;
+    this.weaponSystem = weaponSystem;
+    this.wallTargets = wallTargets;
     this.health = def.health;
-    this.spawnPosition = mesh.position.clone();
 
-    mesh.userData.onHit = (damage: number): void => this.takeDamage(damage);
+    this.mesh = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.4, 1, 4, 8),
+      new THREE.MeshStandardMaterial({ color: 0x4a6741 }),
+    );
+    this.mesh.position.copy(spawnPosition);
+    this.mesh.userData.onHit = (damage: number): void => this.takeDamage(damage);
+    this.scene.add(this.mesh);
+    this.weaponSystem.addTarget(this.mesh);
 
     this.stateMachine = new StateMachine<ZombieState, EnemyAI>(
       "idle",
@@ -78,12 +92,6 @@ export class EnemyAI {
       },
       this,
     );
-
-    runManager.registerResettable(() => this.reset());
-  }
-
-  setWallTargets(targets: THREE.Object3D[]): void {
-    this.wallTargets = targets;
   }
 
   update(): void {
@@ -112,6 +120,20 @@ export class EnemyAI {
         z: this.mesh.position.z,
       },
     };
+  }
+
+  // Removes this enemy from the world without treating it as a kill: no
+  // score, no death sound. Used both by a natural death (via onDeath below)
+  // and by ZombieSurvival forcibly clearing the board on a new run. Safe to
+  // call more than once — only the first call has any effect.
+  destroy(): void {
+    if (this.dead) return;
+    this.dead = true;
+    delete this.gameState.enemyHealth[this.id];
+    this.weaponSystem.removeTarget(this.mesh);
+    this.scene.remove(this.mesh);
+    this.mesh.geometry.dispose();
+    (this.mesh.material as THREE.Material).dispose();
   }
 
   private hasLineOfSight(): boolean {
@@ -165,30 +187,12 @@ export class EnemyAI {
     if (this.dead) return;
 
     this.gameState.addScore(SCORE_PER_HIT);
-    this.health = applyDamage(this.health, damage, () => {
-      this.gameState.addScore(SCORE_PER_KILL);
-      this.die();
-    });
+    this.health = applyDamage(this.health, damage, () => this.onDeath());
   }
 
-  private die(): void {
-    this.dead = true;
+  private onDeath(): void {
+    this.gameState.addScore(SCORE_PER_KILL);
     this.audioSystem.playAt(this.def.deathSoundId, this.mesh);
-    // Hidden rather than removed from the scene graph: reset() needs to be
-    // able to bring the enemy back without recreating geometry/material, and
-    // Raycast.ts's visibility filter already excludes hidden meshes from
-    // hitscan/line-of-sight/occlusion checks.
-    this.mesh.visible = false;
-    delete this.gameState.enemyHealth[this.id];
-  }
-
-  private reset(): void {
-    this.dead = false;
-    this.health = this.def.health;
-    this.mesh.visible = true;
-    this.mesh.position.copy(this.spawnPosition);
-    this.timeSinceGrowl = 0;
-    this.timeSinceAttack = 0;
-    this.stateMachine.transition("idle");
+    this.destroy();
   }
 }
