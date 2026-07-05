@@ -161,9 +161,9 @@ export class EnemyAI {
   private takeDamage(damage: number): void {
     if (this.dead) return;
 
-    this.gameState.score += SCORE_PER_HIT;
+    this.gameState.addScore(SCORE_PER_HIT);
     this.health = applyDamage(this.health, damage, () => {
-      this.gameState.score += SCORE_PER_KILL;
+      this.gameState.addScore(SCORE_PER_KILL);
       this.die();
     });
   }

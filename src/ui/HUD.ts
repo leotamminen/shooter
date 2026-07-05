@@ -10,18 +10,42 @@ function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
   return el;
 }
 
+function createButton(
+  label: string,
+  styles: Partial<CSSStyleDeclaration>,
+  onClick: () => void,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.textContent = label;
+  Object.assign(button.style, {
+    pointerEvents: "auto",
+    cursor: "pointer",
+    fontFamily: "monospace",
+    fontSize: "16px",
+    padding: "10px 24px",
+    border: "none",
+    borderRadius: "4px",
+    color: "#f0f0f0",
+    ...styles,
+  });
+  button.addEventListener("click", onClick);
+  return button;
+}
+
 export class HUD {
   private readonly gameState: GameState;
   private readonly camera: THREE.Camera;
   private readonly root: HTMLDivElement;
 
+  private readonly crosshairEl: HTMLDivElement;
   private readonly weaponNameEl: HTMLDivElement;
   private readonly ammoCountEl: HTMLDivElement;
   private readonly statusEl: HTMLDivElement;
   private readonly interactEl: HTMLDivElement;
   private readonly healthEl: HTMLDivElement;
   private readonly scoreEl: HTMLDivElement;
-  private readonly deathOverlayEl: HTMLDivElement;
+  private readonly deathPanelEl: HTMLDivElement;
+  private readonly deathScoreEl: HTMLDivElement;
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
   private readonly raycast = new Raycast();
@@ -29,7 +53,12 @@ export class HUD {
 
   private emptySince: number | null = null;
 
-  constructor(gameState: GameState, camera: THREE.Camera) {
+  constructor(
+    gameState: GameState,
+    camera: THREE.Camera,
+    onRespawn: () => void,
+    onMainMenu: () => void,
+  ) {
     this.gameState = gameState;
     this.camera = camera;
 
@@ -45,7 +74,8 @@ export class HUD {
     });
     this.root = root;
 
-    root.appendChild(this.buildCrosshair());
+    this.crosshairEl = this.buildCrosshair();
+    root.appendChild(this.crosshairEl);
 
     const promptStack = createDiv({
       position: "absolute",
@@ -99,18 +129,52 @@ export class HUD {
     });
     root.appendChild(this.scoreEl);
 
-    this.deathOverlayEl = createDiv({
+    this.deathPanelEl = createDiv({
       position: "absolute",
       top: "50%",
       left: "50%",
       transform: "translate(-50%, -50%)",
-      fontSize: "48px",
+      display: "none",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: "16px",
+      padding: "32px 48px",
+      background: "rgba(0, 0, 0, 0.75)",
+      borderRadius: "8px",
+      textAlign: "center",
+      pointerEvents: "auto",
+    });
+
+    const heading = createDiv({
+      fontSize: "40px",
       fontWeight: "bold",
       color: "#d94040",
       letterSpacing: "0.1em",
-      textAlign: "center",
     });
-    root.appendChild(this.deathOverlayEl);
+    heading.textContent = "YOU DIED";
+
+    this.deathScoreEl = createDiv({ fontSize: "18px" });
+
+    const buttonRow = createDiv({ display: "flex", gap: "16px" });
+    const respawnButton = createButton(
+      "Respawn",
+      { background: "#3a6b3a" },
+      onRespawn,
+    );
+    // Placeholder: identical to Respawn until checkpoint 9 gives the main
+    // menu (mode select / loadout screens) real behavior to return to.
+    const mainMenuButton = createButton(
+      "Main Menu",
+      { background: "#444" },
+      onMainMenu,
+    );
+    buttonRow.appendChild(respawnButton);
+    buttonRow.appendChild(mainMenuButton);
+
+    this.deathPanelEl.appendChild(heading);
+    this.deathPanelEl.appendChild(this.deathScoreEl);
+    this.deathPanelEl.appendChild(buttonRow);
+    root.appendChild(this.deathPanelEl);
 
     document.body.appendChild(root);
   }
@@ -152,13 +216,29 @@ export class HUD {
   }
 
   update(): void {
-    this.updateAmmo();
-    this.updateStatusPrompt();
-    this.updateInteractPrompt();
-    this.updateHealth();
+    const alive = this.gameState.playerState === "alive";
+    this.crosshairEl.style.display = alive ? "block" : "none";
+
+    if (alive) {
+      this.updateAmmo();
+      this.updateStatusPrompt();
+      this.updateInteractPrompt();
+      this.updateHealth();
+    } else {
+      this.clearAliveOnlyText();
+    }
+
     this.updateScore();
     this.updateEnemyLabels();
-    this.updateDeathOverlay();
+    this.updateDeathPanel();
+  }
+
+  private clearAliveOnlyText(): void {
+    this.weaponNameEl.textContent = "";
+    this.ammoCountEl.textContent = "";
+    this.statusEl.textContent = "";
+    this.interactEl.textContent = "";
+    this.healthEl.textContent = "";
   }
 
   private updateAmmo(): void {
@@ -207,9 +287,12 @@ export class HUD {
     this.scoreEl.textContent = `Score: ${this.gameState.score}`;
   }
 
-  private updateDeathOverlay(): void {
-    this.deathOverlayEl.textContent =
-      this.gameState.playerState === "dead" ? "YOU DIED" : "";
+  private updateDeathPanel(): void {
+    const dead = this.gameState.playerState === "dead";
+    this.deathPanelEl.style.display = dead ? "flex" : "none";
+    if (dead) {
+      this.deathScoreEl.textContent = `Score: ${this.gameState.score}`;
+    }
   }
 
   // Debug/test aid: floating current/max labels above each enemy, projected

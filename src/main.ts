@@ -75,22 +75,31 @@ const PLACEHOLDER_DEATH_SOUND: SoundDef = {
   loop: false,
 };
 
+const SPAWN_X = 8;
+const SPAWN_Z = 8;
+
 const canvas = document.createElement("canvas");
 document.body.appendChild(canvas);
 
 const sceneManager = new SceneManager(canvas);
 const gameState = new GameState();
-const playerState = new PlayerState(gameState);
 const playerController = new PlayerController(
   sceneManager.camera,
   canvas,
   gameState,
 );
+// Releasing pointer lock on death is what makes the death-panel buttons
+// clickable — PlayerState owns the alive/dead transition but not the DOM/
+// pointer-lock machinery, so it's handed this as a callback rather than
+// reaching into PlayerController directly.
+const playerState = new PlayerState(gameState, () =>
+  playerController.controls.unlock(),
+);
 
 const map = loadMap(TEST_GRID);
 sceneManager.scene.add(map.group);
 playerController.setWallBoxes(map.wallBoxes);
-playerController.setSpawn(8, 8);
+playerController.setSpawn(SPAWN_X, SPAWN_Z);
 
 const audioSystem = new AudioSystem(sceneManager.camera);
 void audioSystem.load(PLACEHOLDER_FIRE_SOUND);
@@ -141,7 +150,15 @@ zombie.setWallTargets(map.walls);
 
 weaponSystem.setTargets([...map.walls, interactableBox, zombieMesh]);
 
-const hud = new HUD(gameState, sceneManager.camera);
+function respawn(): void {
+  playerState.respawn();
+  playerController.setSpawn(SPAWN_X, SPAWN_Z);
+  playerController.controls.lock();
+}
+
+// "Main Menu" is a placeholder alias for respawn() until checkpoint 9 gives
+// it a real menu to return to.
+const hud = new HUD(gameState, sceneManager.camera, respawn, respawn);
 hud.setOcclusionTargets(map.walls);
 
 canvas.addEventListener("click", () => {

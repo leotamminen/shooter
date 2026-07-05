@@ -1,4 +1,5 @@
 import { applyDamage } from "./utils/Health";
+import { PLAYER_MAX_HEALTH } from "../state/GameState";
 import type { GameState } from "../state/GameState";
 
 // Owns the player's health/lifecycle transition. PlayerController is
@@ -8,9 +9,11 @@ import type { GameState } from "../state/GameState";
 // decide whether to no-op; only damage sources call applyDamage() here.
 export class PlayerState {
   private readonly gameState: GameState;
+  private readonly onDeath?: () => void;
 
-  constructor(gameState: GameState) {
+  constructor(gameState: GameState, onDeath?: () => void) {
     this.gameState = gameState;
+    this.onDeath = onDeath;
   }
 
   applyDamage(amount: number): void {
@@ -21,7 +24,13 @@ export class PlayerState {
       amount,
       () => {
         this.gameState.playerState = "dead";
+        this.onDeath?.();
       },
     );
+  }
+
+  respawn(): void {
+    this.gameState.playerHealth = PLAYER_MAX_HEALTH;
+    this.gameState.playerState = "alive";
   }
 }
