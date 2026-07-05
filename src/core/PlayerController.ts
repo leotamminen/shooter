@@ -59,7 +59,7 @@ export class PlayerController {
 
   update(): void {
     const delta = this.clock.getDelta();
-    if (this.gameState.paused) return;
+    if (this.gameState.paused || this.gameState.playerState !== "alive") return;
 
     this.camera.getWorldDirection(this.forward);
     this.forward.y = 0;

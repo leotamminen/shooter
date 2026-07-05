@@ -35,9 +35,11 @@ src/
     InteractSystem.ts           [3]
     EnemyAI.ts                  [4]
     AudioSystem.ts              [2]
+    PlayerState.ts              [4.5, player health/lifecycle — see decisions log]
     utils/
       Raycast.ts                [1]
       StateMachine.ts           [4]
+      Health.ts                 [4.5]
   modes/
     GameMode.ts                 [8]
     ZombieSurvival.ts           [7]
@@ -58,6 +60,7 @@ src/
 3. E-interact raycast
 3.5. HUD (crosshair, ammo display, reload/interact prompts)
 4. One hardcoded zombie: state machine + line-of-sight raycast + zombie sounds
+4.5. Enemy health-label occlusion fix + player death handling (alive/dead state)
 5. content/ files (weapons.ts, enemies.ts, maps.ts, sounds.ts) + id-lookup; move zombie/weapon/map from hardcoded to data-driven
 6. Map schema extended with entities (doors, buttons, pickups)
 7. ZombieSurvival mode, hardcoded, as its own module in modes/
@@ -66,9 +69,9 @@ src/
 
 ## Current status
 
-Checkpoint 4 complete. The fire sound (`public/sounds/pistol_fire.wav`) and the new zombie growl/death sounds (`public/sounds/zombie_growl.wav`, `zombie_death.wav`) are all synthesized placeholders (Node-generated tones), not real recordings — swap them for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
+Checkpoint 4.5 complete. The fire sound (`public/sounds/pistol_fire.wav`) and the zombie growl/death sounds (`public/sounds/zombie_growl.wav`, `zombie_death.wav`) are all synthesized placeholders (Node-generated tones), not real recordings — swap them for real audio in a later checkpoint (9, ambience/music, is the natural point to revisit all placeholder audio).
 
-Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) didn't explicitly cover damage/kill mechanics, and no later checkpoint claimed them either, so they were added here rather than left to silently expand checkpoint 7's scope. Player death/reset handling is explicitly deferred — see decisions log.
+Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) didn't explicitly cover damage/kill mechanics, and no later checkpoint claimed them either, so they were added at checkpoint 4 rather than left to silently expand checkpoint 7's scope. Player death is now handled (checkpoint 4.5: `playerState` flips to `"dead"`, freezing movement/firing, "YOU DIED" shown). Respawn/reset and anything past "YOU DIED" are still deferred — see the decisions log and the new "Future mechanics" section below.
 
 ## Decisions log
 
@@ -85,5 +88,16 @@ Note: the original checkpoint 4 scope (state machine + line-of-sight + sounds) d
 - HUD (`ui/HUD.ts`) is a plain DOM overlay, not part of the Three.js scene: absolutely positioned, `pointer-events: none` so it never steals clicks from the canvas (pointer lock, firing, interact all still work). It reads only from `GameState`; `WeaponSystem`/`InteractSystem` write their relevant fields to `GameState` every frame. This replaces the checkpoint-2/3 `console.log` observability, which has been removed now that the same information is visible on screen.
 - The 1-second delay before showing "Press R to reload" is tracked inside `HUD.ts` itself (a local `emptySince` timestamp), not in `WeaponSystem` or `GameState` — it's presentation timing, not a gameplay rule, so it belongs with the thing that renders it.
 - Damage sources use a generic `userData.onHit(damage)` callback on the target mesh, the same pattern as `userData.interactable` — `WeaponSystem` calls whatever hook exists on the object it hit and never imports `EnemyAI`. Any future damageable object (barrels, other enemies) plugs into `WeaponSystem` for free by setting this one field.
-- Player death is explicitly out of scope for checkpoint 4: `GameState.playerHealth` clamps at 0 and just sits there — no respawn, no game-over screen, no round-reset. Deciding what "death" means (respawn? end the round? which game mode owns that?) is a game-mode concern, so it's deferred to whichever of checkpoints 7–9 defines that mode's rules, rather than guessed at here.
-- The floating enemy health label (current/max, projected above the enemy's head via `camera.project()`) is a debug/test aid for verifying damage and state transitions, not a final UI choice — it should be replaced with a real health bar, hidden, or otherwise redesigned once the game is closer to presentable. Noted here so it isn't mistaken for a deliberate design decision later.
+- The floating enemy health label (current/max, projected above the enemy's head via `camera.project()`) is a debug/test aid for verifying damage and state transitions, not a final UI choice — it should be replaced with a real health bar, hidden, or otherwise redesigned once the game is closer to presentable. Noted here so it isn't mistaken for a deliberate design decision later. Checkpoint 4.5 fixed a bug where it showed through walls (it's now hidden whenever a wall occludes the enemy or the enemy is behind the camera), but its status as a placeholder is unchanged.
+- `core/utils/Health.ts` centralizes "clamp damage at 0, fire a callback exactly once on crossing to zero" as a plain function (`applyDamage(current, amount, onZero?) → number`), not a class — it doesn't own any state itself, the caller still stores the returned value. This is the same reuse reasoning as `Raycast.ts`/`StateMachine.ts`: both the enemy's own health (in `EnemyAI`) and the player's health (in `PlayerState`) route through it instead of duplicating "clamp and detect zero" twice.
+- `GameState.playerState` is a string union (`"alive" | "dead"`), not a boolean, because a future `"downed"` value (perk-gated revive, not built yet) sits between them — a boolean would force a breaking type change later. See "Future mechanics" below.
+- Player health/lifecycle logic lives in its own file, `core/PlayerState.ts`, rather than in `PlayerController` or `WeaponSystem`: those two are movement-only and firing-only per the single-responsibility rule, and "what happens when health hits zero" isn't either of those things. `PlayerController` and `WeaponSystem` only read `gameState.playerState` to decide whether to no-op; only `PlayerState.applyDamage()` (called by whatever deals the damage, e.g. `EnemyAI`) is allowed to change it.
+
+## Future mechanics (documented, not built)
+
+Ideas that came up while implementing checkpoint 4.5 but are deliberately out of scope until a later checkpoint gives them a real home. Listed so they're designed-for-later, not forgotten.
+
+- **Downed/revive state for the player**: a third `playerState` value (e.g. `"downed"`) between `"alive"` and `"dead"`, gated behind a perk that doesn't exist yet. The string-union type was chosen specifically so adding this later doesn't require touching every call site that currently checks `=== "alive"` as a boolean-like condition.
+- **Equivalent downed ("crawler") state for enemies**: an enemy that, below some health threshold, becomes slower and weaker instead of dying outright — reusing the same state-union pattern as the player's.
+- **Perk system framework**: not designed yet. The downed/revive mechanic above depends on it existing first.
+- **Post-death flow beyond "YOU DIED"**: spectate mode, a "you survived N rounds" summary screen, restart/respawn. All of this depends on game-mode/wave logic that doesn't exist until checkpoint 7 (`ZombieSurvival`), so it can't be designed concretely yet.

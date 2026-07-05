@@ -6,6 +6,7 @@ import { WeaponSystem } from "./core/WeaponSystem";
 import { AudioSystem } from "./core/AudioSystem";
 import { InteractSystem } from "./core/InteractSystem";
 import { EnemyAI } from "./core/EnemyAI";
+import { PlayerState } from "./core/PlayerState";
 import { HUD } from "./ui/HUD";
 import { GameState } from "./state/GameState";
 import type { Weapon, SoundDef, EnemyDef } from "./types";
@@ -79,6 +80,7 @@ document.body.appendChild(canvas);
 
 const sceneManager = new SceneManager(canvas);
 const gameState = new GameState();
+const playerState = new PlayerState(gameState);
 const playerController = new PlayerController(
   sceneManager.camera,
   canvas,
@@ -133,12 +135,14 @@ const zombie = new EnemyAI(
   sceneManager.camera,
   audioSystem,
   gameState,
+  playerState,
 );
 zombie.setWallTargets(map.walls);
 
 weaponSystem.setTargets([...map.walls, interactableBox, zombieMesh]);
 
 const hud = new HUD(gameState, sceneManager.camera);
+hud.setOcclusionTargets(map.walls);
 
 canvas.addEventListener("click", () => {
   playerController.controls.lock();

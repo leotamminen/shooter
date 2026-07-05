@@ -54,6 +54,7 @@ export class WeaponSystem {
       if (this.reloadTimeRemaining <= 0) this.finishReload();
     } else if (
       !this.gameState.paused &&
+      this.gameState.playerState === "alive" &&
       this.firing &&
       this.currentAmmo > 0 &&
       this.timeSinceLastShot >= this.weapon.fireRate
@@ -106,6 +107,12 @@ export class WeaponSystem {
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (event.code === "KeyR" && !this.gameState.paused) this.startReload();
+    if (
+      event.code === "KeyR" &&
+      !this.gameState.paused &&
+      this.gameState.playerState === "alive"
+    ) {
+      this.startReload();
+    }
   };
 }

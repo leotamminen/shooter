@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { Raycast } from "./utils/Raycast";
 import { StateMachine } from "./utils/StateMachine";
+import { applyDamage } from "./utils/Health";
 import type { AudioSystem } from "./AudioSystem";
+import type { PlayerState } from "./PlayerState";
 import type { EnemyDef } from "../types";
 import type { GameState } from "../state/GameState";
 
@@ -22,6 +24,7 @@ export class EnemyAI {
   private readonly camera: THREE.Camera;
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
+  private readonly playerState: PlayerState;
 
   private readonly raycast = new Raycast();
   private readonly clock = new THREE.Clock();
@@ -40,6 +43,7 @@ export class EnemyAI {
     camera: THREE.Camera,
     audioSystem: AudioSystem,
     gameState: GameState,
+    playerState: PlayerState,
   ) {
     this.id = id;
     this.def = def;
@@ -47,6 +51,7 @@ export class EnemyAI {
     this.camera = camera;
     this.audioSystem = audioSystem;
     this.gameState = gameState;
+    this.playerState = playerState;
     this.health = def.health;
 
     mesh.userData.onHit = (damage: number): void => this.takeDamage(damage);
@@ -147,18 +152,14 @@ export class EnemyAI {
     this.timeSinceAttack += delta;
     if (this.timeSinceAttack >= this.def.attackInterval) {
       this.timeSinceAttack = 0;
-      this.gameState.playerHealth = Math.max(
-        0,
-        this.gameState.playerHealth - this.def.meleeDamage,
-      );
+      this.playerState.applyDamage(this.def.meleeDamage);
     }
   }
 
   private takeDamage(damage: number): void {
     if (this.dead) return;
 
-    this.health = Math.max(0, this.health - damage);
-    if (this.health <= 0) this.die();
+    this.health = applyDamage(this.health, damage, () => this.die());
   }
 
   private die(): void {

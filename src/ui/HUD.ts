@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { Raycast } from "../core/utils/Raycast";
 import type { GameState } from "../state/GameState";
 
 const RELOAD_PROMPT_DELAY_MS = 1000;
@@ -19,8 +20,11 @@ export class HUD {
   private readonly statusEl: HTMLDivElement;
   private readonly interactEl: HTMLDivElement;
   private readonly healthEl: HTMLDivElement;
+  private readonly deathOverlayEl: HTMLDivElement;
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
+  private readonly raycast = new Raycast();
+  private occlusionTargets: THREE.Object3D[] = [];
 
   private emptySince: number | null = null;
 
@@ -85,7 +89,24 @@ export class HUD {
     });
     root.appendChild(this.healthEl);
 
+    this.deathOverlayEl = createDiv({
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      fontSize: "48px",
+      fontWeight: "bold",
+      color: "#d94040",
+      letterSpacing: "0.1em",
+      textAlign: "center",
+    });
+    root.appendChild(this.deathOverlayEl);
+
     document.body.appendChild(root);
+  }
+
+  setOcclusionTargets(targets: THREE.Object3D[]): void {
+    this.occlusionTargets = targets;
   }
 
   private buildCrosshair(): HTMLDivElement {
@@ -126,6 +147,7 @@ export class HUD {
     this.updateInteractPrompt();
     this.updateHealth();
     this.updateEnemyLabels();
+    this.updateDeathOverlay();
   }
 
   private updateAmmo(): void {
@@ -170,6 +192,11 @@ export class HUD {
     this.healthEl.textContent = `HP: ${this.gameState.playerHealth}`;
   }
 
+  private updateDeathOverlay(): void {
+    this.deathOverlayEl.textContent =
+      this.gameState.playerState === "dead" ? "YOU DIED" : "";
+  }
+
   // Debug/test aid: floating current/max labels above each enemy, projected
   // from world space every frame. Not meant to ship as-is — replace with a
   // real health bar (or hide entirely) once the game is closer to
@@ -199,7 +226,7 @@ export class HUD {
       );
       const screen = this.projectToScreen(worldPos);
 
-      if (screen === null) {
+      if (screen === null || this.isOccluded(worldPos)) {
         label.style.display = "none";
         continue;
       }
@@ -229,5 +256,21 @@ export class HUD {
       x: (ndc.x * 0.5 + 0.5) * window.innerWidth,
       y: (-ndc.y * 0.5 + 0.5) * window.innerHeight,
     };
+  }
+
+  private isOccluded(worldPos: THREE.Vector3): boolean {
+    const origin = this.camera.position;
+    const toTarget = worldPos.clone().sub(origin);
+    const distance = toTarget.length();
+    if (distance < 1e-6) return false;
+
+    const direction = toTarget.normalize();
+    const hit = this.raycast.fromOrigin(
+      origin,
+      direction,
+      this.occlusionTargets,
+      distance,
+    );
+    return hit !== null;
   }
 }
