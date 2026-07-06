@@ -6,6 +6,7 @@ export interface Weapon {
   magSize: number;
   reloadTime: number; // seconds
   startingReserveAmmo: number;
+  cost: number; // pointsBalance price at a "wall_buy" MapEntity linked to this weapon's id
   fireSoundId: string; // references SoundDef.id
   model?: string; // path to .glb, added when 3D models exist
 }
@@ -34,13 +35,10 @@ export interface MapEntity {
     | "enemy_spawn"
     | "target"
     | "objective"
-    // CHECKPOINT 10 SCAFFOLDING — remove this variant, MapEntitySystem's
-    // createTestTerminal(), and every content/maps.ts entity using it, once
-    // checkpoint 11's weapon wall-buy adds the first real
-    // GameState.spendPoints() caller.
-    | "test_terminal";
+    | "wall_buy";
   position: [number, number, number];
-  linkedTo?: string; // e.g. a door linked to the button that opens it
+  linkedTo?: string; // a related entity's id (e.g. button -> door), or for
+  // "wall_buy", a Weapon id in content/weapons.ts
 }
 
 export interface MapDef {

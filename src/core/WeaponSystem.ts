@@ -20,7 +20,7 @@ export class WeaponSystem {
   private firing = false;
 
   private readonly camera: THREE.Camera;
-  private readonly weapon: Weapon;
+  private weapon: Weapon;
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
 
@@ -61,6 +61,19 @@ export class WeaponSystem {
 
   addReserveAmmo(amount: number): void {
     this.reserveAmmo += amount;
+  }
+
+  // Switches the player's active weapon mid-game (checkpoint 11's wall-buy
+  // is the first caller): ammo/reload state resets to the new weapon's
+  // stats, the same as a fresh pickup of that weapon — a wall-buy is a full
+  // weapon swap, not a top-up (that's what pickups/addReserveAmmo() are for).
+  setWeapon(weapon: Weapon): void {
+    this.weapon = weapon;
+    this.currentAmmo = weapon.magSize;
+    this.reserveAmmo = weapon.startingReserveAmmo;
+    this.isReloading = false;
+    this.reloadTimeRemaining = 0;
+    this.timeSinceLastShot = Infinity;
   }
 
   reset(): void {

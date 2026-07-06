@@ -9,6 +9,7 @@ export const WEAPONS: Weapon[] = [
     magSize: 12,
     reloadTime: 1.5,
     startingReserveAmmo: 48,
+    cost: 500,
     fireSoundId: "pistol_fire",
   },
 ];

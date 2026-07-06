@@ -93,6 +93,7 @@ function startGame(selections: GameSelections): void {
     raycastRegistry,
     () => playerController.rebuildCollisionBoxes(),
     gameState,
+    WEAPONS,
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);

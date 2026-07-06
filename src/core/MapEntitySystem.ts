@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { CELL_SIZE, WALL_HEIGHT } from "./MapLoader";
 import { computeCollisionBox } from "./utils/CollisionBox";
-import type { MapDef, MapEntity } from "../types";
+import { findById } from "./utils/Lookup";
+import type { MapDef, MapEntity, Weapon } from "../types";
 import type { WeaponSystem } from "./WeaponSystem";
 import type { RunManager } from "./RunManager";
 import type { RaycastRegistry } from "./RaycastRegistry";
@@ -15,23 +16,16 @@ const PICKUP_COLOR = 0x22aacc;
 const PICKUP_EMISSIVE = 0x003344;
 const PICKUP_SIZE = 0.4;
 const PICKUP_AMMO_AMOUNT = 24;
-
-// CHECKPOINT 10 SCAFFOLDING — delete these four constants and
-// createTestTerminal() below once checkpoint 11's weapon wall-buy adds the
-// first real GameState.spendPoints() caller. This whole entity exists only
-// to prove spendPoints() gates/deducts correctly through a real player
-// interaction, not synthetic testing.
-const TEST_TERMINAL_COLOR = 0xff00ff;
-const TEST_TERMINAL_EMISSIVE = 0x550055;
-const TEST_TERMINAL_SIZE = 0.4;
-const TEST_TERMINAL_COST = 50;
+const WALL_BUY_COLOR = 0xffd700;
+const WALL_BUY_EMISSIVE = 0x554400;
+const WALL_BUY_SIZE = 0.5;
 
 export interface DoorEntry {
   mesh: THREE.Mesh;
   box: THREE.Box3;
 }
 
-// Spawns one mesh per door/button/pickup MapEntity and wires their
+// Spawns one mesh per door/button/pickup/wall_buy MapEntity and wires their
 // interaction behavior. Kept separate from MapLoader: MapLoader's job is
 // grid-to-geometry and spawn lookup, this is entity behavior — a different
 // responsibility per the single-responsibility-per-file rule.
@@ -47,6 +41,7 @@ export class MapEntitySystem {
     raycastRegistry: RaycastRegistry,
     onDoorStateChanged: () => void,
     gameState: GameState,
+    weapons: Weapon[],
   ) {
     const doorMeshById = new Map<string, THREE.Mesh>();
 
@@ -64,8 +59,8 @@ export class MapEntitySystem {
         this.createButton(entity, doorMeshById, raycastRegistry, onDoorStateChanged);
       } else if (entity.type === "pickup") {
         this.createPickup(entity, weaponSystem, runManager, raycastRegistry);
-      } else if (entity.type === "test_terminal") {
-        this.createTestTerminal(entity, gameState, raycastRegistry);
+      } else if (entity.type === "wall_buy") {
+        this.createWallBuy(entity, weapons, weaponSystem, gameState, raycastRegistry);
       }
     }
   }
@@ -162,36 +157,48 @@ export class MapEntitySystem {
     });
   }
 
-  // CHECKPOINT 10 SCAFFOLDING — delete this method (and the four constants
-  // above, the "test_terminal" MapEntity type in types/index.ts, and its
-  // content/maps.ts entry) once checkpoint 11's weapon wall-buy adds the
-  // first real spendPoints() caller. No RunManager.registerResettable()
-  // call here: unlike doors/pickups, this entity has no visible on/off
-  // state to reset — pointsBalance itself already resets on its own, via
-  // RunManager -> GameState.resetScore().
-  private createTestTerminal(
+  // The first real GameState.spendPoints() caller (checkpoint 11) — replaces
+  // the checkpoint-10 test terminal, which only proved the mechanism worked.
+  // linkedTo here is a Weapon id (content/weapons.ts), not another
+  // MapEntity's id — findById() throws by name if it doesn't resolve, same
+  // as every other content lookup in this codebase. No
+  // RunManager.registerResettable() call: like the test terminal before it,
+  // this has no visible on/off state of its own to reset — spendPoints()'s
+  // effect on pointsBalance already resets via RunManager ->
+  // GameState.resetScore(). What a new run does to an already-purchased
+  // weapon is a separate, currently undesigned question — see CLAUDE.md
+  // future mechanics.
+  private createWallBuy(
     entity: MapEntity,
+    weapons: Weapon[],
+    weaponSystem: WeaponSystem,
     gameState: GameState,
     raycastRegistry: RaycastRegistry,
   ): void {
+    if (!entity.linkedTo) {
+      throw new Error(`Wall-buy "${entity.id}" has no linkedTo weapon id`);
+    }
+    const weapon = findById(weapons, entity.linkedTo);
+
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(TEST_TERMINAL_SIZE, TEST_TERMINAL_SIZE, TEST_TERMINAL_SIZE),
+      new THREE.BoxGeometry(WALL_BUY_SIZE, WALL_BUY_SIZE, WALL_BUY_SIZE),
       new THREE.MeshStandardMaterial({
-        color: TEST_TERMINAL_COLOR,
-        emissive: TEST_TERMINAL_EMISSIVE,
+        color: WALL_BUY_COLOR,
+        emissive: WALL_BUY_EMISSIVE,
       }),
     );
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
     mesh.userData.onInteract = (): void => {
-      const spent = gameState.spendPoints(TEST_TERMINAL_COST);
-      if (spent) {
+      const purchased = gameState.spendPoints(weapon.cost);
+      if (purchased) {
+        weaponSystem.setWeapon(weapon);
         console.log(
-          `Test terminal: spent ${TEST_TERMINAL_COST} points, balance now ${gameState.pointsBalance}`,
+          `Wall-buy: purchased ${weapon.name} for ${weapon.cost} points, balance now ${gameState.pointsBalance}`,
         );
       } else {
         console.log(
-          `Test terminal: rejected (need ${TEST_TERMINAL_COST}, have ${gameState.pointsBalance}) — balance unchanged`,
+          `Wall-buy: rejected (need ${weapon.cost}, have ${gameState.pointsBalance}) — balance unchanged`,
         );
       }
     };

@@ -47,12 +47,11 @@ export const MAPS: MapDef[] = [
       { id: "target_2", type: "target", position: [4, 0.9, 10] },
       { id: "target_3", type: "target", position: [10, 0.9, 12] },
       { id: "target_4", type: "target", position: [2, 0.9, 12] },
-      // CHECKPOINT 10 SCAFFOLDING — remove this entity (and the
-      // "test_terminal" MapEntity type in types/index.ts, and
-      // MapEntitySystem.createTestTerminal()) once checkpoint 11's weapon
-      // wall-buy adds the first real GameState.spendPoints() caller. Placed
-      // at row 6, col 6 — open floor, not shared with any other entity.
-      { id: "test_terminal_1", type: "test_terminal", position: [12, 0.3, 12] },
+      // Wall-buy (checkpoint 11): reuses the exact position the
+      // checkpoint-10 test terminal occupied (row 6, col 6) — already
+      // verified open floor, not shared with any other entity, now that the
+      // terminal itself is gone.
+      { id: "wall_buy_1", type: "wall_buy", linkedTo: "pistol", position: [12, 0.3, 12] },
     ],
   },
   {
@@ -88,6 +87,9 @@ export const MAPS: MapDef[] = [
       { id: "corridors_target_2", type: "target", position: [14, 0.9, 12] },
       { id: "corridors_target_3", type: "target", position: [4, 0.9, 12] },
       { id: "corridors_target_4", type: "target", position: [16, 0.9, 2] },
+      // Wall-buy (checkpoint 11): Room A, row 3 col 2 — open floor, not
+      // shared with any other corridors entity.
+      { id: "corridors_wall_buy_1", type: "wall_buy", linkedTo: "pistol", position: [4, 0.3, 6] },
     ],
   },
 ];
