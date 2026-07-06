@@ -40,6 +40,7 @@ export interface MapEntity {
 
 export interface MapDef {
   id: string;
+  name: string; // player-facing display text, e.g. "Corridors" (id stays the lookup key)
   grid: number[][]; // 0 = floor, 1 = wall
   entities: MapEntity[];
 }
