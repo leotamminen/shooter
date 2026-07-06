@@ -47,7 +47,7 @@ export class HUD {
   private readonly statusEl: HTMLDivElement;
   private readonly interactEl: HTMLDivElement;
   private readonly healthEl: HTMLDivElement;
-  private readonly scoreEl: HTMLDivElement;
+  private readonly pointsEl: HTMLDivElement;
   private readonly modeStatusEl: HTMLDivElement;
   private readonly deathPanelEl: HTMLDivElement;
   private readonly deathScoreEl: HTMLDivElement;
@@ -129,14 +129,14 @@ export class HUD {
     });
     root.appendChild(this.healthEl);
 
-    this.scoreEl = createDiv({
+    this.pointsEl = createDiv({
       position: "absolute",
       top: "24px",
       right: "24px",
       fontSize: "16px",
       fontWeight: "bold",
     });
-    root.appendChild(this.scoreEl);
+    root.appendChild(this.pointsEl);
 
     this.modeStatusEl = createDiv({
       position: "absolute",
@@ -244,7 +244,7 @@ export class HUD {
       this.clearAliveOnlyText();
     }
 
-    this.updateScore();
+    this.updatePointsBalance();
     this.updateModeStatus();
     this.updateEnemyLabels();
     this.updateDeathPanel();
@@ -300,8 +300,8 @@ export class HUD {
     this.healthEl.textContent = `HP: ${this.gameState.playerHealth}`;
   }
 
-  private updateScore(): void {
-    this.scoreEl.textContent = `Score: ${this.gameState.score}`;
+  private updatePointsBalance(): void {
+    this.pointsEl.textContent = `Points: ${this.gameState.pointsBalance}`;
   }
 
   private updateModeStatus(): void {
