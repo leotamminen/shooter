@@ -40,6 +40,16 @@ export class GameState {
     this.pointsBalance = 0;
   }
 
+  // The only mutator that ever decrements pointsBalance — addScore() only
+  // ever increases both score and pointsBalance together, so this is where
+  // the two numbers can finally diverge. score (the permanent total) is
+  // never touched here.
+  spendPoints(amount: number): boolean {
+    if (this.pointsBalance < amount) return false;
+    this.pointsBalance -= amount;
+    return true;
+  }
+
   // Keyed by enemy id so multiple simultaneous enemies (checkpoint 7+) don't
   // need a rewrite here.
   enemyHealth: Record<string, EnemyHealthEntry> = {};
