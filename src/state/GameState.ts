@@ -24,9 +24,10 @@ export class GameState {
   playerHealth = PLAYER_MAX_HEALTH;
   playerState: PlayerLifeState = "alive";
 
-  // score is a permanent total, never decreased. pointsBalance is the future
-  // spendable currency for wall-buys etc — they start identical but will
-  // diverge once spending exists (checkpoint 6+). Do not conflate them later.
+  // score is a permanent total, never decreased. pointsBalance is the real
+  // spendable currency (spendPoints() below is the only decrementer) — they
+  // start identical and only diverge once the player actually spends. Do not
+  // conflate them.
   score = 0;
   pointsBalance = 0;
 
