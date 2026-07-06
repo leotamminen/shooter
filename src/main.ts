@@ -97,22 +97,6 @@ function startGame(selections: GameSelections): void {
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);
 
-  // Placeholder interactable: still hardcoded here, not a real MapEntity type —
-  // it predates doors/buttons/pickups (checkpoint 3) and has no map-entity
-  // shape of its own to migrate into.
-  const interactableBox = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 0.6, 0.6),
-    new THREE.MeshStandardMaterial({ color: 0xffaa00, emissive: 0x552200 }),
-  );
-  interactableBox.name = "placeholder box";
-  interactableBox.userData.interactable = true;
-  interactableBox.userData.onInteract = (): void => {
-    console.log("Interacted with placeholder box");
-  };
-  interactableBox.position.set(2, 0.3, 8);
-  sceneManager.scene.add(interactableBox);
-  raycastRegistry.register(interactableBox);
-
   const interactSystem = new InteractSystem(sceneManager.camera, gameState, raycastRegistry);
 
   const enemySpawnPoints = mapDef.entities
