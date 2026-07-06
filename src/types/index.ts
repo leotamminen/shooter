@@ -33,7 +33,12 @@ export interface MapEntity {
     | "spawn"
     | "enemy_spawn"
     | "target"
-    | "objective";
+    | "objective"
+    // CHECKPOINT 10 SCAFFOLDING — remove this variant, MapEntitySystem's
+    // createTestTerminal(), and every content/maps.ts entity using it, once
+    // checkpoint 11's weapon wall-buy adds the first real
+    // GameState.spendPoints() caller.
+    | "test_terminal";
   position: [number, number, number];
   linkedTo?: string; // e.g. a door linked to the button that opens it
 }
