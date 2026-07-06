@@ -1,4 +1,4 @@
-import type { Weapon, EnemyDef } from "../types";
+import type { Weapon, EnemyDef, MapDef } from "../types";
 
 // The menu's own notion of which modes exist — not content, since game
 // modes are code (ZombieSurvival/ShootingRange), not typed data, per the
@@ -8,6 +8,7 @@ export type ModeId = "zombie" | "range";
 
 export interface GameSelections {
   modeId: ModeId;
+  mapId: string;
   weaponId: string;
   enemyId: string;
 }
@@ -50,14 +51,14 @@ function createOptionButton(label: string, onClick: () => void): HTMLButtonEleme
   return button;
 }
 
-// A one-time DOM overlay shown before gameplay starts: mode/weapon/enemy
+// A one-time DOM overlay shown before gameplay starts: mode/map/weapon/enemy
 // selection plus a Start Game button. Kept separate from ui/HUD.ts — its
 // lifecycle (shown once, then destroyed) is distinct from HUD's (shown
 // continuously during gameplay), so folding it into HUD would mix two
 // different concerns into one file.
 //
-// Deliberately one screen with three groups, not three sequential screens:
-// with only two modes and one weapon/enemy currently in content/, a
+// Deliberately one screen with four groups, not sequential screens: with
+// only two modes and small weapon/enemy/map lists currently in content/, a
 // multi-screen wizard would be pure overhead. Revisit if the option lists
 // grow long enough to need it.
 export class MainMenu {
@@ -65,18 +66,22 @@ export class MainMenu {
   private readonly enemyGroup: HTMLDivElement;
 
   private selectedModeId: ModeId = MODE_OPTIONS[0].id;
+  private selectedMapId: string;
   private selectedWeaponId: string;
   private selectedEnemyId: string;
 
   private readonly modeButtons = new Map<string, HTMLButtonElement>();
+  private readonly mapButtons = new Map<string, HTMLButtonElement>();
   private readonly weaponButtons = new Map<string, HTMLButtonElement>();
   private readonly enemyButtons = new Map<string, HTMLButtonElement>();
 
   constructor(
     weapons: Weapon[],
     enemies: EnemyDef[],
+    maps: MapDef[],
     onStart: (selections: GameSelections) => void,
   ) {
+    this.selectedMapId = maps[0].id;
     this.selectedWeaponId = weapons[0].id;
     this.selectedEnemyId = enemies[0].id;
 
@@ -107,6 +112,23 @@ export class MainMenu {
       (id) => this.selectMode(id as ModeId),
     );
     this.root.appendChild(modeGroup);
+
+    // No mode-based filtering here — maps are mode-agnostic for now (see
+    // CLAUDE.md decisions log). Every map works under both Zombie Survival
+    // and Shooting Range, since every map is required to carry both
+    // enemy_spawn and target entities.
+    const mapOptions: SelectableOption[] = maps.map((map) => ({
+      id: map.id,
+      label: map.name,
+    }));
+    const mapGroup = this.buildGroup(
+      "Map",
+      mapOptions,
+      this.selectedMapId,
+      this.mapButtons,
+      (id) => this.selectMap(id),
+    );
+    this.root.appendChild(mapGroup);
 
     const weaponOptions: SelectableOption[] = weapons.map((weapon) => ({
       id: weapon.id,
@@ -140,6 +162,7 @@ export class MainMenu {
     const startButton = createOptionButton("Start Game", () => {
       onStart({
         modeId: this.selectedModeId,
+        mapId: this.selectedMapId,
         weaponId: this.selectedWeaponId,
         enemyId: this.selectedEnemyId,
       });
@@ -205,6 +228,11 @@ export class MainMenu {
     const isRange = modeId === "range";
     this.enemyGroup.style.opacity = isRange ? "0.4" : "1";
     this.enemyGroup.style.pointerEvents = isRange ? "none" : "auto";
+  }
+
+  private selectMap(mapId: string): void {
+    this.selectedMapId = mapId;
+    this.applySelection(this.mapButtons, mapId);
   }
 
   private selectWeapon(weaponId: string): void {
