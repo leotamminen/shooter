@@ -65,7 +65,7 @@ function startGame(selections: GameSelections): void {
   // InteractSystem's interact ray, HUD's label occlusion) reads the same list.
   const raycastRegistry = new RaycastRegistry();
 
-  const mapDef = findById(MAPS, "test-grid");
+  const mapDef = findById(MAPS, selections.mapId);
   const map = loadMap(mapDef.grid, raycastRegistry);
   sceneManager.scene.add(map.group);
   playerController.setWallBoxes(map.wallBoxes);
@@ -192,7 +192,7 @@ function startGame(selections: GameSelections): void {
   animate();
 }
 
-const mainMenu = new MainMenu(WEAPONS, ENEMIES, (selections) => {
+const mainMenu = new MainMenu(WEAPONS, ENEMIES, MAPS, (selections) => {
   mainMenu.destroy();
   startGame(selections);
 });
