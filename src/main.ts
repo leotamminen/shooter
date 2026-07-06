@@ -59,10 +59,10 @@ function startGame(selections: GameSelections): void {
   const runManager = new RunManager(gameState, playerState);
 
   // The single shared "what can be hit/occluded by a ray" registry — every
-  // solid or interactable object (walls, doors, buttons, pickups, the
-  // placeholder interactable, enemies) registers itself here once, and every
-  // raycasting system (WeaponSystem's fire, EnemyAI's line-of-sight,
-  // InteractSystem's interact ray, HUD's label occlusion) reads the same list.
+  // solid or interactable object (walls, doors, buttons, pickups, wall_buys,
+  // enemies) registers itself here once, and every raycasting system
+  // (WeaponSystem's fire, EnemyAI's line-of-sight, InteractSystem's interact
+  // ray, HUD's label occlusion) reads the same list.
   const raycastRegistry = new RaycastRegistry();
 
   const mapDef = findById(MAPS, selections.mapId);

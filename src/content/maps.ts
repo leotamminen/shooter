@@ -1,8 +1,9 @@
 import type { MapDef } from "../types";
 
 // test-grid: interior pillar at row 4, col 2 doubles as a line-of-sight
-// blocker for testing InteractSystem: it sits directly between the spawn
-// point and the placeholder interactable box. The row-2 partition
+// blocker for testing InteractSystem: it originally sat directly between the
+// spawn point and the checkpoint-3 placeholder interactable box (deleted at
+// checkpoint 11). The row-2 partition
 // (checkpoint 6) walls off the row-1 alcove behind door_1, opened by
 // button_1 (row 3, next to the gap but not inside it, so it doesn't block
 // the doorway itself).
