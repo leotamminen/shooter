@@ -39,6 +39,10 @@ export interface MapEntity {
   position: [number, number, number];
   linkedTo?: string; // a related entity's id (e.g. button -> door), or for
   // "wall_buy", a Weapon id in content/weapons.ts
+  cost?: number; // "button" only (checkpoint 12): pointsBalance price to open
+  // the linked door; absent/undefined means free, same as every button
+  // before this checkpoint. Unrelated to "wall_buy"'s price, which comes
+  // from Weapon.cost, not this field.
 }
 
 export interface MapDef {
