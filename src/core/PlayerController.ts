@@ -30,6 +30,7 @@ export class PlayerController {
   private wallBoxes: THREE.Box3[] = [];
   private doors: DoorEntry[] = [];
   private collisionBoxes: THREE.Box3[] = [];
+  private speed = 0;
 
   private readonly forward = new THREE.Vector3();
   private readonly right = new THREE.Vector3();
@@ -79,7 +80,10 @@ export class PlayerController {
 
   update(): void {
     const delta = this.clock.getDelta();
-    if (this.gameState.paused || this.gameState.playerState !== "alive") return;
+    if (this.gameState.paused || this.gameState.playerState !== "alive") {
+      this.speed = 0;
+      return;
+    }
 
     this.camera.getWorldDirection(this.forward);
     this.forward.y = 0;
@@ -94,8 +98,10 @@ export class PlayerController {
     if (this.moveDirection.lengthSq() > 0) this.moveDirection.normalize();
 
     const step = MOVE_SPEED * delta;
-    let x = this.camera.position.x + this.moveDirection.x * step;
-    let z = this.camera.position.z + this.moveDirection.z * step;
+    const prevX = this.camera.position.x;
+    const prevZ = this.camera.position.z;
+    let x = prevX + this.moveDirection.x * step;
+    let z = prevZ + this.moveDirection.z * step;
 
     for (let pass = 0; pass < COLLISION_PASSES; pass++) {
       for (const box of this.collisionBoxes) {
@@ -105,6 +111,24 @@ export class PlayerController {
 
     this.camera.position.x = x;
     this.camera.position.z = z;
+
+    // Actual measured displacement this frame, not the intended MOVE_SPEED
+    // constant -- this automatically reads as slower while sliding along a
+    // wall, and automatically reads as faster if a future different
+    // movement speed (sprint) ever exists, with no code here needing to
+    // know that speed exists.
+    this.speed = delta > 0 ? Math.hypot(x - prevX, z - prevZ) / delta : 0;
+  }
+
+  // Horizontal movement speed in units/second, measured from actual
+  // resolved displacement this frame (post-collision). Zero whenever the
+  // player is paused or not alive. Consumed by WeaponViewmodel to drive a
+  // continuous, speed-proportional view-bob (checkpoint 14) -- a continuous
+  // function of this value, not a discrete moving/idle state, so any future
+  // different movement speed (sprint) produces proportionally more bob
+  // automatically.
+  getSpeed(): number {
+    return this.speed;
   }
 
   private resolveAgainstBox(
