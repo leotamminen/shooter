@@ -177,6 +177,7 @@ function startGame(selections: GameSelections): void {
     hud.update();
     sceneManager.render();
     if (gameState.playerState === "alive") {
+      weaponViewmodel.update(playerController.getSpeed(), delta);
       weaponViewmodel.render(sceneManager.renderer);
     }
   }
