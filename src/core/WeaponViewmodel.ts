@@ -34,6 +34,17 @@ const BOB_SPEED_SMOOTHING = 8; // per-second lerp rate
 // near-plane ever change.
 const MAX_IMPULSE_MAGNITUDE = 0.15;
 
+// Near-cap jitter (checkpoint 14): additive to, never a replacement for,
+// the MAX_IMPULSE_MAGNITUDE clamp above. A hard clamp alone reads as the
+// weapon freezing/getting stuck rather than straining under sustained
+// impulses -- this layers a small, fast wobble on top, scaled by how close
+// the (pre-clamp) impulse sum is to the cap, so motion stays visible while
+// the clamp is engaged. JITTER_MAX_AMPLITUDE is deliberately small relative
+// to MAX_IMPULSE_MAGNITUDE and tuned by eye in-browser (checkpoint 14) for
+// a "straining/kicking under sustained fire" read, not visible jank.
+const JITTER_FREQUENCY = 40; // radians of phase per second (fast, independent of bob's own phase/speed)
+const JITTER_MAX_AMPLITUDE = 0.01; // full jitter amplitude once at/over the cap
+
 // The only piece of this file meant to be tuned later: every positioning
 // computation below reads from this object, so a future per-weapon offset
 // or a handedness toggle is a one-line change here, not a code change.
@@ -81,6 +92,7 @@ export class WeaponViewmodel {
 
   private smoothedSpeed = 0;
   private bobPhase = 0;
+  private jitterPhase = 0;
   private readonly impulses: Impulse[] = [];
 
   constructor() {
@@ -173,12 +185,27 @@ export class WeaponViewmodel {
       impulseZ *= scale;
     }
 
+    // Proximity to the cap, measured against the pre-clamp magnitude so it
+    // reads as 1 (full jitter) throughout a spam/hold, not just at the
+    // instant the sum first crosses the cap. Cubed easing keeps jitter
+    // negligible at low proximity (a single normal impulse) and only makes
+    // it clearly visible once several impulses have stacked close to or
+    // past the cap -- a smooth ramp, not a threshold snap.
+    this.jitterPhase += JITTER_FREQUENCY * deltaTime;
+    const proximity = Math.min(1, impulseMagnitude / MAX_IMPULSE_MAGNITUDE);
+    const jitterAmount = proximity * proximity * proximity * JITTER_MAX_AMPLITUDE;
+    // Different multipliers on the two axes' phases (not both 1x) avoid a
+    // clean back-and-forth line, giving a small chaotic wobble that reads
+    // more like straining than a mechanical metronome.
+    const jitterX = Math.sin(this.jitterPhase) * jitterAmount;
+    const jitterY = Math.sin(this.jitterPhase * 1.3) * jitterAmount;
+
     const baseX = VIEWMODEL_CONFIG.mirrored
       ? -VIEWMODEL_CONFIG.offset.x
       : VIEWMODEL_CONFIG.offset.x;
     this.weaponMesh.position.set(
-      baseX + bobX + impulseX,
-      VIEWMODEL_CONFIG.offset.y + bobY + impulseY,
+      baseX + bobX + impulseX + jitterX,
+      VIEWMODEL_CONFIG.offset.y + bobY + impulseY + jitterY,
       VIEWMODEL_CONFIG.offset.z + impulseZ,
     );
   }
