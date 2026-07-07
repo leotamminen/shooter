@@ -15,6 +15,15 @@ import type { MapDef } from "../types";
 // fully seals the only path between the two rooms, since the corridor is
 // exactly one row tall (rows 3 and 5 at cols 4-6 are walls, so there's no
 // way around it).
+//
+// corridors (checkpoint 12): a small vault room (row 9, cols 7-9) was added
+// south of Room B, gated by a paid door — corridors_door_2 sits at the one
+// gap (row 8, col 8) in an otherwise solid partition wall between Room B and
+// the vault, opened by corridors_button_2 (row 7, col 8, on the Room B side
+// so it's never trapped behind its own door) at a cost of 300 points. The
+// vault holds corridors_pickup_2, a bonus ammo refill — the first real
+// instance of a paid button, alongside the existing free door_1/button_1
+// pairs on both maps, which are untouched.
 export const MAPS: MapDef[] = [
   {
     id: "test-grid",
@@ -67,6 +76,8 @@ export const MAPS: MapDef[] = [
       [1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1],
       [1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1],
       [1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1],
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ],
     entities: [
@@ -91,6 +102,22 @@ export const MAPS: MapDef[] = [
       // Wall-buy (checkpoint 11): Room A, row 3 col 2 — open floor, not
       // shared with any other corridors entity.
       { id: "corridors_wall_buy_1", type: "wall_buy", linkedTo: "pistol", position: [4, 0.3, 6] },
+      // Paid door (checkpoint 12): gates the small vault room at row 9,
+      // cols 7-9, added south of Room B. corridors_door_2 is the sole gap
+      // (row 8, col 8) in the partition wall between Room B and the vault —
+      // rows 8's other columns are solid, so this is the only way in.
+      // corridors_button_2 sits on the Room B side (row 7, col 8, not
+      // inside the vault) and costs 300 points; corridors_pickup_2 inside
+      // the vault is a bonus ammo refill.
+      { id: "corridors_door_2", type: "door", position: [16, 1.5, 16] },
+      {
+        id: "corridors_button_2",
+        type: "button",
+        linkedTo: "corridors_door_2",
+        cost: 300,
+        position: [16, 0.3, 14],
+      },
+      { id: "corridors_pickup_2", type: "pickup", position: [16, 0.3, 18] },
     ],
   },
 ];
