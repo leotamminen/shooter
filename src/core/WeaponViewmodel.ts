@@ -21,6 +21,19 @@ const BOB_AMPLITUDE_X_SCALE = 0.008; // horizontal sway per unit of speed
 const BOB_AMPLITUDE_Y_SCALE = 0.006; // vertical bob per unit of speed
 const BOB_SPEED_SMOOTHING = 8; // per-second lerp rate
 
+// Clamps the *combined* magnitude of all currently-summed impulse offsets
+// (never a per-impulse cap, never a cap on how many impulses can be active)
+// so a burst or held rapid-fire trigger can still visibly stack the effect
+// up to this ceiling and hold there, rather than either being silently
+// rejected past some count or pushing the mesh off-screen entirely. 0.15
+// was chosen by visual verification in-browser (checkpoint 14) against the
+// current VIEWMODEL_FOV/near-plane/base offset -- not derived from a
+// formula and assumed correct -- confirmed the mesh stays fully on-screen
+// even when the test impulse key was held down continuously. Revisit this
+// value if VIEWMODEL_FOV, the base offset, or the viewmodel camera's
+// near-plane ever change.
+const MAX_IMPULSE_MAGNITUDE = 0.15;
+
 // The only piece of this file meant to be tuned later: every positioning
 // computation below reads from this object, so a future per-weapon offset
 // or a handedness toggle is a one-line change here, not a code change.
@@ -145,6 +158,19 @@ export class WeaponViewmodel {
       impulseX += impulse.offset.x * remaining;
       impulseY += impulse.offset.y * remaining;
       impulseZ += impulse.offset.z * remaining;
+    }
+
+    // Clamp the combined magnitude, preserving direction -- this is what
+    // lets many overlapping/rapid impulses visibly stack up to the ceiling
+    // and hold there (rather than being rejected outright), while
+    // guaranteeing the mesh can never be pushed past MAX_IMPULSE_MAGNITUDE
+    // from its bob-adjusted base position.
+    const impulseMagnitude = Math.hypot(impulseX, impulseY, impulseZ);
+    if (impulseMagnitude > MAX_IMPULSE_MAGNITUDE) {
+      const scale = MAX_IMPULSE_MAGNITUDE / impulseMagnitude;
+      impulseX *= scale;
+      impulseY *= scale;
+      impulseZ *= scale;
     }
 
     const baseX = VIEWMODEL_CONFIG.mirrored
