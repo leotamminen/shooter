@@ -177,7 +177,6 @@ function startGame(selections: GameSelections): void {
     hud.update();
     sceneManager.render();
     if (gameState.playerState === "alive") {
-      weaponViewmodel.updateOrientation(sceneManager.camera);
       weaponViewmodel.render(sceneManager.renderer);
     }
   }

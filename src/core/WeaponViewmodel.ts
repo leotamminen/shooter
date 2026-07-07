@@ -31,9 +31,8 @@ export const VIEWMODEL_CONFIG = {
 //
 // Rendering-only: this class has no notion of "alive"/"dead" or any other
 // gameplay state. main.ts (the composition root) decides when to call
-// updateOrientation()/render() based on gameState.playerState, the same way
-// it already gates gameMode.update() -- keeping this file free of a
-// GameState import.
+// render() based on gameState.playerState, the same way it already gates
+// gameMode.update() -- keeping this file free of a GameState import.
 export class WeaponViewmodel {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
@@ -69,10 +68,13 @@ export class WeaponViewmodel {
       VIEWMODEL_CONFIG.offset.y,
       VIEWMODEL_CONFIG.offset.z,
     );
-    // Child of the camera, not of the scene directly: this is what makes
-    // the weapon track the player's look direction for free every frame --
-    // only the camera's own rotation (synced in updateOrientation()) ever
-    // changes; the mesh's local offset never does.
+    // Child of the camera, not of the scene directly: this is what fixes
+    // the weapon rigidly in this camera's view. Because a child mesh's
+    // view-space transform is always just its local offset relative to the
+    // camera that renders it (the camera's own world rotation/position
+    // always cancels out exactly in that math), the weapon stays put on
+    // screen regardless of this camera's rotation -- there is no per-frame
+    // rotation sync, and none is needed.
     this.camera.add(this.weaponMesh);
 
     window.addEventListener("resize", this.handleResize);
@@ -82,16 +84,6 @@ export class WeaponViewmodel {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
   };
-
-  // Matches this system's own camera rotation to the main camera's, so the
-  // weapon appears to swing with the player's look direction exactly like
-  // the world does. Position is never synced -- this camera stays at its
-  // constructed origin forever, since the weapon mesh's fixed local offset
-  // already produces the correct on-screen position regardless of the main
-  // camera's world position.
-  updateOrientation(mainCamera: THREE.PerspectiveCamera): void {
-    this.camera.quaternion.copy(mainCamera.quaternion);
-  }
 
   // The second render pass -- must run after the main scene's render() this
   // frame. autoClear is switched off only for this call so clearDepth()'s
