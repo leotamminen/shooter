@@ -8,6 +8,19 @@ const WEAPON_WIDTH = 0.1;
 const WEAPON_HEIGHT = 0.1;
 const WEAPON_LENGTH = 0.4;
 
+// Placeholder walk-bob tuning (checkpoint 14) -- a continuous function of
+// speed, not a lookup table keyed by named movement states, so any future
+// higher speed (sprint, not built yet) produces proportionally more bob
+// automatically. BOB_SPEED_SMOOTHING is a per-second lerp rate: it smooths
+// the raw speed input (which can jump instantly between 0 and a movement
+// speed as keys are pressed/released) before amplitude/frequency read from
+// it, which is what makes bob both ramp in smoothly on starting to move and
+// decay smoothly back to neutral on stopping -- one mechanism for both.
+const BOB_FREQUENCY_SCALE = 3; // radians of phase per second, per unit of speed
+const BOB_AMPLITUDE_X_SCALE = 0.008; // horizontal sway per unit of speed
+const BOB_AMPLITUDE_Y_SCALE = 0.006; // vertical bob per unit of speed
+const BOB_SPEED_SMOOTHING = 8; // per-second lerp rate
+
 // The only piece of this file meant to be tuned later: every positioning
 // computation below reads from this object, so a future per-weapon offset
 // or a handedness toggle is a one-line change here, not a code change.
@@ -18,9 +31,15 @@ export const VIEWMODEL_CONFIG = {
   mirrored: false,
 };
 
-// Renders the player's held weapon as a static placeholder shape, always
-// drawn in front of world geometry regardless of proximity to a wall. A
-// naive single-pass render (the weapon mesh parented directly into the main
+interface Impulse {
+  offset: { x: number; y: number; z: number };
+  elapsed: number;
+  decayTime: number;
+}
+
+// Renders the player's held weapon as a placeholder shape, always drawn in
+// front of world geometry regardless of proximity to a wall. A naive
+// single-pass render (the weapon mesh parented directly into the main
 // scene/camera) would clip through nearby walls, since it would share the
 // main scene's depth buffer -- a wall 0.3 units away is closer to the
 // camera than the far side of a viewmodel gun. Instead this owns a wholly
@@ -31,12 +50,25 @@ export const VIEWMODEL_CONFIG = {
 //
 // Rendering-only: this class has no notion of "alive"/"dead" or any other
 // gameplay state. main.ts (the composition root) decides when to call
-// render() based on gameState.playerState, the same way it already gates
-// gameMode.update() -- keeping this file free of a GameState import.
+// update()/render() based on gameState.playerState, the same way it already
+// gates gameMode.update() -- keeping this file free of a GameState import.
+//
+// Checkpoint 14 adds two composed motion sources on top of the static base
+// offset, both owned entirely by this class: a continuous, speed-driven bob
+// (see update()), and a generic addImpulse() mechanism for future
+// fire-kick/reload-dip/damage-flinch/weapon-switch-dip/melee-swing effects
+// (none implemented yet -- see CLAUDE.md future mechanics). Every frame's
+// final local position is base + bob + summed active impulses; callers only
+// ever see update()/render()/addImpulse(), never the three pieces
+// separately.
 export class WeaponViewmodel {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly weaponMesh: THREE.Mesh;
+
+  private smoothedSpeed = 0;
+  private bobPhase = 0;
+  private readonly impulses: Impulse[] = [];
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -60,21 +92,14 @@ export class WeaponViewmodel {
       new THREE.BoxGeometry(WEAPON_WIDTH, WEAPON_HEIGHT, WEAPON_LENGTH),
       new THREE.MeshStandardMaterial({ color: WEAPON_COLOR }),
     );
-    const offsetX = VIEWMODEL_CONFIG.mirrored
-      ? -VIEWMODEL_CONFIG.offset.x
-      : VIEWMODEL_CONFIG.offset.x;
-    this.weaponMesh.position.set(
-      offsetX,
-      VIEWMODEL_CONFIG.offset.y,
-      VIEWMODEL_CONFIG.offset.z,
-    );
-    // Child of the camera, not of the scene directly: this is what fixes
-    // the weapon rigidly in this camera's view. Because a child mesh's
-    // view-space transform is always just its local offset relative to the
-    // camera that renders it (the camera's own world rotation/position
-    // always cancels out exactly in that math), the weapon stays put on
-    // screen regardless of this camera's rotation -- there is no per-frame
-    // rotation sync, and none is needed.
+    // Child of the camera, not of the scene directly: this fixes the weapon
+    // rigidly in this camera's view. Because a child mesh's view-space
+    // transform is always just its local offset relative to the camera that
+    // renders it (the camera's own world rotation/position always cancels
+    // out exactly in that math), the weapon stays put on screen regardless
+    // of this camera's rotation -- there is no per-frame rotation sync, and
+    // none is needed. Its local position is recomputed every frame by
+    // update() below (base + bob + impulses), not set once here.
     this.camera.add(this.weaponMesh);
 
     window.addEventListener("resize", this.handleResize);
@@ -84,6 +109,63 @@ export class WeaponViewmodel {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
   };
+
+  // Called every frame gameplay is active, before render(). Recomputes the
+  // weapon mesh's local position from three summed sources: the static
+  // VIEWMODEL_CONFIG base offset, a continuous speed-driven bob, and the
+  // sum of any active addImpulse() calls.
+  update(speed: number, deltaTime: number): void {
+    // Smoothing raw speed (which can jump instantly between 0 and a
+    // movement speed as keys are pressed/released) is what makes bob
+    // amplitude both ramp up smoothly during acceleration and decay
+    // smoothly back to zero on stopping, from a single mechanism -- no
+    // separate discrete "stopping" case.
+    const smoothingRate = Math.min(1, BOB_SPEED_SMOOTHING * deltaTime);
+    this.smoothedSpeed += (speed - this.smoothedSpeed) * smoothingRate;
+
+    this.bobPhase += this.smoothedSpeed * BOB_FREQUENCY_SCALE * deltaTime;
+    const bobX = Math.sin(this.bobPhase) * this.smoothedSpeed * BOB_AMPLITUDE_X_SCALE;
+    // Double the phase for the vertical component: one full side-to-side
+    // sway (bobX's period) spans two footsteps, and each footstep produces
+    // one vertical bounce, so vertical bob completes two cycles per one
+    // horizontal cycle.
+    const bobY = Math.sin(this.bobPhase * 2) * this.smoothedSpeed * BOB_AMPLITUDE_Y_SCALE;
+
+    let impulseX = 0;
+    let impulseY = 0;
+    let impulseZ = 0;
+    for (let i = this.impulses.length - 1; i >= 0; i--) {
+      const impulse = this.impulses[i];
+      impulse.elapsed += deltaTime;
+      if (impulse.elapsed >= impulse.decayTime) {
+        this.impulses.splice(i, 1);
+        continue;
+      }
+      const remaining = 1 - impulse.elapsed / impulse.decayTime;
+      impulseX += impulse.offset.x * remaining;
+      impulseY += impulse.offset.y * remaining;
+      impulseZ += impulse.offset.z * remaining;
+    }
+
+    const baseX = VIEWMODEL_CONFIG.mirrored
+      ? -VIEWMODEL_CONFIG.offset.x
+      : VIEWMODEL_CONFIG.offset.x;
+    this.weaponMesh.position.set(
+      baseX + bobX + impulseX,
+      VIEWMODEL_CONFIG.offset.y + bobY + impulseY,
+      VIEWMODEL_CONFIG.offset.z + impulseZ,
+    );
+  }
+
+  // Adds a temporary offset that decays linearly from its full value back
+  // to zero over decayTime seconds, then is discarded. Multiple concurrent
+  // impulses sum rather than overwrite each other -- the intended hook for
+  // future fire-kick, reload-dip, damage-flinch, weapon-switch-dip,
+  // melee-swing, etc. (none implemented yet; see CLAUDE.md future
+  // mechanics). Consumed every frame by update() above.
+  addImpulse(offset: { x: number; y: number; z: number }, decayTime: number): void {
+    this.impulses.push({ offset, elapsed: 0, decayTime });
+  }
 
   // The second render pass -- must run after the main scene's render() this
   // frame. autoClear is switched off only for this call so clearDepth()'s
