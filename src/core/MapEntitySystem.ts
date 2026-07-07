@@ -56,7 +56,7 @@ export class MapEntitySystem {
 
     for (const entity of mapDef.entities) {
       if (entity.type === "button") {
-        this.createButton(entity, doorMeshById, raycastRegistry, onDoorStateChanged);
+        this.createButton(entity, doorMeshById, raycastRegistry, onDoorStateChanged, gameState);
       } else if (entity.type === "pickup") {
         this.createPickup(entity, weaponSystem, runManager, raycastRegistry);
       } else if (entity.type === "wall_buy") {
@@ -94,11 +94,18 @@ export class MapEntitySystem {
     return mesh;
   }
 
+  // A button's cost (checkpoint 12) is optional — most buttons are still
+  // free. The idempotency check (`!door.visible`, i.e. door already open)
+  // runs BEFORE any spend attempt, not after: this is what guarantees a
+  // repeat press of an already-open door's button never charges the player
+  // again, the same way it already never re-opened an open door before
+  // costs existed.
   private createButton(
     entity: MapEntity,
     doorMeshById: Map<string, THREE.Mesh>,
     raycastRegistry: RaycastRegistry,
     onDoorStateChanged: () => void,
+    gameState: GameState,
   ): void {
     const door = entity.linkedTo ? doorMeshById.get(entity.linkedTo) : undefined;
     if (!door) {
@@ -117,7 +124,22 @@ export class MapEntitySystem {
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
     mesh.userData.onInteract = (): void => {
-      if (!door.visible) return; // idempotent: door already open
+      if (!door.visible) return; // idempotent: door already open — checked
+      // before any spend attempt below, so this never charges twice.
+
+      if (entity.cost !== undefined) {
+        const paid = gameState.spendPoints(entity.cost);
+        if (!paid) {
+          console.log(
+            `Button "${entity.id}": rejected (need ${entity.cost}, have ${gameState.pointsBalance}) — door stays closed`,
+          );
+          return;
+        }
+        console.log(
+          `Button "${entity.id}": paid ${entity.cost} points, balance now ${gameState.pointsBalance}`,
+        );
+      }
+
       door.visible = false;
       onDoorStateChanged();
     };
