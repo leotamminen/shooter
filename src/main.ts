@@ -9,6 +9,7 @@ import { PlayerState } from "./core/PlayerState";
 import { RunManager } from "./core/RunManager";
 import { MapEntitySystem } from "./core/MapEntitySystem";
 import { RaycastRegistry } from "./core/RaycastRegistry";
+import { WeaponViewmodel } from "./core/WeaponViewmodel";
 import type { GameMode } from "./modes/GameMode";
 import { ZombieSurvival } from "./modes/ZombieSurvival";
 import { ShootingRange } from "./modes/ShootingRange";
@@ -149,6 +150,8 @@ function startGame(selections: GameSelections): void {
     raycastRegistry,
   );
 
+  const weaponViewmodel = new WeaponViewmodel();
+
   canvas.addEventListener("click", () => {
     playerController.controls.lock();
   });
@@ -173,6 +176,10 @@ function startGame(selections: GameSelections): void {
     }
     hud.update();
     sceneManager.render();
+    if (gameState.playerState === "alive") {
+      weaponViewmodel.updateOrientation(sceneManager.camera);
+      weaponViewmodel.render(sceneManager.renderer);
+    }
   }
 
   animate();
