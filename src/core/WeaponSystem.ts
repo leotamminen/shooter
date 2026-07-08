@@ -11,8 +11,47 @@ import type { RaycastRegistry } from "./RaycastRegistry";
 // change is a one-line edit here, not a code change (checkpoint 15).
 const MAX_SLOTS = 2;
 
+// The subset of Weapon a weapon must satisfy to occupy an inventory slot
+// (checkpoint 16) -- ammo/reload stats are optional on Weapon itself so a
+// melee weapon like the knife can share the same content array/interface
+// without needing them (see content/weapons.ts and CLAUDE.md's checkpoint-16
+// decisions log). assertRangedWeapon() below is what narrows a plain Weapon
+// down to this shape at the few places that actually need it.
+type RangedWeapon = Weapon & {
+  magSize: number;
+  reloadTime: number;
+  startingReserveAmmo: number;
+};
+
+// The subset of Weapon a weapon must satisfy to be equipped as the melee
+// weapon (checkpoint 16) -- meleeRange is optional on Weapon itself for the
+// same reason ammo fields are optional: a ranged weapon has no meleeRange.
+type MeleeWeapon = Weapon & {
+  meleeRange: number;
+};
+
+function assertRangedWeapon(weapon: Weapon): asserts weapon is RangedWeapon {
+  if (
+    weapon.magSize === undefined ||
+    weapon.reloadTime === undefined ||
+    weapon.startingReserveAmmo === undefined
+  ) {
+    throw new Error(
+      `Weapon "${weapon.id}" has no ammo stats -- cannot be placed in a weapon slot (is it melee?)`,
+    );
+  }
+}
+
+function assertMeleeWeapon(weapon: Weapon): asserts weapon is MeleeWeapon {
+  if (weapon.meleeRange === undefined) {
+    throw new Error(
+      `Weapon "${weapon.id}" has no meleeRange -- cannot be equipped as the melee weapon`,
+    );
+  }
+}
+
 interface WeaponSlot {
-  weapon: Weapon;
+  weapon: RangedWeapon;
   currentAmmo: number;
   reserveAmmo: number;
 }
@@ -25,6 +64,7 @@ export class WeaponSystem {
   private readonly raycastRegistry: RaycastRegistry;
 
   private timeSinceLastShot = Infinity;
+  private timeSinceLastMeleeSwing = Infinity;
   private reloadTimeRemaining = 0;
   private firing = false;
 
@@ -39,7 +79,21 @@ export class WeaponSystem {
   // weapon -- simpler, and matches most FPS games' weapon-switch behavior.
   private slots: (WeaponSlot | null)[];
   private activeSlotIndex = 0;
-  private readonly startingWeapon: Weapon;
+  private readonly startingWeapon: RangedWeapon;
+
+  // Melee (checkpoint 16): entirely separate from the gun slot array above
+  // -- equipping the knife never touches slots/activeSlotIndex, so
+  // switching back to a gun (V again, or a number-key/scroll switch)
+  // restores that gun's exact prior ammo/reload state with zero extra
+  // bookkeeping, since it was simply never touched while melee was active.
+  // meleeWeapon is mutable state, not a hardcoded constant, even though
+  // only the knife exists today -- a future Bowie knife pickup would
+  // reassign this field to a higher-damage melee weapon (not built yet;
+  // see CLAUDE.md future mechanics). startingMeleeWeapon is what reset()
+  // restores it to.
+  private meleeWeapon: MeleeWeapon;
+  private readonly startingMeleeWeapon: MeleeWeapon;
+  private meleeEquipped = false;
 
   private readonly camera: THREE.Camera;
   private readonly audioSystem: AudioSystem;
@@ -48,14 +102,20 @@ export class WeaponSystem {
   constructor(
     camera: THREE.Camera,
     weapon: Weapon,
+    meleeWeapon: Weapon,
     audioSystem: AudioSystem,
     gameState: GameState,
     runManager: RunManager,
     raycastRegistry: RaycastRegistry,
   ) {
+    assertRangedWeapon(weapon);
+    assertMeleeWeapon(meleeWeapon);
+
     this.camera = camera;
     this.startingWeapon = weapon;
     this.slots = this.buildStartingSlots();
+    this.startingMeleeWeapon = meleeWeapon;
+    this.meleeWeapon = meleeWeapon;
     this.audioSystem = audioSystem;
     this.gameState = gameState;
     this.raycastRegistry = raycastRegistry;
@@ -86,7 +146,7 @@ export class WeaponSystem {
     return slot;
   }
 
-  private get weapon(): Weapon {
+  private get weapon(): RangedWeapon {
     return this.activeSlot.weapon;
   }
 
@@ -130,6 +190,7 @@ export class WeaponSystem {
   // unselected slot) -- buying a weapon while full swaps out whatever
   // you're currently holding, not whatever else happens to be in inventory.
   pickupWeapon(weapon: Weapon): void {
+    assertRangedWeapon(weapon);
     const emptySlotIndex = this.slots.findIndex((slot) => slot === null);
     const targetIndex = emptySlotIndex !== -1 ? emptySlotIndex : this.activeSlotIndex;
     this.slots[targetIndex] = {
@@ -143,6 +204,9 @@ export class WeaponSystem {
   private switchToSlot(index: number): void {
     if (!this.slots[index]) return;
     this.activeSlotIndex = index;
+    // Switching to a gun slot always exits melee mode (checkpoint 16) --
+    // pressing a number key or scrolling always means "I want a gun now."
+    this.meleeEquipped = false;
     // Switching cancels any in-progress reload of the weapon being switched
     // away from (it must be restarted if you switch back) and resets the
     // fire-rate cooldown, so the newly active weapon is immediately
@@ -155,19 +219,32 @@ export class WeaponSystem {
   reset(): void {
     this.slots = this.buildStartingSlots();
     this.activeSlotIndex = 0;
+    this.meleeEquipped = false;
+    this.meleeWeapon = this.startingMeleeWeapon;
     this.isReloading = false;
     this.reloadTimeRemaining = 0;
     this.timeSinceLastShot = Infinity;
+    this.timeSinceLastMeleeSwing = Infinity;
     this.firing = false;
   }
 
   update(): void {
     const delta = this.clock.getDelta();
     this.timeSinceLastShot += delta;
+    this.timeSinceLastMeleeSwing += delta;
 
     if (this.isReloading) {
       this.reloadTimeRemaining -= delta;
       if (this.reloadTimeRemaining <= 0) this.finishReload();
+    } else if (this.meleeEquipped) {
+      if (
+        !this.gameState.paused &&
+        this.gameState.playerState === "alive" &&
+        this.firing &&
+        this.timeSinceLastMeleeSwing >= this.meleeWeapon.fireRate
+      ) {
+        this.meleeSwing();
+      }
     } else if (
       !this.gameState.paused &&
       this.gameState.playerState === "alive" &&
@@ -178,7 +255,7 @@ export class WeaponSystem {
       this.fire();
     }
 
-    this.gameState.weaponName = this.weapon.name;
+    this.gameState.weaponName = this.meleeEquipped ? this.meleeWeapon.name : this.weapon.name;
     this.gameState.currentAmmo = this.currentAmmo;
     this.gameState.reserveAmmo = this.reserveAmmo;
     this.gameState.isReloading = this.isReloading;
@@ -195,6 +272,27 @@ export class WeaponSystem {
     onHit?.(this.weapon.damage);
 
     this.audioSystem.play(this.weapon.fireSoundId);
+  }
+
+  // Melee swing (checkpoint 16): reuses the exact same userData.onHit hook
+  // and shared RaycastRegistry hitscan guns already use, just with a much
+  // shorter maxDistance (meleeWeapon.meleeRange) instead of the default
+  // Infinity -- no separate AABB-based melee system needed. No ammo check:
+  // melee never consumes ammo.
+  private meleeSwing(): void {
+    this.timeSinceLastMeleeSwing = 0;
+
+    const hit = this.raycast.fromCamera(
+      this.camera,
+      this.raycastRegistry.getAll(),
+      this.meleeWeapon.meleeRange,
+    );
+    const onHit = hit?.object.userData.onHit as
+      | ((damage: number) => void)
+      | undefined;
+    onHit?.(this.meleeWeapon.damage);
+
+    this.audioSystem.play(this.meleeWeapon.fireSoundId);
   }
 
   private startReload(): void {
@@ -226,9 +324,29 @@ export class WeaponSystem {
     if (
       event.code === "KeyR" &&
       !this.gameState.paused &&
-      this.gameState.playerState === "alive"
+      this.gameState.playerState === "alive" &&
+      !this.meleeEquipped
     ) {
       this.startReload();
+      return;
+    }
+
+    // Melee toggle (checkpoint 16): V equips the knife; pressing it again
+    // returns to whichever gun slot was active, with that gun's exact
+    // ammo/reload state untouched (see the meleeEquipped field comment
+    // above).
+    if (
+      event.code === "KeyV" &&
+      !this.gameState.paused &&
+      this.gameState.playerState === "alive"
+    ) {
+      this.meleeEquipped = !this.meleeEquipped;
+      // Toggling melee on/off cancels any in-progress gun reload and resets
+      // its fire cooldown, the same way switching gun slots already does --
+      // you can't be mid-reload on a gun you're not currently holding.
+      this.isReloading = false;
+      this.reloadTimeRemaining = 0;
+      this.timeSinceLastShot = Infinity;
       return;
     }
 
