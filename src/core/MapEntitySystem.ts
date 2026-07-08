@@ -188,13 +188,15 @@ export class MapEntitySystem {
   // this has no visible on/off state of its own to reset — spendPoints()'s
   // effect on pointsBalance already resets via RunManager ->
   // GameState.resetScore(). What a new run does to an already-purchased
-  // weapon is a separate, currently undesigned question — see CLAUDE.md
-  // future mechanics.
+  // weapon was originally an open question here — resolved at checkpoint 15,
+  // see below.
   // (checkpoint 15: pickupWeapon() replaces the checkpoint-11 setWeapon() —
   // it fills an empty inventory slot if one exists, or replaces the active
   // slot if the inventory is full, rather than always overwriting a single
-  // current weapon. See WeaponSystem.ts and the checkpoint-15 decisions
-  // log.)
+  // current weapon. WeaponSystem.reset() now rebuilds the whole inventory
+  // back to the starting loadout on a new run, so a purchased weapon does
+  // NOT survive a run reset. See WeaponSystem.ts and the checkpoint-15
+  // decisions log.)
   private createWallBuy(
     entity: MapEntity,
     weapons: Weapon[],
