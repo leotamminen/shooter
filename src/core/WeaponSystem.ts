@@ -6,9 +6,18 @@ import type { GameState } from "../state/GameState";
 import type { RunManager } from "./RunManager";
 import type { RaycastRegistry } from "./RaycastRegistry";
 
-export class WeaponSystem {
+// A future perk is planned to raise this to 3 -- kept as one named constant,
+// not a magic number scattered through slot-sizing/indexing logic, so that
+// change is a one-line edit here, not a code change (checkpoint 15).
+const MAX_SLOTS = 2;
+
+interface WeaponSlot {
+  weapon: Weapon;
   currentAmmo: number;
   reserveAmmo: number;
+}
+
+export class WeaponSystem {
   isReloading = false;
 
   private readonly raycast = new Raycast();
@@ -19,8 +28,20 @@ export class WeaponSystem {
   private reloadTimeRemaining = 0;
   private firing = false;
 
+  // The weapon inventory (checkpoint 15): fixed-size slots, most of them
+  // empty at first. Index 0 always starts occupied by startingWeapon; every
+  // other slot starts null. Ammo/reserve are tracked per slot, not
+  // globally, so switching back to a previously-held weapon restores
+  // exactly the ammo it had when you switched away from it. isReloading/
+  // reloadTimeRemaining/timeSinceLastShot stay single (not per-slot):
+  // switching cancels any in-progress reload of the weapon left behind
+  // (see switchToSlot()) rather than tracking independent reload state per
+  // weapon -- simpler, and matches most FPS games' weapon-switch behavior.
+  private slots: (WeaponSlot | null)[];
+  private activeSlotIndex = 0;
+  private readonly startingWeapon: Weapon;
+
   private readonly camera: THREE.Camera;
-  private weapon: Weapon;
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
 
@@ -33,9 +54,8 @@ export class WeaponSystem {
     raycastRegistry: RaycastRegistry,
   ) {
     this.camera = camera;
-    this.weapon = weapon;
-    this.currentAmmo = weapon.magSize;
-    this.reserveAmmo = weapon.startingReserveAmmo;
+    this.startingWeapon = weapon;
+    this.slots = this.buildStartingSlots();
     this.audioSystem = audioSystem;
     this.gameState = gameState;
     this.raycastRegistry = raycastRegistry;
@@ -43,8 +63,47 @@ export class WeaponSystem {
     window.addEventListener("mousedown", this.handleMouseDown);
     window.addEventListener("mouseup", this.handleMouseUp);
     window.addEventListener("keydown", this.handleKeyDown);
+    window.addEventListener("wheel", this.handleWheel, { passive: false });
 
     runManager.registerResettable(() => this.reset());
+  }
+
+  private buildStartingSlots(): (WeaponSlot | null)[] {
+    const slots: (WeaponSlot | null)[] = new Array(MAX_SLOTS).fill(null);
+    slots[0] = {
+      weapon: this.startingWeapon,
+      currentAmmo: this.startingWeapon.magSize,
+      reserveAmmo: this.startingWeapon.startingReserveAmmo,
+    };
+    return slots;
+  }
+
+  private get activeSlot(): WeaponSlot {
+    const slot = this.slots[this.activeSlotIndex];
+    if (!slot) {
+      throw new Error(`Active slot ${this.activeSlotIndex} is empty -- should never happen`);
+    }
+    return slot;
+  }
+
+  private get weapon(): Weapon {
+    return this.activeSlot.weapon;
+  }
+
+  get currentAmmo(): number {
+    return this.activeSlot.currentAmmo;
+  }
+
+  private set currentAmmo(value: number) {
+    this.activeSlot.currentAmmo = value;
+  }
+
+  get reserveAmmo(): number {
+    return this.activeSlot.reserveAmmo;
+  }
+
+  private set reserveAmmo(value: number) {
+    this.activeSlot.reserveAmmo = value;
   }
 
   // Lets a dynamically spawned/despawned object (e.g. a ZombieSurvival enemy
@@ -63,22 +122,39 @@ export class WeaponSystem {
     this.reserveAmmo += amount;
   }
 
-  // Switches the player's active weapon mid-game (checkpoint 11's wall-buy
-  // is the first caller): ammo/reload state resets to the new weapon's
-  // stats, the same as a fresh pickup of that weapon — a wall-buy is a full
-  // weapon swap, not a top-up (that's what pickups/addReserveAmmo() are for).
-  setWeapon(weapon: Weapon): void {
-    this.weapon = weapon;
-    this.currentAmmo = weapon.magSize;
-    this.reserveAmmo = weapon.startingReserveAmmo;
+  // The wall-buy's purchase hook (checkpoint 15 replaces checkpoint 11's
+  // setWeapon(), which unconditionally overwrote the single current weapon
+  // -- that no longer makes sense once there's more than one slot). If an
+  // empty slot exists, this fills it and switches to it; if every slot is
+  // full, it replaces only the currently active slot (never a different,
+  // unselected slot) -- buying a weapon while full swaps out whatever
+  // you're currently holding, not whatever else happens to be in inventory.
+  pickupWeapon(weapon: Weapon): void {
+    const emptySlotIndex = this.slots.findIndex((slot) => slot === null);
+    const targetIndex = emptySlotIndex !== -1 ? emptySlotIndex : this.activeSlotIndex;
+    this.slots[targetIndex] = {
+      weapon,
+      currentAmmo: weapon.magSize,
+      reserveAmmo: weapon.startingReserveAmmo,
+    };
+    this.switchToSlot(targetIndex);
+  }
+
+  private switchToSlot(index: number): void {
+    if (!this.slots[index]) return;
+    this.activeSlotIndex = index;
+    // Switching cancels any in-progress reload of the weapon being switched
+    // away from (it must be restarted if you switch back) and resets the
+    // fire-rate cooldown, so the newly active weapon is immediately
+    // fireable rather than inheriting the previous weapon's timing.
     this.isReloading = false;
     this.reloadTimeRemaining = 0;
     this.timeSinceLastShot = Infinity;
   }
 
   reset(): void {
-    this.currentAmmo = this.weapon.magSize;
-    this.reserveAmmo = this.weapon.startingReserveAmmo;
+    this.slots = this.buildStartingSlots();
+    this.activeSlotIndex = 0;
     this.isReloading = false;
     this.reloadTimeRemaining = 0;
     this.timeSinceLastShot = Infinity;
@@ -153,6 +229,43 @@ export class WeaponSystem {
       this.gameState.playerState === "alive"
     ) {
       this.startReload();
+      return;
     }
+
+    // Number-key slot switching (checkpoint 15): Digit1 -> slot 0, Digit2 ->
+    // slot 1, and so on generically -- so a future MAX_SLOTS increase (the
+    // planned 3-slot perk) needs no new key-handling code. Only occupied
+    // slots are selectable.
+    const digitMatch = /^Digit([1-9])$/.exec(event.code);
+    if (
+      digitMatch &&
+      !this.gameState.paused &&
+      this.gameState.playerState === "alive"
+    ) {
+      const slotIndex = Number(digitMatch[1]) - 1;
+      if (slotIndex < MAX_SLOTS && this.slots[slotIndex]) {
+        this.switchToSlot(slotIndex);
+      }
+    }
+  };
+
+  // Scroll wheel slot cycling (checkpoint 15): cycles the active weapon
+  // through occupied slots only, wrapping around -- empty slots are never a
+  // valid scroll target. Works for any number of occupied slots, not just
+  // 2, so it also needs no change when MAX_SLOTS grows.
+  private readonly handleWheel = (event: WheelEvent): void => {
+    if (this.gameState.paused || this.gameState.playerState !== "alive") return;
+    event.preventDefault();
+
+    const occupiedIndices = this.slots
+      .map((slot, index) => (slot ? index : -1))
+      .filter((index) => index !== -1);
+    if (occupiedIndices.length <= 1) return;
+
+    const currentPosition = occupiedIndices.indexOf(this.activeSlotIndex);
+    const direction = event.deltaY < 0 ? 1 : -1;
+    const nextPosition =
+      (currentPosition + direction + occupiedIndices.length) % occupiedIndices.length;
+    this.switchToSlot(occupiedIndices[nextPosition]);
   };
 }
