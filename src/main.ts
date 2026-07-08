@@ -80,7 +80,14 @@ function startGame(selections: GameSelections): void {
 
   const weaponSystem = new WeaponSystem(
     sceneManager.camera,
-    findById(WEAPONS, selections.weaponId),
+    // Checkpoint 15: every run starts with M1911 in inventory slot 0,
+    // unconditionally -- the main menu's Weapon selection (selections.weaponId)
+    // no longer determines the starting loadout now that WeaponSystem is a
+    // slot-based inventory rather than a single current weapon. Confirmed
+    // with the user; the menu's Weapon group is left in place (still
+    // visible/selectable) but its choice is presently unused here. See
+    // CLAUDE.md's checkpoint-15 decisions log and future mechanics.
+    findById(WEAPONS, "pistol"),
     audioSystem,
     gameState,
     runManager,
