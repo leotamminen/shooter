@@ -190,6 +190,11 @@ export class MapEntitySystem {
   // GameState.resetScore(). What a new run does to an already-purchased
   // weapon is a separate, currently undesigned question — see CLAUDE.md
   // future mechanics.
+  // (checkpoint 15: pickupWeapon() replaces the checkpoint-11 setWeapon() —
+  // it fills an empty inventory slot if one exists, or replaces the active
+  // slot if the inventory is full, rather than always overwriting a single
+  // current weapon. See WeaponSystem.ts and the checkpoint-15 decisions
+  // log.)
   private createWallBuy(
     entity: MapEntity,
     weapons: Weapon[],
@@ -214,7 +219,7 @@ export class MapEntitySystem {
     mesh.userData.onInteract = (): void => {
       const purchased = gameState.spendPoints(weapon.cost);
       if (purchased) {
-        weaponSystem.setWeapon(weapon);
+        weaponSystem.pickupWeapon(weapon);
         console.log(
           `Wall-buy: purchased ${weapon.name} for ${weapon.cost} points, balance now ${gameState.pointsBalance}`,
         );
