@@ -88,6 +88,10 @@ function startGame(selections: GameSelections): void {
     // visible/selectable) but its choice is presently unused here. See
     // CLAUDE.md's checkpoint-15 decisions log and future mechanics.
     findById(WEAPONS, "pistol"),
+    // Checkpoint 16: the knife is always the starting/default melee weapon
+    // -- there is no menu selection for melee (only one option exists), and
+    // no wall-buy either (the knife is always available, never purchased).
+    findById(WEAPONS, "knife"),
     audioSystem,
     gameState,
     runManager,
