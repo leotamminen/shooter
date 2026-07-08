@@ -25,6 +25,13 @@ export class EnemyAI {
   dead = false;
 
   private readonly def: EnemyDef;
+  // The actual max health this specific instance was spawned with
+  // (checkpoint 16) -- not necessarily def.health, since ZombieSurvival
+  // scales health per round (def.health * round) without mutating the
+  // shared EnemyDef. Used both as the starting health and as the "max"
+  // value reported to the HUD label, so the label reads correctly at any
+  // round (e.g. "300/300" at round 3, not "300/100").
+  private readonly maxHealth: number;
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.Camera;
   private readonly audioSystem: AudioSystem;
@@ -43,6 +50,7 @@ export class EnemyAI {
   constructor(
     id: string,
     def: EnemyDef,
+    maxHealth: number,
     spawnPosition: THREE.Vector3,
     scene: THREE.Scene,
     camera: THREE.Camera,
@@ -53,13 +61,14 @@ export class EnemyAI {
   ) {
     this.id = id;
     this.def = def;
+    this.maxHealth = maxHealth;
     this.scene = scene;
     this.camera = camera;
     this.audioSystem = audioSystem;
     this.gameState = gameState;
     this.playerState = playerState;
     this.raycastRegistry = raycastRegistry;
-    this.health = def.health;
+    this.health = maxHealth;
 
     this.mesh = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.4, 1, 4, 8),
@@ -111,7 +120,7 @@ export class EnemyAI {
 
     this.gameState.enemyHealth[this.id] = {
       current: this.health,
-      max: this.def.health,
+      max: this.maxHealth,
       position: {
         x: this.mesh.position.x,
         y: this.mesh.position.y + LABEL_HEIGHT_OFFSET,
