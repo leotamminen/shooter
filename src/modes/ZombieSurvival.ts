@@ -93,8 +93,20 @@ export class ZombieSurvival implements GameMode {
     return round;
   }
 
+  // Round-based health scaling (checkpoint 16): each zombie's max health is
+  // the EnemyDef's base health times the current round number -- round 1
+  // zombies have their normal base health, round 2 zombies have double,
+  // round 3 triple, and so on, uncapped (matching real CoD Zombies scaling
+  // being large at high rounds -- intended, not a bug). Computed fresh here
+  // per round, never mutating this.enemyDef itself, since that one EnemyDef
+  // object is shared and reused across every spawn in every round.
+  private healthForRound(round: number): number {
+    return this.enemyDef.health * round;
+  }
+
   private startRound(): void {
     const count = this.zombiesForRound(this.currentRound);
+    const health = this.healthForRound(this.currentRound);
     this.activeEnemies = [];
 
     for (let i = 0; i < count; i++) {
@@ -102,6 +114,7 @@ export class ZombieSurvival implements GameMode {
       const enemy = new EnemyAI(
         `zombie-r${this.currentRound}-${i}`,
         this.enemyDef,
+        health,
         spawnPoint,
         this.scene,
         this.camera,
