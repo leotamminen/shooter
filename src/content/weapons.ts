@@ -32,4 +32,34 @@ export const WEAPONS: Weapon[] = [
     cost: 1200,
     fireSoundId: "pistol_fire",
   },
+  // Knife (checkpoint 16): the first melee weapon -- no magSize/reloadTime/
+  // startingReserveAmmo (all now optional on Weapon), meleeRange present
+  // instead, which is what marks this as melee rather than ranged.
+  //
+  // damage: 100 is NOT an arbitrary choice -- it is deliberately exactly
+  // equal to content/enemies.ts's zombie EnemyDef.health (100). Round N's
+  // scaled zombie health is enemyDef.health * N (see
+  // modes/ZombieSurvival.ts's healthForRound()), so with knife damage also
+  // at exactly 100, round N always takes exactly N knife hits to kill a
+  // zombie -- that's the explicit design goal, not a coincidence. If either
+  // number ever changes, the other must change with it, or this property
+  // breaks silently. See CLAUDE.md's checkpoint-16 decisions log.
+  //
+  // cost: 0 is a placeholder -- Weapon.cost is a required field, but no
+  // wall_buy links to "knife" (none is planned; the knife is always
+  // available, not purchasable), so this value is never actually read.
+  //
+  // fireRate here means swing cooldown (seconds between swings), reusing
+  // the same field ranged weapons use for time-between-shots -- a
+  // first-cut value, tune during manual verification (Task 7) same as
+  // MAC-10's fireRate was at checkpoint 15.
+  {
+    id: "knife",
+    name: "Knife",
+    damage: 100,
+    fireRate: 0.8,
+    meleeRange: 2,
+    cost: 0,
+    fireSoundId: "pistol_fire",
+  },
 ];
