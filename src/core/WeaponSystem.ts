@@ -236,6 +236,7 @@ export class WeaponSystem {
   }
 
   reset(): void {
+    this.damageMultiplier = 1;
     this.slots = this.buildStartingSlots();
     this.activeSlotIndex = 0;
     this.meleeWeapon = this.startingMeleeWeapon;

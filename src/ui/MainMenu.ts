@@ -130,10 +130,21 @@ export class MainMenu {
     );
     this.root.appendChild(mapGroup);
 
-    const weaponOptions: SelectableOption[] = weapons.map((weapon) => ({
-      id: weapon.id,
-      label: weapon.name,
-    }));
+    // Melee weapons (e.g. the checkpoint-16 knife) are excluded from this
+    // list -- meleeRange presence is the same ranged-vs-melee discriminator
+    // WeaponSystem's assertRangedWeapon()/assertMeleeWeapon() use. This
+    // selection is currently inert (every run always starts with M1911
+    // regardless of what's picked here -- see CLAUDE.md's checkpoint-15
+    // decisions log), but a melee weapon showing up as a selectable
+    // "starting weapon" would be a visible UI wart today and a crash trap
+    // if this group is ever repurposed to actually choose slot 0's starting
+    // weapon (WeaponSystem would throw on construction).
+    const weaponOptions: SelectableOption[] = weapons
+      .filter((weapon) => weapon.meleeRange === undefined)
+      .map((weapon) => ({
+        id: weapon.id,
+        label: weapon.name,
+      }));
     const weaponGroup = this.buildGroup(
       "Weapon",
       weaponOptions,
