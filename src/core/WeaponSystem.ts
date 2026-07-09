@@ -58,6 +58,14 @@ interface WeaponSlot {
 
 export class WeaponSystem {
   isReloading = false;
+  // A generic, externally-set multiplier applied to gun damage only
+  // (checkpoint 16) -- WeaponSystem has no notion of "rounds" itself (per
+  // core/ never referencing modes/); ZombieSurvival sets this each round
+  // via its own round-scaling formula (see modes/ZombieSurvival.ts). Modes
+  // that never set it (e.g. ShootingRange) leave it at the default 1, i.e.
+  // no scaling. Never applied to the melee attack's damage -- see
+  // meleeAttack() and CLAUDE.md's checkpoint-16 decisions log.
+  damageMultiplier = 1;
 
   private readonly raycast = new Raycast();
   private readonly clock = new THREE.Clock();
@@ -271,7 +279,7 @@ export class WeaponSystem {
     const onHit = hit?.object.userData.onHit as
       | ((damage: number) => void)
       | undefined;
-    onHit?.(this.weapon.damage);
+    onHit?.(this.weapon.damage * this.damageMultiplier);
 
     this.audioSystem.play(this.weapon.fireSoundId);
   }
