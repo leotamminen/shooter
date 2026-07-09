@@ -6,10 +6,12 @@ import type { AudioSystem } from "../core/AudioSystem";
 import type { PlayerState } from "../core/PlayerState";
 import type { RaycastRegistry } from "../core/RaycastRegistry";
 import type { RunManager } from "../core/RunManager";
+import type { WeaponSystem } from "../core/WeaponSystem";
 import type { GameState } from "../state/GameState";
 import type { EnemyDef } from "../types";
 
 const ROUND_TRANSITION_DELAY = 3; // seconds after the last zombie dies before the next round starts
+const GUN_SCALE_RATE = 0.3; // gun damage grows at this rate per round (see gunDamageMultiplierForRound()) -- a first-cut value, tune during manual verification
 
 // Hardcoded on purpose (per the project's mode-building rule: modes are
 // built hardcoded first, a GameMode interface only gets extracted once a
@@ -30,6 +32,7 @@ export class ZombieSurvival implements GameMode {
   private readonly gameState: GameState;
   private readonly playerState: PlayerState;
   private readonly raycastRegistry: RaycastRegistry;
+  private readonly weaponSystem: WeaponSystem;
 
   constructor(
     enemyDef: EnemyDef,
@@ -41,6 +44,7 @@ export class ZombieSurvival implements GameMode {
     playerState: PlayerState,
     raycastRegistry: RaycastRegistry,
     runManager: RunManager,
+    weaponSystem: WeaponSystem,
   ) {
     if (spawnPoints.length === 0) {
       throw new Error("ZombieSurvival requires at least one enemy_spawn point");
@@ -54,6 +58,7 @@ export class ZombieSurvival implements GameMode {
     this.gameState = gameState;
     this.playerState = playerState;
     this.raycastRegistry = raycastRegistry;
+    this.weaponSystem = weaponSystem;
 
     runManager.registerResettable(() => this.resetRun());
   }
@@ -99,14 +104,35 @@ export class ZombieSurvival implements GameMode {
   // round 3 triple, and so on, uncapped (matching real CoD Zombies scaling
   // being large at high rounds -- intended, not a bug). Computed fresh here
   // per round, never mutating this.enemyDef itself, since that one EnemyDef
-  // object is shared and reused across every spawn in every round.
+  // object is shared and reused across every spawn in every round. This
+  // formula must NEVER be changed without also considering
+  // gunDamageMultiplierForRound() below and the knife's damage (see
+  // CLAUDE.md's checkpoint-16 decisions log) -- three independent numbers
+  // that all interact.
   private healthForRound(round: number): number {
     return this.enemyDef.health * round;
+  }
+
+  // Gun-only damage scaling per round (checkpoint 16, added after manual
+  // testing found guns became nearly unusable at higher rounds once zombie
+  // health scaling alone was in place). Deliberately a GENTLER growth curve
+  // than health's 1x-per-round -- gun kill-shot counts still rise with
+  // round, just far more slowly, keeping guns viable without eliminating
+  // the intended late-game difficulty increase. GUN_SCALE_RATE is a named,
+  // tunable constant (not a magic number) -- adjust here if round-5/round-10
+  // hit counts still feel off during manual testing. Applies ONLY to guns
+  // (via WeaponSystem.damageMultiplier, set below) -- the knife's damage
+  // stays flat at 100 always, completely independent of this formula. This
+  // is a second, separate round-scaling coupling from the
+  // zombie-health-to-knife-damage one above; do not conflate the two.
+  private gunDamageMultiplierForRound(round: number): number {
+    return 1 + GUN_SCALE_RATE * (round - 1);
   }
 
   private startRound(): void {
     const count = this.zombiesForRound(this.currentRound);
     const health = this.healthForRound(this.currentRound);
+    this.weaponSystem.damageMultiplier = this.gunDamageMultiplierForRound(this.currentRound);
     this.activeEnemies = [];
 
     for (let i = 0; i < count; i++) {
