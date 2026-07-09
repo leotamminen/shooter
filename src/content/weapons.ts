@@ -49,15 +49,17 @@ export const WEAPONS: Weapon[] = [
   // wall_buy links to "knife" (none is planned; the knife is always
   // available, not purchasable), so this value is never actually read.
   //
-  // fireRate here means swing cooldown (seconds between swings), reusing
-  // the same field ranged weapons use for time-between-shots -- a
-  // first-cut value, tune during manual verification (Task 7) same as
-  // MAC-10's fireRate was at checkpoint 15.
+  // fireRate here means the melee attack's cooldown (also its effective
+  // duration) -- V triggers one instant attack, then this many seconds
+  // must pass before V can trigger another. Corrected from an original
+  // design (0.8, framed as a repeatable "swing while held" rate) after
+  // manual testing found V should be a quick attack action, not a
+  // held-weapon swing loop -- see CLAUDE.md's checkpoint-16 decisions log.
   {
     id: "knife",
     name: "Knife",
     damage: 100,
-    fireRate: 0.8,
+    fireRate: 0.5,
     meleeRange: 2,
     cost: 0,
     fireSoundId: "pistol_fire",
