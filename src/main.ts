@@ -149,6 +149,11 @@ function startGame(selections: GameSelections): void {
           playerState,
           raycastRegistry,
           runManager,
+          // Checkpoint 16: lets ZombieSurvival set weaponSystem.damageMultiplier
+          // each round -- WeaponSystem itself has no notion of "rounds," it
+          // just holds a generic externally-set multiplier (see
+          // core/WeaponSystem.ts and CLAUDE.md's checkpoint-16 decisions log).
+          weaponSystem,
         )
       : new ShootingRange(
           targetPoints,
