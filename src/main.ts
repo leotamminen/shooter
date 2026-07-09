@@ -13,15 +13,19 @@ import { WeaponViewmodel } from "./core/WeaponViewmodel";
 import type { GameMode } from "./modes/GameMode";
 import { ZombieSurvival } from "./modes/ZombieSurvival";
 import { ShootingRange } from "./modes/ShootingRange";
+import { Campaign } from "./modes/Campaign";
 import { HUD } from "./ui/HUD";
 import { MainMenu } from "./ui/MainMenu";
 import type { GameSelections } from "./ui/MainMenu";
+import { Terminal } from "./ui/Terminal";
+import { PasswordLock } from "./ui/PasswordLock";
 import { GameState } from "./state/GameState";
 import { findById } from "./core/utils/Lookup";
 import { WEAPONS } from "./content/weapons";
 import { ENEMIES } from "./content/enemies";
 import { SOUNDS } from "./content/sounds";
 import { MAPS } from "./content/maps";
+import { TERMINALS } from "./content/terminals";
 
 // Everything that used to run at module load now runs once, here, only
 // after the main menu's Start button fires with the player's choices.
@@ -58,6 +62,31 @@ function startGame(selections: GameSelections): void {
     gameState.deathSummaryLines = gameMode.getSummaryLines();
   });
   const runManager = new RunManager(gameState, playerState);
+
+  // Checkpoint 17: constructed unconditionally here, before mapEntitySystem
+  // — the same "always construct, branch on usage" pattern already used for
+  // weaponSystem/mapEntitySystem (every run gets one regardless of mode).
+  // Campaign's constructor only needs runManager, so it's cheap to build
+  // this early; doing so lets the password-lock success callback below
+  // reference it directly, mirroring how weaponViewmodel was moved earlier
+  // in this function at checkpoint 16 so weaponSystem's onMeleeAttack
+  // callback could reference it directly (see CLAUDE.md's checkpoint-16
+  // decisions log for that precedent).
+  const campaign = new Campaign(runManager);
+
+  // Checkpoint 17: constructed before mapEntitySystem so its open() methods
+  // can be referenced by the openTerminal/openPasswordLock callbacks passed
+  // into MapEntitySystem's constructor below. Both release pointer lock on
+  // open and re-lock on close, the same PlayerState.onDeath ->
+  // controls.unlock() callback pattern used elsewhere in this function.
+  const terminal = new Terminal(
+    () => playerController.controls.unlock(),
+    () => playerController.controls.lock(),
+  );
+  const passwordLock = new PasswordLock(
+    () => playerController.controls.unlock(),
+    () => playerController.controls.lock(),
+  );
 
   // The single shared "what can be hit/occluded by a ray" registry — every
   // solid or interactable object (walls, doors, buttons, pickups, wall_buys,
@@ -123,6 +152,18 @@ function startGame(selections: GameSelections): void {
     () => playerController.rebuildCollisionBoxes(),
     gameState,
     WEAPONS,
+    TERMINALS,
+    (terminalDef) => terminal.open(terminalDef),
+    (terminalDef, onCorrectPassword) =>
+      passwordLock.open(terminalDef, () => {
+        onCorrectPassword();
+        // Checkpoint 17: marking the objective complete is harmless even
+        // when Campaign isn't the active mode -- nothing ever reads it in
+        // that case, since only campaign_room1 has a password_lock entity,
+        // and that map is only ever selectable under Campaign mode (see
+        // ui/MainMenu.ts's supportedModes filtering).
+        campaign.markObjectiveComplete();
+      }),
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);
@@ -137,31 +178,40 @@ function startGame(selections: GameSelections): void {
     .filter((entity) => entity.type === "target")
     .map((entity) => new THREE.Vector3(...entity.position));
 
-  gameMode =
-    selections.modeId === "zombie"
-      ? new ZombieSurvival(
-          findById(ENEMIES, selections.enemyId),
-          enemySpawnPoints,
-          sceneManager.scene,
-          sceneManager.camera,
-          audioSystem,
-          gameState,
-          playerState,
-          raycastRegistry,
-          runManager,
-          // Checkpoint 16: lets ZombieSurvival set weaponSystem.damageMultiplier
-          // each round -- WeaponSystem itself has no notion of "rounds," it
-          // just holds a generic externally-set multiplier (see
-          // core/WeaponSystem.ts and CLAUDE.md's checkpoint-16 decisions log).
-          weaponSystem,
-        )
-      : new ShootingRange(
-          targetPoints,
-          sceneManager.scene,
-          weaponSystem,
-          gameState,
-          runManager,
-        );
+  // A proper if/else if/else now that there are three modes, not two -- the
+  // checkpoint-9/15-era ternary no longer reads cleanly with a third branch.
+  if (selections.modeId === "zombie") {
+    gameMode = new ZombieSurvival(
+      findById(ENEMIES, selections.enemyId),
+      enemySpawnPoints,
+      sceneManager.scene,
+      sceneManager.camera,
+      audioSystem,
+      gameState,
+      playerState,
+      raycastRegistry,
+      runManager,
+      // Checkpoint 16: lets ZombieSurvival set weaponSystem.damageMultiplier
+      // each round -- WeaponSystem itself has no notion of "rounds," it
+      // just holds a generic externally-set multiplier (see
+      // core/WeaponSystem.ts and CLAUDE.md's checkpoint-16 decisions log).
+      weaponSystem,
+    );
+  } else if (selections.modeId === "range") {
+    gameMode = new ShootingRange(
+      targetPoints,
+      sceneManager.scene,
+      weaponSystem,
+      gameState,
+      runManager,
+    );
+  } else {
+    // Checkpoint 17: Campaign was already constructed above (before
+    // mapEntitySystem, so its password-lock success callback could
+    // reference it) -- reused here as the active mode rather than
+    // constructed a second time.
+    gameMode = campaign;
+  }
   gameMode.start();
 
   function startNewRun(): void {
