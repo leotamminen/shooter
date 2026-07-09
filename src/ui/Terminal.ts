@@ -131,6 +131,7 @@ export class Terminal {
   }
 
   private close(): void {
+    this.inputEl.blur();
     this.root.style.display = "none";
     this.root.style.pointerEvents = "none";
     this.terminalDef = null;
