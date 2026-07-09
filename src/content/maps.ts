@@ -120,4 +120,41 @@ export const MAPS: MapDef[] = [
       { id: "corridors_pickup_2", type: "pickup", position: [16, 0.3, 18] },
     ],
   },
+  // campaign_room1 (checkpoint 17): a single small room split by one
+  // partition wall with one gap. The gap is sealed by campaign_door_1,
+  // opened by campaign_lock_1 (a password_lock, not a button) once the
+  // player finds the password via campaign_terminal_1. No enemy_spawn or
+  // target entities -- supportedModes below excludes this map from the
+  // modes (Zombie Survival, Shooting Range) that would ever look for them,
+  // so they're not needed, unlike every other map in this array.
+  {
+    id: "campaign_room1",
+    name: "Campaign: Room 1",
+    supportedModes: ["campaign"],
+    grid: [
+      [1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 0, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1],
+    ],
+    entities: [
+      { id: "campaign_spawn_1", type: "spawn", position: [2, 0, 8] },
+      {
+        id: "campaign_terminal_1",
+        type: "terminal",
+        linkedTo: "room1_terminal",
+        position: [10, 0.3, 8],
+      },
+      { id: "campaign_door_1", type: "door", position: [6, 1.5, 4] },
+      {
+        id: "campaign_lock_1",
+        type: "password_lock",
+        linkedTo: "campaign_door_1",
+        terminalId: "room1_terminal",
+        position: [6, 0.3, 6],
+      },
+    ],
+  },
 ];
