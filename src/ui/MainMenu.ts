@@ -1,10 +1,10 @@
 import type { Weapon, EnemyDef, MapDef } from "../types";
 
 // The menu's own notion of which modes exist — not content, since game
-// modes are code (ZombieSurvival/ShootingRange), not typed data, per the
-// project's mode-building rule. Mirrors the ModeName union that used to be
-// hardcoded directly in main.ts before this checkpoint.
-export type ModeId = "zombie" | "range";
+// modes are code (ZombieSurvival/ShootingRange/Campaign), not typed data,
+// per the project's mode-building rule. Mirrors the ModeName union that
+// used to be hardcoded directly in main.ts before this checkpoint.
+export type ModeId = "zombie" | "range" | "campaign";
 
 export interface GameSelections {
   modeId: ModeId;
@@ -21,6 +21,7 @@ interface SelectableOption {
 const MODE_OPTIONS: { id: ModeId; label: string }[] = [
   { id: "zombie", label: "Zombie Survival" },
   { id: "range", label: "Shooting Range" },
+  { id: "campaign", label: "Campaign" },
 ];
 
 const SELECTED_BORDER = "#4a9eff";
@@ -64,6 +65,7 @@ function createOptionButton(label: string, onClick: () => void): HTMLButtonEleme
 export class MainMenu {
   private readonly root: HTMLDivElement;
   private readonly enemyGroup: HTMLDivElement;
+  private readonly maps: MapDef[];
 
   private selectedModeId: ModeId = MODE_OPTIONS[0].id;
   private selectedMapId: string;
@@ -81,6 +83,7 @@ export class MainMenu {
     maps: MapDef[],
     onStart: (selections: GameSelections) => void,
   ) {
+    this.maps = maps;
     this.selectedMapId = maps[0].id;
     this.selectedWeaponId = weapons[0].id;
     this.selectedEnemyId = enemies[0].id;
@@ -113,10 +116,10 @@ export class MainMenu {
     );
     this.root.appendChild(modeGroup);
 
-    // No mode-based filtering here — maps are mode-agnostic for now (see
-    // CLAUDE.md decisions log). Every map works under both Zombie Survival
-    // and Shooting Range, since every map is required to carry both
-    // enemy_spawn and target entities.
+    // Checkpoint 17: mode-based filtering/graying now exists via
+    // MapDef.supportedModes -- see updateMapAvailability() below. Maps
+    // without supportedModes (test-grid, corridors) remain mode-agnostic,
+    // selectable under any mode, unchanged from before this checkpoint.
     const mapOptions: SelectableOption[] = maps.map((map) => ({
       id: map.id,
       label: map.name,
@@ -129,6 +132,13 @@ export class MainMenu {
       (id) => this.selectMap(id),
     );
     this.root.appendChild(mapGroup);
+
+    // Checkpoint 17: apply the default mode's map availability immediately
+    // at construction, the same way applySelection() above already sets
+    // initial button styling -- a no-op today (the default mode, "zombie",
+    // and both existing maps are mode-agnostic), but keeps this correct
+    // even if the default mode or content ever changes.
+    this.updateMapAvailability(this.selectedModeId);
 
     // Melee weapons (e.g. the checkpoint-16 knife) are excluded from this
     // list -- meleeRange presence is the same ranged-vs-melee discriminator
@@ -236,14 +246,47 @@ export class MainMenu {
     this.selectedModeId = modeId;
     this.applySelection(this.modeButtons, modeId);
 
-    const isRange = modeId === "range";
-    this.enemyGroup.style.opacity = isRange ? "0.4" : "1";
-    this.enemyGroup.style.pointerEvents = isRange ? "none" : "auto";
+    // Checkpoint 17: Campaign has no enemies either, same as Shooting
+    // Range -- both gray out the Enemy group.
+    const hideEnemyGroup = modeId === "range" || modeId === "campaign";
+    this.enemyGroup.style.opacity = hideEnemyGroup ? "0.4" : "1";
+    this.enemyGroup.style.pointerEvents = hideEnemyGroup ? "none" : "auto";
+
+    this.updateMapAvailability(modeId);
   }
 
   private selectMap(mapId: string): void {
     this.selectedMapId = mapId;
     this.applySelection(this.mapButtons, mapId);
+  }
+
+  // A map with no supportedModes is mode-agnostic (test-grid, corridors,
+  // unchanged from before checkpoint 17); a map that declares supportedModes
+  // (campaign_room1) is only selectable when the current mode is in that
+  // list. Mirrors the Enemy group's existing mode-based graying, just keyed
+  // off a different field.
+  private isMapSupportedForMode(map: MapDef, modeId: ModeId): boolean {
+    return map.supportedModes === undefined || map.supportedModes.includes(modeId);
+  }
+
+  // Grays out (and disables clicks on) every map button not valid for
+  // modeId, then — if the currently selected map just became invalid —
+  // falls back to the first map that IS valid, so the Start button can
+  // never be pressed with an impossible mode/map pairing.
+  private updateMapAvailability(modeId: ModeId): void {
+    for (const map of this.maps) {
+      const button = this.mapButtons.get(map.id);
+      if (!button) continue;
+      const supported = this.isMapSupportedForMode(map, modeId);
+      button.style.opacity = supported ? "1" : "0.4";
+      button.style.pointerEvents = supported ? "auto" : "none";
+    }
+
+    const currentMap = this.maps.find((map) => map.id === this.selectedMapId);
+    if (currentMap && !this.isMapSupportedForMode(currentMap, modeId)) {
+      const fallback = this.maps.find((map) => this.isMapSupportedForMode(map, modeId));
+      if (fallback) this.selectMap(fallback.id);
+    }
   }
 
   private selectWeapon(weaponId: string): void {
