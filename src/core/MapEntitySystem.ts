@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CELL_SIZE, WALL_HEIGHT } from "./MapLoader";
 import { computeCollisionBox } from "./utils/CollisionBox";
 import { findById } from "./utils/Lookup";
-import type { MapDef, MapEntity, Weapon } from "../types";
+import type { MapDef, MapEntity, Weapon, TerminalDef } from "../types";
 import type { WeaponSystem } from "./WeaponSystem";
 import type { RunManager } from "./RunManager";
 import type { RaycastRegistry } from "./RaycastRegistry";
@@ -19,16 +19,23 @@ const PICKUP_AMMO_AMOUNT = 24;
 const WALL_BUY_COLOR = 0xffd700;
 const WALL_BUY_EMISSIVE = 0x554400;
 const WALL_BUY_SIZE = 0.5;
+const TERMINAL_COLOR = 0x223344;
+const TERMINAL_EMISSIVE = 0x114477;
+const TERMINAL_SIZE = 0.6;
+const PASSWORD_LOCK_COLOR = 0x444444;
+const PASSWORD_LOCK_EMISSIVE = 0x552200;
+const PASSWORD_LOCK_SIZE = 0.3;
 
 export interface DoorEntry {
   mesh: THREE.Mesh;
   box: THREE.Box3;
 }
 
-// Spawns one mesh per door/button/pickup/wall_buy MapEntity and wires their
-// interaction behavior. Kept separate from MapLoader: MapLoader's job is
-// grid-to-geometry and spawn lookup, this is entity behavior — a different
-// responsibility per the single-responsibility-per-file rule.
+// Spawns one mesh per door/button/pickup/wall_buy/terminal/password_lock
+// MapEntity and wires their interaction behavior. Kept separate from
+// MapLoader: MapLoader's job is grid-to-geometry and spawn lookup, this is
+// entity behavior — a different responsibility per the
+// single-responsibility-per-file rule.
 export class MapEntitySystem {
   readonly group = new THREE.Group();
   readonly doors: DoorEntry[] = [];
@@ -42,6 +49,9 @@ export class MapEntitySystem {
     onDoorStateChanged: () => void,
     gameState: GameState,
     weapons: Weapon[],
+    terminals: TerminalDef[],
+    openTerminal: (terminalDef: TerminalDef) => void,
+    openPasswordLock: (terminalDef: TerminalDef, onCorrectPassword: () => void) => void,
   ) {
     const doorMeshById = new Map<string, THREE.Mesh>();
 
@@ -61,6 +71,17 @@ export class MapEntitySystem {
         this.createPickup(entity, weaponSystem, runManager, raycastRegistry);
       } else if (entity.type === "wall_buy") {
         this.createWallBuy(entity, weapons, weaponSystem, gameState, raycastRegistry);
+      } else if (entity.type === "terminal") {
+        this.createTerminal(entity, terminals, raycastRegistry, openTerminal);
+      } else if (entity.type === "password_lock") {
+        this.createPasswordLock(
+          entity,
+          doorMeshById,
+          terminals,
+          raycastRegistry,
+          onDoorStateChanged,
+          openPasswordLock,
+        );
       }
     }
   }
@@ -230,6 +251,91 @@ export class MapEntitySystem {
           `Wall-buy: rejected (need ${weapon.cost}, have ${gameState.pointsBalance}) — balance unchanged`,
         );
       }
+    };
+
+    this.group.add(mesh);
+    this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
+  }
+
+  // Checkpoint 17: linkedTo here is a TerminalDef id (content/terminals.ts),
+  // resolved via findById() the same way createWallBuy() resolves a Weapon
+  // id -- same pattern, different content array. openTerminal is a generic
+  // UI-trigger callback (this class never imports ui/Terminal.ts directly),
+  // matching how onDoorStateChanged/onMeleeAttack are already injected
+  // elsewhere in this codebase rather than reached into directly.
+  private createTerminal(
+    entity: MapEntity,
+    terminals: TerminalDef[],
+    raycastRegistry: RaycastRegistry,
+    openTerminal: (terminalDef: TerminalDef) => void,
+  ): void {
+    if (!entity.linkedTo) {
+      throw new Error(`Terminal "${entity.id}" has no linkedTo terminal id`);
+    }
+    const terminalDef = findById(terminals, entity.linkedTo);
+
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(TERMINAL_SIZE, TERMINAL_SIZE, TERMINAL_SIZE),
+      new THREE.MeshStandardMaterial({
+        color: TERMINAL_COLOR,
+        emissive: TERMINAL_EMISSIVE,
+      }),
+    );
+    mesh.position.set(...entity.position);
+    mesh.userData.interactable = true;
+    mesh.userData.onInteract = (): void => {
+      openTerminal(terminalDef);
+    };
+
+    this.group.add(mesh);
+    this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
+  }
+
+  // Checkpoint 17: mirrors createButton()'s shape closely, reusing the same
+  // doorMeshById map rather than rebuilding it -- linkedTo is the door's
+  // MapEntity id (like button), terminalId is a separate TerminalDef id
+  // (unlike button/wall_buy, a password lock has two distinct relationships:
+  // which door, which terminal). The idempotency guard (door already open ->
+  // no-op) runs before the password-lock UI is even opened, the same
+  // "check before doing anything" ordering createButton() already
+  // establishes for its cost-gating.
+  private createPasswordLock(
+    entity: MapEntity,
+    doorMeshById: Map<string, THREE.Mesh>,
+    terminals: TerminalDef[],
+    raycastRegistry: RaycastRegistry,
+    onDoorStateChanged: () => void,
+    openPasswordLock: (terminalDef: TerminalDef, onCorrectPassword: () => void) => void,
+  ): void {
+    const door = entity.linkedTo ? doorMeshById.get(entity.linkedTo) : undefined;
+    if (!door) {
+      throw new Error(
+        `Password lock "${entity.id}" has no matching door for linkedTo "${entity.linkedTo}"`,
+      );
+    }
+    if (!entity.terminalId) {
+      throw new Error(`Password lock "${entity.id}" has no terminalId`);
+    }
+    const terminalDef = findById(terminals, entity.terminalId);
+
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(PASSWORD_LOCK_SIZE, PASSWORD_LOCK_SIZE, PASSWORD_LOCK_SIZE),
+      new THREE.MeshStandardMaterial({
+        color: PASSWORD_LOCK_COLOR,
+        emissive: PASSWORD_LOCK_EMISSIVE,
+      }),
+    );
+    mesh.position.set(...entity.position);
+    mesh.userData.interactable = true;
+    mesh.userData.onInteract = (): void => {
+      if (!door.visible) return; // idempotent: door already open
+
+      openPasswordLock(terminalDef, () => {
+        door.visible = false;
+        onDoorStateChanged();
+      });
     };
 
     this.group.add(mesh);
