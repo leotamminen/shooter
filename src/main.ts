@@ -75,6 +75,10 @@ function startGame(selections: GameSelections): void {
 
   const audioSystem = new AudioSystem(sceneManager.camera);
   void audioSystem.load(findById(SOUNDS, "pistol_fire"));
+  // Checkpoint 16: the melee attack's own distinct sound -- without this
+  // preload, AudioSystem.play("melee_hit") would silently no-op (see
+  // AudioSystem.play()'s early return when a sound was never load()ed).
+  void audioSystem.load(findById(SOUNDS, "melee_hit"));
   void audioSystem.load(findById(SOUNDS, "zombie_growl"));
   void audioSystem.load(findById(SOUNDS, "zombie_death"));
 
