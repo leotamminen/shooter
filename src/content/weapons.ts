@@ -51,17 +51,17 @@ export const WEAPONS: Weapon[] = [
   //
   // fireRate here means the melee attack's cooldown (also its effective
   // duration) -- V triggers one instant attack, then this many seconds
-  // must pass before V can trigger another. Corrected from an original
-  // design (0.8, framed as a repeatable "swing while held" rate) after
-  // manual testing found V should be a quick attack action, not a
-  // held-weapon swing loop -- see CLAUDE.md's checkpoint-16 decisions log.
+  // must pass before V can trigger another. Was 0.5 (an earlier
+  // mid-checkpoint correction from an original 0.8 "swing while held"
+  // framing), raised to 1 after manual testing found 0.5 still read as too
+  // fast -- see CLAUDE.md's checkpoint-16 decisions log.
   {
     id: "knife",
     name: "Knife",
     damage: 100,
-    fireRate: 0.5,
+    fireRate: 1,
     meleeRange: 2,
     cost: 0,
-    fireSoundId: "pistol_fire",
+    fireSoundId: "melee_hit",
   },
 ];
