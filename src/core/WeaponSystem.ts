@@ -23,9 +23,9 @@ type RangedWeapon = Weapon & {
   startingReserveAmmo: number;
 };
 
-// The subset of Weapon a weapon must satisfy to be equipped as the melee
-// weapon (checkpoint 16) -- meleeRange is optional on Weapon itself for the
-// same reason ammo fields are optional: a ranged weapon has no meleeRange.
+// The subset of Weapon a weapon must satisfy to be used as the melee attack
+// (checkpoint 16) -- meleeRange is optional on Weapon itself for the same
+// reason ammo fields are optional: a ranged weapon has no meleeRange.
 type MeleeWeapon = Weapon & {
   meleeRange: number;
 };
@@ -45,7 +45,7 @@ function assertRangedWeapon(weapon: Weapon): asserts weapon is RangedWeapon {
 function assertMeleeWeapon(weapon: Weapon): asserts weapon is MeleeWeapon {
   if (weapon.meleeRange === undefined) {
     throw new Error(
-      `Weapon "${weapon.id}" has no meleeRange -- cannot be equipped as the melee weapon`,
+      `Weapon "${weapon.id}" has no meleeRange -- cannot be used as the melee attack`,
     );
   }
 }
@@ -64,7 +64,7 @@ export class WeaponSystem {
   private readonly raycastRegistry: RaycastRegistry;
 
   private timeSinceLastShot = Infinity;
-  private timeSinceLastMeleeSwing = Infinity;
+  private timeSinceLastMeleeAttack = Infinity;
   private reloadTimeRemaining = 0;
   private firing = false;
 
@@ -81,23 +81,27 @@ export class WeaponSystem {
   private activeSlotIndex = 0;
   private readonly startingWeapon: RangedWeapon;
 
-  // Melee (checkpoint 16): entirely separate from the gun slot array above
-  // -- equipping the knife never touches slots/activeSlotIndex, so
-  // switching back to a gun (V again, or a number-key/scroll switch)
-  // restores that gun's exact prior ammo/reload state with zero extra
-  // bookkeeping, since it was simply never touched while melee was active.
-  // meleeWeapon is mutable state, not a hardcoded constant, even though
-  // only the knife exists today -- a future Bowie knife pickup would
-  // reassign this field to a higher-damage melee weapon (not built yet;
-  // see CLAUDE.md future mechanics). startingMeleeWeapon is what reset()
-  // restores it to.
+  // Melee (checkpoint 16, corrected after manual testing): V is a quick
+  // ATTACK ACTION, not a weapon-equip toggle -- the currently-held gun
+  // (slots/activeSlotIndex) is never touched by pressing V, matching
+  // classic CoD Zombies knife-melee (attack while still holding your gun,
+  // rather than switching to a knife in-hand). meleeWeapon/
+  // startingMeleeWeapon still exist as reassignable state -- not because
+  // you can "equip" them, but because a future Bowie knife would make V
+  // perform a different, higher-damage attack; meleeWeapon just describes
+  // *which attack* V currently performs, never something rendered in-hand.
   private meleeWeapon: MeleeWeapon;
   private readonly startingMeleeWeapon: MeleeWeapon;
-  private meleeEquipped = false;
 
   private readonly camera: THREE.Camera;
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
+  // Notifies main.ts (the composition root) that a melee attack just
+  // happened, so it can trigger a small viewmodel impulse for feedback --
+  // WeaponSystem never imports WeaponViewmodel directly, the same
+  // dependency-injection pattern PlayerState's onDeath callback already
+  // uses.
+  private readonly onMeleeAttack: () => void;
 
   constructor(
     camera: THREE.Camera,
@@ -107,6 +111,7 @@ export class WeaponSystem {
     gameState: GameState,
     runManager: RunManager,
     raycastRegistry: RaycastRegistry,
+    onMeleeAttack: () => void,
   ) {
     assertRangedWeapon(weapon);
     assertMeleeWeapon(meleeWeapon);
@@ -119,6 +124,7 @@ export class WeaponSystem {
     this.audioSystem = audioSystem;
     this.gameState = gameState;
     this.raycastRegistry = raycastRegistry;
+    this.onMeleeAttack = onMeleeAttack;
 
     window.addEventListener("mousedown", this.handleMouseDown);
     window.addEventListener("mouseup", this.handleMouseUp);
@@ -148,6 +154,14 @@ export class WeaponSystem {
 
   private get weapon(): RangedWeapon {
     return this.activeSlot.weapon;
+  }
+
+  // True for the duration of an in-progress melee attack -- its own
+  // cooldown window doubles as the "attack in progress" state, so no
+  // separate boolean flag is needed, the same way gun fire-rate gating
+  // already works via a single timer comparison (see update()/fire()).
+  private get isMeleeAttacking(): boolean {
+    return this.timeSinceLastMeleeAttack < this.meleeWeapon.fireRate;
   }
 
   get currentAmmo(): number {
@@ -204,9 +218,6 @@ export class WeaponSystem {
   private switchToSlot(index: number): void {
     if (!this.slots[index]) return;
     this.activeSlotIndex = index;
-    // Switching to a gun slot always exits melee mode (checkpoint 16) --
-    // pressing a number key or scrolling always means "I want a gun now."
-    this.meleeEquipped = false;
     // Switching cancels any in-progress reload of the weapon being switched
     // away from (it must be restarted if you switch back) and resets the
     // fire-rate cooldown, so the newly active weapon is immediately
@@ -219,33 +230,24 @@ export class WeaponSystem {
   reset(): void {
     this.slots = this.buildStartingSlots();
     this.activeSlotIndex = 0;
-    this.meleeEquipped = false;
     this.meleeWeapon = this.startingMeleeWeapon;
     this.isReloading = false;
     this.reloadTimeRemaining = 0;
     this.timeSinceLastShot = Infinity;
-    this.timeSinceLastMeleeSwing = Infinity;
+    this.timeSinceLastMeleeAttack = Infinity;
     this.firing = false;
   }
 
   update(): void {
     const delta = this.clock.getDelta();
     this.timeSinceLastShot += delta;
-    this.timeSinceLastMeleeSwing += delta;
+    this.timeSinceLastMeleeAttack += delta;
 
     if (this.isReloading) {
       this.reloadTimeRemaining -= delta;
       if (this.reloadTimeRemaining <= 0) this.finishReload();
-    } else if (this.meleeEquipped) {
-      if (
-        !this.gameState.paused &&
-        this.gameState.playerState === "alive" &&
-        this.firing &&
-        this.timeSinceLastMeleeSwing >= this.meleeWeapon.fireRate
-      ) {
-        this.meleeSwing();
-      }
     } else if (
+      !this.isMeleeAttacking &&
       !this.gameState.paused &&
       this.gameState.playerState === "alive" &&
       this.firing &&
@@ -255,7 +257,7 @@ export class WeaponSystem {
       this.fire();
     }
 
-    this.gameState.weaponName = this.meleeEquipped ? this.meleeWeapon.name : this.weapon.name;
+    this.gameState.weaponName = this.weapon.name;
     this.gameState.currentAmmo = this.currentAmmo;
     this.gameState.reserveAmmo = this.reserveAmmo;
     this.gameState.isReloading = this.isReloading;
@@ -274,13 +276,16 @@ export class WeaponSystem {
     this.audioSystem.play(this.weapon.fireSoundId);
   }
 
-  // Melee swing (checkpoint 16): reuses the exact same userData.onHit hook
-  // and shared RaycastRegistry hitscan guns already use, just with a much
-  // shorter maxDistance (meleeWeapon.meleeRange) instead of the default
-  // Infinity -- no separate AABB-based melee system needed. No ammo check:
-  // melee never consumes ammo.
-  private meleeSwing(): void {
-    this.timeSinceLastMeleeSwing = 0;
+  // The melee attack itself (checkpoint 16, corrected): fired the instant V
+  // is pressed, reusing the exact same userData.onHit hook and shared
+  // RaycastRegistry hitscan guns already use, just with a much shorter
+  // maxDistance (meleeWeapon.meleeRange). No ammo check -- melee never
+  // consumes ammo, and never touches the gun slots at all. onMeleeAttack()
+  // notifies main.ts so it can trigger a small viewmodel impulse (a lunge)
+  // for feedback, without WeaponSystem needing to know WeaponViewmodel
+  // exists.
+  private meleeAttack(): void {
+    this.timeSinceLastMeleeAttack = 0;
 
     const hit = this.raycast.fromCamera(
       this.camera,
@@ -293,6 +298,7 @@ export class WeaponSystem {
     onHit?.(this.meleeWeapon.damage);
 
     this.audioSystem.play(this.meleeWeapon.fireSoundId);
+    this.onMeleeAttack();
   }
 
   private startReload(): void {
@@ -325,28 +331,23 @@ export class WeaponSystem {
       event.code === "KeyR" &&
       !this.gameState.paused &&
       this.gameState.playerState === "alive" &&
-      !this.meleeEquipped
+      !this.isMeleeAttacking
     ) {
       this.startReload();
       return;
     }
 
-    // Melee toggle (checkpoint 16): V equips the knife; pressing it again
-    // returns to whichever gun slot was active, with that gun's exact
-    // ammo/reload state untouched (see the meleeEquipped field comment
-    // above).
+    // Melee attack (checkpoint 16, corrected): V triggers an instant
+    // attack, gated only by its own cooldown (isMeleeAttacking) -- it never
+    // changes the equipped gun, so there is nothing to "return to" once the
+    // attack window ends; normal gun controls simply resume automatically.
     if (
       event.code === "KeyV" &&
       !this.gameState.paused &&
-      this.gameState.playerState === "alive"
+      this.gameState.playerState === "alive" &&
+      !this.isMeleeAttacking
     ) {
-      this.meleeEquipped = !this.meleeEquipped;
-      // Toggling melee on/off cancels any in-progress gun reload and resets
-      // its fire cooldown, the same way switching gun slots already does --
-      // you can't be mid-reload on a gun you're not currently holding.
-      this.isReloading = false;
-      this.reloadTimeRemaining = 0;
-      this.timeSinceLastShot = Infinity;
+      this.meleeAttack();
       return;
     }
 
