@@ -78,6 +78,13 @@ function startGame(selections: GameSelections): void {
   void audioSystem.load(findById(SOUNDS, "zombie_growl"));
   void audioSystem.load(findById(SOUNDS, "zombie_death"));
 
+  // Checkpoint 16: constructed before weaponSystem (moved up from its
+  // original checkpoint-13 position further down this function) so
+  // weaponSystem's onMeleeAttack callback below can reference it directly,
+  // rather than relying on closure-timing semantics to make a forward
+  // reference safe.
+  const weaponViewmodel = new WeaponViewmodel();
+
   const weaponSystem = new WeaponSystem(
     sceneManager.camera,
     // Checkpoint 15: every run starts with M1911 in inventory slot 0,
@@ -96,6 +103,12 @@ function startGame(selections: GameSelections): void {
     gameState,
     runManager,
     raycastRegistry,
+    // Checkpoint 16: a small viewmodel "lunge" as placeholder melee-attack
+    // feedback, reusing the addImpulse() mechanism built at checkpoint 14
+    // (its own future-mechanics notes already named melee-swing as an
+    // intended integration point). Values are a first-cut guess, not tuned
+    // against manual testing -- adjust here if they don't read well.
+    () => weaponViewmodel.addImpulse({ x: 0, y: -0.06, z: 0.12 }, 0.15),
   );
 
   const mapEntitySystem = new MapEntitySystem(
@@ -160,8 +173,6 @@ function startGame(selections: GameSelections): void {
     startNewRun,
     raycastRegistry,
   );
-
-  const weaponViewmodel = new WeaponViewmodel();
 
   canvas.addEventListener("click", () => {
     playerController.controls.lock();
