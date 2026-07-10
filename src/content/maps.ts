@@ -120,41 +120,90 @@ export const MAPS: MapDef[] = [
       { id: "corridors_pickup_2", type: "pickup", position: [16, 0.3, 18] },
     ],
   },
-  // campaign_room1 (checkpoint 17): a single small room split by one
-  // partition wall with one gap. The gap is sealed by campaign_door_1,
-  // opened by campaign_lock_1 (a password_lock, not a button) once the
-  // player finds the password via campaign_terminal_1. No enemy_spawn or
-  // target entities -- supportedModes below excludes this map from the
-  // modes (Zombie Survival, Shooting Range) that would ever look for them,
-  // so they're not needed, unlike every other map in this array.
+  // campaign_room1 (checkpoint 17, extended at 19): Room 1 is unchanged in
+  // shape/mechanics -- its whole grid section (and every one of its
+  // entities' positions) simply shifted down by 8 rows (z += 16) to make
+  // room for Room 2 above it. Reading the grid top to bottom: Room 3 (rows
+  // 0-4, empty, reached via campaign_door_2's gap at row4/col6 -- no
+  // button/lock, opened only programmatically by main.ts when
+  // room2_terminal's "whoami" succeeds); Room 2 (rows 5-9, cols 1-10
+  // interior, bigger than Room 1) holding the required part/terminal
+  // puzzle (campaign_part_1 + campaign_terminal_2, requiresPart-gated) and
+  // an optional vault side-path (campaign_door_3 + campaign_lock_2, a
+  // checksVaultPin lock, gating a 1x2 alcove at cols 12-13 holding
+  // campaign_wall_buy_1, a bonus MAC-10); row 10 (the wall separating Room
+  // 2 from Room 1, with campaign_door_1's gap at col3 -- exactly the same
+  // relative position it held before this checkpoint); Room 1 itself (rows
+  // 11-13, unchanged interior). No enemy_spawn or target entities --
+  // supportedModes below still excludes this map from the modes that would
+  // ever look for them.
   {
     id: "campaign_room1",
     name: "Campaign: Room 1",
     supportedModes: ["campaign"],
     grid: [
-      [1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 0, 0, 0, 0, 0, 0, 1],
-      [1, 1, 1, 0, 1, 1, 1, 1],
-      [1, 0, 0, 0, 0, 0, 0, 1],
-      [1, 0, 0, 0, 0, 0, 0, 1],
-      [1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
+      [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ],
     entities: [
-      { id: "campaign_spawn_1", type: "spawn", position: [2, 0, 8] },
+      { id: "campaign_spawn_1", type: "spawn", position: [2, 0, 24] },
       {
         id: "campaign_terminal_1",
         type: "terminal",
         linkedTo: "room1_terminal",
-        position: [10, 0.3, 8],
+        position: [10, 0.3, 24],
       },
-      { id: "campaign_door_1", type: "door", position: [6, 1.5, 4] },
+      { id: "campaign_door_1", type: "door", position: [6, 1.5, 20] },
       {
         id: "campaign_lock_1",
         type: "password_lock",
         linkedTo: "campaign_door_1",
         terminalId: "room1_terminal",
-        position: [6, 0.3, 6],
+        position: [6, 0.3, 22],
       },
+      // Room 2's required path: the power cable and the terminal it feeds.
+      // The terminal sits at the far (north) end of the same column as
+      // Room 1's entry gap (row10/col3), so walking straight in from Room
+      // 1 leads directly to it, passing the part along the way.
+      { id: "campaign_part_1", type: "computer_part", position: [6, 0.3, 14] },
+      {
+        id: "campaign_terminal_2",
+        type: "terminal",
+        linkedTo: "room2_terminal",
+        requiresPart: "campaign_part_1",
+        position: [6, 0.3, 10],
+      },
+      // Room 2's optional vault side-path: a password_lock checking
+      // Campaign's live vault pin (not a terminal's fixed password),
+      // sitting just outside the vault's own doorway so it's never trapped
+      // behind the door it controls -- same placement discipline as
+      // corridors_button_2 (checkpoint 12).
+      { id: "campaign_door_3", type: "door", position: [22, 1.5, 12] },
+      {
+        id: "campaign_lock_2",
+        type: "password_lock",
+        linkedTo: "campaign_door_3",
+        checksVaultPin: true,
+        position: [20, 0.3, 12],
+      },
+      { id: "campaign_wall_buy_1", type: "wall_buy", linkedTo: "mac10", position: [24, 0.3, 12] },
+      // Room 3's connector: no button, no lock -- opened only
+      // programmatically by main.ts when room2_terminal's "whoami"
+      // succeeds. Room 3 itself (rows 0-3, cols 4-7) is deliberately empty
+      // this checkpoint.
+      { id: "campaign_door_2", type: "door", position: [12, 1.5, 8] },
     ],
   },
 ];
