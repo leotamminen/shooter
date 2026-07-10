@@ -43,12 +43,26 @@ export class PasswordLock {
     this.onOpen = onOpen;
     this.onClose = onClose;
 
+    // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
+    // ui/MainMenu.ts's own root and ui/Terminal.ts's identical checkpoint-18
+    // fix) -- without this, clicking anywhere outside the small centered
+    // panel landed directly on the canvas underneath, and main.ts's canvas
+    // click handler (playerController.controls.lock()) would re-lock
+    // pointer and resume gameplay while this overlay was still visibly
+    // open.
     this.root = createDiv({
       position: "fixed",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
+      inset: "0",
       display: "none",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0, 0, 0, 0.5)",
+      zIndex: "30",
+      pointerEvents: "none",
+    });
+
+    const panel = createDiv({
+      display: "flex",
       flexDirection: "column",
       gap: "10px",
       background: "rgba(20, 14, 10, 0.95)",
@@ -58,13 +72,12 @@ export class PasswordLock {
       fontFamily: "monospace",
       fontSize: "14px",
       color: "#f0f0f0",
-      zIndex: "30",
-      pointerEvents: "none",
     });
+    this.root.appendChild(panel);
 
     const title = createDiv({ fontWeight: "bold" });
     title.textContent = "PASSWORD LOCK";
-    this.root.appendChild(title);
+    panel.appendChild(title);
 
     this.inputEl = document.createElement("input");
     this.inputEl.type = "password";
@@ -86,10 +99,10 @@ export class PasswordLock {
       if (event.key === "Enter") this.submit();
       else if (event.key === "Escape") this.close();
     });
-    this.root.appendChild(this.inputEl);
+    panel.appendChild(this.inputEl);
 
     this.errorEl = createDiv({ fontSize: "12px", color: "#d94040", minHeight: "16px" });
-    this.root.appendChild(this.errorEl);
+    panel.appendChild(this.errorEl);
 
     const buttonRow = createDiv({ display: "flex", gap: "10px" });
     buttonRow.appendChild(
@@ -98,7 +111,7 @@ export class PasswordLock {
     buttonRow.appendChild(
       createButton("Cancel", { background: "#444" }, () => this.close()),
     );
-    this.root.appendChild(buttonRow);
+    panel.appendChild(buttonRow);
 
     document.body.appendChild(this.root);
 
@@ -114,7 +127,15 @@ export class PasswordLock {
     this.inputEl.value = "";
     this.root.style.display = "flex";
     this.root.style.pointerEvents = "auto";
-    this.inputEl.focus();
+    // Checkpoint 18 bugfix: see ui/Terminal.ts's identical open() fix for
+    // the full explanation -- deferred to the next frame so the "E"
+    // keypress that opened this overlay (via InteractSystem) doesn't also
+    // land inside the just-focused input as a typed character. Guarded by
+    // isOpen() in case the overlay was closed again before this frame's
+    // callback fires.
+    requestAnimationFrame(() => {
+      if (this.isOpen()) this.inputEl.focus();
+    });
     this.onOpen();
   }
 
@@ -142,7 +163,16 @@ export class PasswordLock {
     this.root.style.pointerEvents = "none";
     this.terminalDef = null;
     this.onSuccess = null;
-    this.onClose();
+    // Checkpoint 18 bugfix: see ui/Terminal.ts's identical close() fix --
+    // deferred so blur()'s focus transition settles before the
+    // pointer-relock attempt below (playerController.controls.lock() ->
+    // requestPointerLock()), which otherwise raced when Escape (not a
+    // click) triggered this same close() method. Guarded by !isOpen() in
+    // case the overlay was reopened again before this frame's callback
+    // fires.
+    requestAnimationFrame(() => {
+      if (!this.isOpen()) this.onClose();
+    });
   }
 
   private isOpen(): boolean {
