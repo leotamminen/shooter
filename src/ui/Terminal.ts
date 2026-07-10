@@ -31,14 +31,29 @@ export class Terminal {
     this.onOpen = onOpen;
     this.onClose = onClose;
 
+    // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
+    // ui/MainMenu.ts's own root), not just the small visible panel --
+    // without this, clicking anywhere outside the small centered panel
+    // landed directly on the canvas underneath, and main.ts's canvas click
+    // handler (playerController.controls.lock()) would re-lock pointer and
+    // resume gameplay while this overlay was still visibly open. The
+    // backdrop captures every click while open (pointerEvents toggled the
+    // same way the old root's was), so the canvas never sees it.
     this.root = createDiv({
       position: "fixed",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
+      inset: "0",
+      display: "none",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "rgba(0, 0, 0, 0.5)",
+      zIndex: "30",
+      pointerEvents: "none",
+    });
+
+    const panel = createDiv({
       width: "520px",
       height: "360px",
-      display: "none",
+      display: "flex",
       flexDirection: "column",
       background: "rgba(10, 14, 10, 0.95)",
       border: "2px solid #2a5c2a",
@@ -47,9 +62,8 @@ export class Terminal {
       fontFamily: "monospace",
       fontSize: "13px",
       color: "#7CFC7C",
-      zIndex: "30",
-      pointerEvents: "none",
     });
+    this.root.appendChild(panel);
 
     const titleBar = createDiv({
       display: "flex",
@@ -71,14 +85,14 @@ export class Terminal {
     closeButton.addEventListener("click", () => this.close());
     titleBar.appendChild(title);
     titleBar.appendChild(closeButton);
-    this.root.appendChild(titleBar);
+    panel.appendChild(titleBar);
 
     this.outputEl = createDiv({
       flex: "1",
       overflowY: "auto",
       marginBottom: "8px",
     });
-    this.root.appendChild(this.outputEl);
+    panel.appendChild(this.outputEl);
 
     this.inputEl = document.createElement("input");
     Object.assign(this.inputEl.style, {
@@ -106,7 +120,7 @@ export class Terminal {
         this.close();
       }
     });
-    this.root.appendChild(this.inputEl);
+    panel.appendChild(this.inputEl);
 
     document.body.appendChild(this.root);
 
@@ -126,7 +140,20 @@ export class Terminal {
     this.root.style.display = "flex";
     this.root.style.pointerEvents = "auto";
     this.inputEl.value = "";
-    this.inputEl.focus();
+    // Checkpoint 18 bugfix: deferred to the next frame, not called
+    // synchronously here. This overlay is opened from inside the same "E"
+    // keydown event InteractSystem processes to trigger onInteract() --
+    // focusing the input synchronously within that same event let the
+    // browser's default "insert this character" action for that same
+    // physical keypress land on the newly-focused input (focus changed
+    // mid-event-processing for the same key), so the literal "e" was
+    // appearing in the input the instant it opened. Deferring past the
+    // current event's processing avoids that. Guarded by isOpen() in case
+    // the overlay was closed again before this frame's callback fires
+    // (e.g. a very fast E-then-Escape).
+    requestAnimationFrame(() => {
+      if (this.isOpen()) this.inputEl.focus();
+    });
     this.onOpen();
   }
 
@@ -135,7 +162,22 @@ export class Terminal {
     this.root.style.display = "none";
     this.root.style.pointerEvents = "none";
     this.terminalDef = null;
-    this.onClose();
+    // Checkpoint 18 bugfix: deferred to the next frame. Closing via the x
+    // button already worked correctly (a mouse click blurs the input and
+    // shifts focus to the button natively, before our own click handler
+    // even runs, so by the time this method's own blur()/onClose() run,
+    // that focus transition has long settled) -- but closing via Escape did
+    // not: this.inputEl.blur() above and the onClose() ->
+    // playerController.controls.lock() -> requestPointerLock() chain were
+    // both happening back-to-back in the very same synchronous turn as the
+    // Escape keydown itself, with no time for the blur's focus transition
+    // to settle before the relock attempt. Deferring onClose() by one frame
+    // gives that transition time to complete first, regardless of which
+    // path triggered the close. Guarded by !isOpen() in case the overlay
+    // was reopened again before this frame's callback fires.
+    requestAnimationFrame(() => {
+      if (!this.isOpen()) this.onClose();
+    });
   }
 
   private isOpen(): boolean {
@@ -234,7 +276,13 @@ export class Terminal {
         color: "#7CFC7C",
       });
       copyButton.addEventListener("click", () => {
-        void navigator.clipboard.writeText(copyValue);
+        // Checkpoint 18: .catch() added -- clipboard access can be denied
+        // (insecure context, permission policy, unfocused document), and an
+        // unhandled rejection previously surfaced only as a stray console
+        // error with no feedback to the player that the copy failed.
+        navigator.clipboard.writeText(copyValue).catch(() => {
+          textEl.textContent = `${text} (copy failed)`;
+        });
       });
       line.appendChild(copyButton);
     }
