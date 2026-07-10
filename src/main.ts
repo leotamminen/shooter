@@ -46,6 +46,14 @@ function startGame(selections: GameSelections): void {
     canvas,
     gameState,
   );
+
+  // Checkpoint 19: extracted to a named function (previously inlined
+  // directly into MapEntitySystem's constructor call) so the
+  // room2Terminal onCommand callback below can also call it when Room 3's
+  // door opens programmatically, without duplicating this one-line
+  // callback twice.
+  const onDoorStateChanged = (): void => playerController.rebuildCollisionBoxes();
+
   // gameMode is assigned further down (it needs the map/weapon systems built
   // first) but this callback only ever runs later, once the player has
   // actually died, by which point construction has long finished.
@@ -74,6 +82,14 @@ function startGame(selections: GameSelections): void {
   // decisions log for that precedent).
   const campaign = new Campaign(runManager);
 
+  // Checkpoint 19: declared here (forward reference, same pattern as
+  // `let gameMode: GameMode` above) so room2Terminal's onCommand callback
+  // below can reference mapEntitySystem.getDoorMesh() even though
+  // mapEntitySystem itself isn't constructed until after both Terminal
+  // instances -- the callback only actually runs later, once the player
+  // types "whoami," by which point construction has long finished.
+  let mapEntitySystem: MapEntitySystem;
+
   // Checkpoint 17: constructed before mapEntitySystem so its open() methods
   // can be referenced by the openTerminal/openPasswordLock callbacks passed
   // into MapEntitySystem's constructor below. Both release pointer lock on
@@ -82,6 +98,27 @@ function startGame(selections: GameSelections): void {
   const terminal = new Terminal(
     () => playerController.controls.unlock(),
     () => playerController.controls.lock(),
+    campaign.getVaultPin,
+  );
+  // Checkpoint 19: a second, separate Terminal instance dedicated to
+  // room2_terminal -- its onCommand callback watches for "whoami" and
+  // opens Room 3's door + advances Campaign to "complete" when it runs.
+  // room1_terminal's instance (above) is never given an onCommand
+  // callback, so it never reacts to any command, per this checkpoint's own
+  // requirement.
+  const room2Terminal = new Terminal(
+    () => playerController.controls.unlock(),
+    () => playerController.controls.lock(),
+    campaign.getVaultPin,
+    (command) => {
+      if (command !== "whoami") return;
+      const door = mapEntitySystem.getDoorMesh("campaign_door_2");
+      if (door && door.visible) {
+        door.visible = false;
+        onDoorStateChanged();
+      }
+      campaign.markComplete();
+    },
   );
   const passwordLock = new PasswordLock(
     () => playerController.controls.unlock(),
@@ -144,26 +181,45 @@ function startGame(selections: GameSelections): void {
     () => weaponViewmodel.addImpulse({ x: 0, y: -0.06, z: 0.12 }, 0.15),
   );
 
-  const mapEntitySystem = new MapEntitySystem(
+  mapEntitySystem = new MapEntitySystem(
     mapDef,
     weaponSystem,
     runManager,
     raycastRegistry,
-    () => playerController.rebuildCollisionBoxes(),
+    onDoorStateChanged,
     gameState,
     WEAPONS,
     TERMINALS,
-    (terminalDef) => terminal.open(terminalDef),
-    (terminalDef, onCorrectPassword) =>
+    // Checkpoint 19: routes to whichever Terminal instance matches the
+    // interacted entity's linked TerminalDef -- room2_terminal gets its
+    // own instance (wired to react to "whoami"), everything else
+    // (currently only room1_terminal) uses the original single instance.
+    (terminalDef) => {
+      if (terminalDef.id === "room2_terminal") {
+        room2Terminal.open(terminalDef);
+      } else {
+        terminal.open(terminalDef);
+      }
+    },
+    (terminalDef, onCorrectPassword) => {
       passwordLock.open(terminalDef, () => {
         onCorrectPassword();
-        // Checkpoint 17: marking the objective complete is harmless even
-        // when Campaign isn't the active mode -- nothing ever reads it in
-        // that case, since only campaign_room1 has a password_lock entity,
-        // and that map is only ever selectable under Campaign mode (see
-        // ui/MainMenu.ts's supportedModes filtering).
-        campaign.markObjectiveComplete();
-      }),
+        // Checkpoint 19: only Room 1's real password-lock success (checked
+        // by terminalDef.id, since the vault lock's synthetic TerminalDef
+        // has a different id, "campaign_lock_2") awards points and
+        // advances Campaign's stage -- replaces checkpoint 17's
+        // markObjectiveComplete() call, which no longer exists now that
+        // Campaign tracks a 3-stage flow instead of a single boolean. The
+        // vault lock's success path stays a plain door-open with no side
+        // effects; the MAC-10 it guards is granted separately, by
+        // interacting with campaign_wall_buy_1 inside the vault.
+        if (terminalDef.id === "room1_terminal") {
+          gameState.addScore(findById(WEAPONS, "mac10").cost);
+          campaign.onDoorOneOpened();
+        }
+      });
+    },
+    campaign.getVaultPin,
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);
