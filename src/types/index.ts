@@ -38,7 +38,8 @@ export interface MapEntity {
     | "objective"
     | "wall_buy"
     | "terminal"
-    | "password_lock";
+    | "password_lock"
+    | "computer_part";
   position: [number, number, number];
   linkedTo?: string; // a related entity's id (e.g. button -> door), or for
   // "wall_buy", a Weapon id in content/weapons.ts, or for "terminal", a
@@ -53,6 +54,15 @@ export interface MapEntity {
   // checks against. Separate from linkedTo because a password lock has two
   // distinct relationships (which door, which terminal) -- unlike
   // button/wall_buy, which only ever have one.
+  requiresPart?: string; // "terminal" only (checkpoint 19): a computer_part
+  // entity's id. When set, interacting with this terminal before that part
+  // has been collected (its mesh is still visible) shows a short flavor
+  // message instead of opening the Terminal overlay.
+  checksVaultPin?: boolean; // "password_lock" only (checkpoint 19): when
+  // true, this lock ignores terminalId/TerminalDef.password entirely and
+  // checks against Campaign's live, per-run vault pin instead (via a
+  // getVaultPin callback). A hardcoded boolean branch, not a generalized
+  // "secret source" abstraction, since there are exactly two cases.
 }
 
 export interface MapDef {
@@ -85,10 +95,16 @@ export interface TerminalDirectory {
 
 export interface TerminalDef {
   id: string;
-  password: string; // checked by ui/PasswordLock.ts against the linked
+  password?: string; // checked by ui/PasswordLock.ts against the linked
   // "password_lock" MapEntity's input. Also (via template-literal
   // interpolation, not a second hardcoded copy) appears inside root's file
-  // tree somewhere, so the player can find it in-fiction via cat.
+  // tree somewhere, so the player can find it in-fiction via cat. Optional
+  // as of checkpoint 19 -- room2_terminal has no password to guard (its
+  // only purpose is the "whoami" command), and inventing a dummy value
+  // would be worse than just not requiring one.
+  username?: string; // checkpoint 19: read by ui/Terminal.ts's "whoami"
+  // command. Only room2_terminal sets this; room1_terminal leaves it
+  // undefined, since nothing in Room 1's puzzle needs it.
   root: TerminalDirectory;
 }
 
