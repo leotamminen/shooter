@@ -22,12 +22,34 @@ export const TERMINALS: TerminalDef[] = [
           files: [
             {
               name: "credentials.txt",
-              content: `door override password: ${ROOM1_PASSWORD}`,
+              // Checkpoint 19: {{VAULT_PIN}} is substituted live by
+              // ui/Terminal.ts's runCat() with Campaign's current per-run
+              // vault pin (via a getVaultPin callback) -- it is never a
+              // literal value in source, unlike ROOM1_PASSWORD above,
+              // since the vault pin regenerates every run and this content
+              // string is static.
+              content: `Top secret do not share this!
+// TODO: hide the password better
+door override password: ${ROOM1_PASSWORD}
+
+vault pin: {{VAULT_PIN}}`,
             },
           ],
           directories: [],
         },
       ],
+    },
+  },
+  // room2_terminal (checkpoint 19): no password, no files -- its only
+  // purpose is the "whoami" command, watched for by main.ts's onCommand
+  // callback to open Room 3's door and advance Campaign to "complete".
+  {
+    id: "room2_terminal",
+    username: "svc-maintenance",
+    root: {
+      name: "/",
+      files: [],
+      directories: [],
     },
   },
 ];
