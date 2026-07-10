@@ -260,13 +260,30 @@ export class MainMenu {
     this.applySelection(this.mapButtons, mapId);
   }
 
-  // A map with no supportedModes is mode-agnostic (test-grid, corridors,
-  // unchanged from before checkpoint 17); a map that declares supportedModes
-  // (campaign_room1) is only selectable when the current mode is in that
-  // list. Mirrors the Enemy group's existing mode-based graying, just keyed
-  // off a different field.
+  // Checkpoint 18 bugfix: a map with no supportedModes is mode-agnostic,
+  // but "mode-agnostic" now means "supported under any mode that has no
+  // map explicitly dedicated to it" -- not unconditionally "supported
+  // everywhere". Checkpoint 17's original version returned true whenever
+  // supportedModes was undefined, full stop, which meant Test Grid/
+  // Corridors stayed selectable under Campaign too, even though
+  // campaign_room1 is the only map actually built for it (it's the only
+  // map with terminal/password_lock entities). The check below asks
+  // instead: has ANY map already explicitly opted into modeId via its own
+  // supportedModes? If so, that mode is treated as requiring an
+  // explicitly-dedicated map, and mode-agnostic maps no longer default
+  // into it. Zombie Survival/Shooting Range have no map that explicitly
+  // opts into them, so mode-agnostic maps remain available under both,
+  // completely unchanged from before this fix. This generalizes correctly
+  // for any future mode-exclusive map, without hardcoding "campaign" by
+  // name anywhere in this method.
   private isMapSupportedForMode(map: MapDef, modeId: ModeId): boolean {
-    return map.supportedModes === undefined || map.supportedModes.includes(modeId);
+    if (map.supportedModes !== undefined) {
+      return map.supportedModes.includes(modeId);
+    }
+    const modeHasDedicatedMap = this.maps.some(
+      (m) => m.supportedModes !== undefined && m.supportedModes.includes(modeId),
+    );
+    return !modeHasDedicatedMap;
   }
 
   // Grays out (and disables clicks on) every map button not valid for
