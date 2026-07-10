@@ -17,19 +17,35 @@ function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
 // Opening it releases pointer lock (the same PlayerState.onDeath ->
 // controls.unlock() callback pattern used elsewhere in this codebase) so
 // the browser cursor is usable to type and click; closing it re-locks.
+//
+// Checkpoint 19: main.ts constructs TWO instances of this class -- one for
+// room1_terminal, one for room2_terminal -- since only the latter needs an
+// onCommand callback (watching for "whoami"). Both take the same
+// getVaultPin callback, since room1_terminal's credentials.txt is the only
+// consumer of the {{VAULT_PIN}} substitution, but passing it uniformly to
+// both keeps their constructor shape identical.
 export class Terminal {
   private readonly root: HTMLDivElement;
   private readonly outputEl: HTMLDivElement;
   private readonly inputEl: HTMLInputElement;
   private readonly onOpen: () => void;
   private readonly onClose: () => void;
+  private readonly getVaultPin: () => string;
+  private readonly onCommand?: (command: string) => void;
 
   private terminalDef: TerminalDef | null = null;
   private pathStack: TerminalDirectory[] = [];
 
-  constructor(onOpen: () => void, onClose: () => void) {
+  constructor(
+    onOpen: () => void,
+    onClose: () => void,
+    getVaultPin: () => string,
+    onCommand?: (command: string) => void,
+  ) {
     this.onOpen = onOpen;
     this.onClose = onClose;
+    this.getVaultPin = getVaultPin;
+    this.onCommand = onCommand;
 
     // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
     // ui/MainMenu.ts's own root), not just the small visible panel --
@@ -204,9 +220,21 @@ export class Terminal {
       case "cat":
         this.runCat(args[0]);
         break;
+      case "whoami":
+        this.runWhoami();
+        break;
       default:
         this.appendLine(`command not found: ${command}`);
+        return; // unrecognized commands never fire onCommand below
     }
+    // Checkpoint 19: fired for every successfully-parsed command
+    // (ls/cd/cat/whoami), regardless of whether that command's own
+    // execution succeeded (e.g. `cd nonexistent` still counts -- the
+    // command itself was recognized and ran, it just printed its own
+    // error). main.ts only wires this for room2_terminal's instance,
+    // watching for "whoami" specifically; room1_terminal's instance is
+    // constructed without it, so it never reacts to any command.
+    this.onCommand?.(command);
   }
 
   private runLs(): void {
@@ -246,10 +274,25 @@ export class Terminal {
       this.appendLine(`cat: no such file: ${name}`);
       return;
     }
+    // Checkpoint 19: substituted against the LIVE current pin, never a
+    // snapshot -- this Terminal instance persists across a run reset,
+    // which regenerates Campaign's vault pin, so reading getVaultPin()
+    // fresh on every cat is what keeps this correct after a respawn.
+    const content = file.content.replaceAll("{{VAULT_PIN}}", this.getVaultPin());
     const password = this.terminalDef?.password;
     const copyValue =
-      password !== undefined && file.content.includes(password) ? password : undefined;
-    this.appendLine(file.content, copyValue);
+      password !== undefined && content.includes(password) ? password : undefined;
+    this.appendLine(content, copyValue);
+  }
+
+  // Checkpoint 19: room1_terminal has no username set (TerminalDef.username
+  // is optional), so running whoami there prints a generic "unknown user"
+  // line rather than crashing or silently no-op'ing -- deliberately, since
+  // room1_terminal's own Terminal instance is never given an onCommand
+  // callback anyway, so nothing downstream reacts to it either way.
+  private runWhoami(): void {
+    const username = this.terminalDef?.username;
+    this.appendLine(username !== undefined ? username : "whoami: unknown user");
   }
 
   // Copy button (checkpoint 17's one deliberate accessibility feature):
