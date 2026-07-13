@@ -18,12 +18,11 @@ function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
 // controls.unlock() callback pattern used elsewhere in this codebase) so
 // the browser cursor is usable to type and click; closing it re-locks.
 //
-// Checkpoint 19: main.ts constructs TWO instances of this class -- one for
-// room1_terminal, one for room2_terminal -- since only the latter needs an
-// onCommand callback (watching for "whoami"). Both take the same
-// getVaultPin callback, since room1_terminal's credentials.txt is the only
-// consumer of the {{VAULT_PIN}} substitution, but passing it uniformly to
-// both keeps their constructor shape identical.
+// Checkpoint 19 correction: main.ts now constructs a single shared
+// instance of this class again (checkpoint 19 briefly constructed two, to
+// give room2_terminal an onCommand callback -- that callback and its sole
+// use case are both gone, so the second instance's only reason to exist
+// went with it).
 export class Terminal {
   private readonly root: HTMLDivElement;
   private readonly outputEl: HTMLDivElement;
@@ -31,7 +30,15 @@ export class Terminal {
   private readonly onOpen: () => void;
   private readonly onClose: () => void;
   private readonly getVaultPin: () => string;
-  private readonly onCommand?: (command: string) => void;
+  // Checkpoint 19 correction: command-permission data injected as
+  // constructor parameters (content/terminalCommands.ts's exports),
+  // rather than imported directly here -- matching this project's
+  // established ui/MainMenu.ts precedent of never importing content/
+  // directly, keeping every ui/ file a pure presentation layer over data
+  // it's handed by main.ts (the composition root).
+  private readonly blockedCommands: string[];
+  private readonly restrictedCommands: string[];
+  private readonly coreCommands: { name: string; description: string }[];
 
   private terminalDef: TerminalDef | null = null;
   private pathStack: TerminalDirectory[] = [];
@@ -40,12 +47,16 @@ export class Terminal {
     onOpen: () => void,
     onClose: () => void,
     getVaultPin: () => string,
-    onCommand?: (command: string) => void,
+    blockedCommands: string[],
+    restrictedCommands: string[],
+    coreCommands: { name: string; description: string }[],
   ) {
     this.onOpen = onOpen;
     this.onClose = onClose;
     this.getVaultPin = getVaultPin;
-    this.onCommand = onCommand;
+    this.blockedCommands = blockedCommands;
+    this.restrictedCommands = restrictedCommands;
+    this.coreCommands = coreCommands;
 
     // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
     // ui/MainMenu.ts's own root), not just the small visible panel --
@@ -223,18 +234,36 @@ export class Terminal {
       case "whoami":
         this.runWhoami();
         break;
+      case "pwd":
+        this.runPwd();
+        break;
+      case "clear":
+        this.runClear();
+        break;
+      case "help":
+        this.runHelp();
+        break;
       default:
+        if (this.blockedCommands.includes(command)) {
+          this.appendLine(`${command}: Permission denied`);
+          break;
+        }
+        if (this.restrictedCommands.includes(command)) {
+          const unlocked = this.terminalDef?.unlockedCommands?.includes(command) ?? false;
+          if (!unlocked) {
+            this.appendLine(`${command}: Permission denied`);
+            break;
+          }
+          // No functional handler exists for any restricted command yet --
+          // unlocked or not, this checkpoint always denies. The unlock
+          // check above is wired and read now so a future checkpoint only
+          // needs to add a real handler branch here, not touch the unlock
+          // plumbing.
+          this.appendLine(`${command}: Permission denied`);
+          break;
+        }
         this.appendLine(`command not found: ${command}`);
-        return; // unrecognized commands never fire onCommand below
     }
-    // Checkpoint 19: fired for every successfully-parsed command
-    // (ls/cd/cat/whoami), regardless of whether that command's own
-    // execution succeeded (e.g. `cd nonexistent` still counts -- the
-    // command itself was recognized and ran, it just printed its own
-    // error). main.ts only wires this for room2_terminal's instance,
-    // watching for "whoami" specifically; room1_terminal's instance is
-    // constructed without it, so it never reacts to any command.
-    this.onCommand?.(command);
   }
 
   private runLs(): void {
@@ -285,14 +314,50 @@ export class Terminal {
     this.appendLine(content, copyValue);
   }
 
-  // Checkpoint 19: room1_terminal has no username set (TerminalDef.username
-  // is optional), so running whoami there prints a generic "unknown user"
-  // line rather than crashing or silently no-op'ing -- deliberately, since
-  // room1_terminal's own Terminal instance is never given an onCommand
-  // callback anyway, so nothing downstream reacts to it either way.
+  // Checkpoint 19 correction: whoami no longer opens anything by itself
+  // (see the vault/Room-1-style password_lock now gating Room 3's door
+  // instead) -- it only reveals the answer, with a copy button, the same
+  // accessibility treatment runCat() already gives the door-1/vault-pin
+  // secrets. room1_terminal has no username set (TerminalDef.username is
+  // optional), so running whoami there prints a generic "unknown user"
+  // line with no copy button.
   private runWhoami(): void {
     const username = this.terminalDef?.username;
-    this.appendLine(username !== undefined ? username : "whoami: unknown user");
+    if (username === undefined) {
+      this.appendLine("whoami: unknown user");
+      return;
+    }
+    this.appendLine(username, username);
+  }
+
+  // Checkpoint 19 correction (part of the originally-scoped-but-dropped
+  // pwd/clear/help trio, completed now): built from the existing
+  // pathStack rather than a second path-tracking mechanism -- pathStack[0]
+  // is always root, so everything after it joined with "/" and prefixed
+  // with a leading "/" is the current path.
+  private runPwd(): void {
+    const path =
+      this.pathStack.length > 1
+        ? "/" + this.pathStack.slice(1).map((dir) => dir.name).join("/")
+        : "/";
+    this.appendLine(path);
+  }
+
+  private runClear(): void {
+    this.outputEl.textContent = "";
+  }
+
+  // Iterates coreCommands (content/terminalCommands.ts's CORE_COMMANDS,
+  // injected via the constructor) rather than a separate hardcoded help
+  // string, so a future core command addition shows up here automatically.
+  // Deliberately does NOT list blockedCommands/restrictedCommands --
+  // discovering those by trying them is part of the intended experience,
+  // not something help should spoil.
+  private runHelp(): void {
+    this.appendLine("bash 5.2.37 (simulated)");
+    for (const command of this.coreCommands) {
+      this.appendLine(`${command.name} - ${command.description}`);
+    }
   }
 
   // Copy button (checkpoint 17's one deliberate accessibility feature):
