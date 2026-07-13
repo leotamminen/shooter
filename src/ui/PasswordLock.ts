@@ -1,5 +1,7 @@
 import type { TerminalDef } from "../types";
 
+const DEFAULT_PROMPT_LABEL = "PASSWORD LOCK";
+
 function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
   const el = document.createElement("div");
   Object.assign(el.style, styles);
@@ -31,6 +33,7 @@ function createButton(
 // symmetry with Terminal's close x) a cancel button.
 export class PasswordLock {
   private readonly root: HTMLDivElement;
+  private readonly titleEl: HTMLDivElement;
   private readonly inputEl: HTMLInputElement;
   private readonly errorEl: HTMLDivElement;
   private readonly onOpen: () => void;
@@ -43,13 +46,6 @@ export class PasswordLock {
     this.onOpen = onOpen;
     this.onClose = onClose;
 
-    // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
-    // ui/MainMenu.ts's own root and ui/Terminal.ts's identical checkpoint-18
-    // fix) -- without this, clicking anywhere outside the small centered
-    // panel landed directly on the canvas underneath, and main.ts's canvas
-    // click handler (playerController.controls.lock()) would re-lock
-    // pointer and resume gameplay while this overlay was still visibly
-    // open.
     this.root = createDiv({
       position: "fixed",
       inset: "0",
@@ -75,9 +71,13 @@ export class PasswordLock {
     });
     this.root.appendChild(panel);
 
-    const title = createDiv({ fontWeight: "bold" });
-    title.textContent = "PASSWORD LOCK";
-    panel.appendChild(title);
+    // Checkpoint 19 correction: stored as a field (was a local const) so
+    // open() below can set its text per-open, since different locks
+    // (Room 3's identity lock vs. Room 1's/the vault's) now show different
+    // prompts.
+    this.titleEl = createDiv({ fontWeight: "bold" });
+    this.titleEl.textContent = DEFAULT_PROMPT_LABEL;
+    panel.appendChild(this.titleEl);
 
     this.inputEl = document.createElement("input");
     this.inputEl.type = "password";
@@ -120,9 +120,10 @@ export class PasswordLock {
     });
   }
 
-  open(terminalDef: TerminalDef, onSuccess: () => void): void {
+  open(terminalDef: TerminalDef, onSuccess: () => void, promptLabel?: string): void {
     this.terminalDef = terminalDef;
     this.onSuccess = onSuccess;
+    this.titleEl.textContent = promptLabel ?? DEFAULT_PROMPT_LABEL;
     this.errorEl.textContent = "";
     this.inputEl.value = "";
     this.root.style.display = "flex";
