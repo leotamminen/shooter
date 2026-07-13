@@ -124,19 +124,19 @@ export const MAPS: MapDef[] = [
   // shape/mechanics -- its whole grid section (and every one of its
   // entities' positions) simply shifted down by 8 rows (z += 16) to make
   // room for Room 2 above it. Reading the grid top to bottom: Room 3 (rows
-  // 0-4, empty, reached via campaign_door_2's gap at row4/col6 -- no
-  // button/lock, opened only programmatically by main.ts when
-  // room2_terminal's "whoami" succeeds); Room 2 (rows 5-9, cols 1-10
-  // interior, bigger than Room 1) holding the required part/terminal
-  // puzzle (campaign_part_1 + campaign_terminal_2, requiresPart-gated) and
-  // an optional vault side-path (campaign_door_3 + campaign_lock_2, a
-  // checksVaultPin lock, gating a 1x2 alcove at cols 12-13 holding
-  // campaign_wall_buy_1, a bonus MAC-10); row 10 (the wall separating Room
-  // 2 from Room 1, with campaign_door_1's gap at col3 -- exactly the same
-  // relative position it held before this checkpoint); Room 1 itself (rows
-  // 11-13, unchanged interior). No enemy_spawn or target entities --
-  // supportedModes below still excludes this map from the modes that would
-  // ever look for them.
+  // 0-4, empty, reached via campaign_door_2's gap at row4/col6 -- gated by
+  // campaign_lock_3, a secretField: "username" lock checked against
+  // room2_terminal's username); Room 2 (rows 5-9, cols 1-10 interior,
+  // bigger than Room 1) holding the required part/terminal puzzle
+  // (campaign_part_1 + campaign_terminal_2, requiresPart-gated) and an
+  // optional vault side-path (campaign_door_3 + campaign_lock_2, a
+  // secretField: "vaultPin" lock, gating a 1x2 alcove at cols 12-13
+  // holding campaign_wall_buy_1, a bonus MAC-10); row 10 (the wall
+  // separating Room 2 from Room 1, with campaign_door_1's gap at col3 --
+  // exactly the same relative position it held before this checkpoint);
+  // Room 1 itself (rows 11-13, unchanged interior). No enemy_spawn or
+  // target entities -- supportedModes below still excludes this map from
+  // the modes that would ever look for them.
   {
     id: "campaign_room1",
     name: "Campaign: Room 1",
