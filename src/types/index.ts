@@ -50,19 +50,30 @@ export interface MapEntity {
   // before this checkpoint. Unrelated to "wall_buy"'s price, which comes
   // from Weapon.cost, not this field.
   terminalId?: string; // "password_lock" only (checkpoint 17): a TerminalDef
-  // id in content/terminals.ts, the terminal whose password this lock
-  // checks against. Separate from linkedTo because a password lock has two
-  // distinct relationships (which door, which terminal) -- unlike
-  // button/wall_buy, which only ever have one.
+  // id in content/terminals.ts, the terminal this lock is checked against
+  // (see secretField below for which of that terminal's fields). Separate
+  // from linkedTo because a password lock has two distinct relationships
+  // (which door, which terminal) -- unlike button/wall_buy, which only
+  // ever have one. Not read at all when secretField is "vaultPin".
   requiresPart?: string; // "terminal" only (checkpoint 19): a computer_part
   // entity's id. When set, interacting with this terminal before that part
   // has been collected (its mesh is still visible) shows a short flavor
   // message instead of opening the Terminal overlay.
-  checksVaultPin?: boolean; // "password_lock" only (checkpoint 19): when
-  // true, this lock ignores terminalId/TerminalDef.password entirely and
-  // checks against Campaign's live, per-run vault pin instead (via a
-  // getVaultPin callback). A hardcoded boolean branch, not a generalized
-  // "secret source" abstraction, since there are exactly two cases.
+  secretField?: "password" | "vaultPin" | "username"; // "password_lock"
+  // only (checkpoint 19, corrected same checkpoint): which value this lock
+  // checks the player's input against. "password" (the default when this
+  // field is absent) checks the linked terminal's static
+  // TerminalDef.password -- unchanged checkpoint-17 behavior. "vaultPin"
+  // checks Campaign's live, per-run vault pin instead of anything on a
+  // TerminalDef -- unchanged checkpoint-19 behavior, previously gated by a
+  // now-removed checksVaultPin boolean. "username" checks the linked
+  // terminal's TerminalDef.username -- new this correction, used by Room
+  // 3's identity lock. A literal union, not a generalized "secret source"
+  // abstraction, since there are exactly three known cases.
+  promptLabel?: string; // "password_lock" only (checkpoint 19, corrected
+  // same checkpoint): the overlay's prompt text. Defaults to
+  // ui/PasswordLock.ts's own generic label when absent -- Room 1's and the
+  // vault's locks don't set this.
 }
 
 export interface MapDef {
@@ -96,15 +107,23 @@ export interface TerminalDirectory {
 export interface TerminalDef {
   id: string;
   password?: string; // checked by ui/PasswordLock.ts against the linked
-  // "password_lock" MapEntity's input. Also (via template-literal
-  // interpolation, not a second hardcoded copy) appears inside root's file
-  // tree somewhere, so the player can find it in-fiction via cat. Optional
-  // as of checkpoint 19 -- room2_terminal has no password to guard (its
-  // only purpose is the "whoami" command), and inventing a dummy value
-  // would be worse than just not requiring one.
-  username?: string; // checkpoint 19: read by ui/Terminal.ts's "whoami"
-  // command. Only room2_terminal sets this; room1_terminal leaves it
-  // undefined, since nothing in Room 1's puzzle needs it.
+  // "password_lock" MapEntity's input, when that lock's secretField is
+  // "password" (the default -- see MapEntity.secretField). Also (via
+  // template-literal interpolation, not a second hardcoded copy) appears
+  // inside root's file tree somewhere, so the player can find it
+  // in-fiction via cat. Optional as of checkpoint 19 -- room2_terminal has
+  // no password to guard (its only purpose is the "whoami" command).
+  username?: string; // read by ui/Terminal.ts's "whoami" command, and by a
+  // "password_lock" whose secretField is "username" (checkpoint 19,
+  // corrected same checkpoint -- see Room 3's identity lock). Only
+  // room2_terminal sets this; room1_terminal leaves it undefined.
+  unlockedCommands?: string[]; // checkpoint 19 (corrected same checkpoint):
+  // names from content/terminalCommands.ts's RESTRICTED_COMMANDS that THIS
+  // specific terminal allows -- the mechanism a future checkpoint will use
+  // to make e.g. "ping" actually work in one particular room's terminal,
+  // without touching ui/Terminal.ts or content/terminalCommands.ts's
+  // BLOCKED_COMMANDS at all. No current TerminalDef sets this; no
+  // restricted command has real behavior yet even when unlocked.
   root: TerminalDirectory;
 }
 

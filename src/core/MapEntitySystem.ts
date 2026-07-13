@@ -29,11 +29,11 @@ const COMPUTER_PART_COLOR = 0x888800;
 const COMPUTER_PART_EMISSIVE = 0x333300;
 const COMPUTER_PART_SIZE = 0.35;
 
-// Checkpoint 19: a placeholder TerminalDirectory for the vault password
-// lock's synthetic TerminalDef (see createPasswordLock()'s checksVaultPin
-// branch) -- the vault lock has no real terminal/filesystem behind it, so
-// this satisfies TerminalDef's required `root` field with an inert, empty
-// tree that's never actually navigated.
+// Checkpoint 19: a placeholder TerminalDirectory for a password lock's
+// synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
+// some locks have no real terminal/filesystem behind them, so this
+// satisfies TerminalDef's required `root` field with an inert, empty tree
+// that's never actually navigated.
 const EMPTY_ROOT: TerminalDirectory = { name: "/", files: [], directories: [] };
 
 export interface DoorEntry {
@@ -51,14 +51,6 @@ export class MapEntitySystem {
   readonly doors: DoorEntry[] = [];
   readonly interactables: THREE.Mesh[] = [];
 
-  // Checkpoint 19: promoted from a local constructor variable to a field so
-  // getDoorMesh() below can expose door lookups after construction --
-  // main.ts needs this to programmatically open Room 3's door once
-  // room2_terminal's "whoami" command runs, since that door has no
-  // button/lock of its own to drive it.
-  private readonly doorMeshById = new Map<string, THREE.Mesh>();
-  private readonly computerPartMeshById = new Map<string, THREE.Mesh>();
-
   constructor(
     mapDef: MapDef,
     weaponSystem: WeaponSystem,
@@ -69,17 +61,31 @@ export class MapEntitySystem {
     weapons: Weapon[],
     terminals: TerminalDef[],
     openTerminal: (terminalDef: TerminalDef) => void,
-    openPasswordLock: (terminalDef: TerminalDef, onCorrectPassword: () => void) => void,
+    openPasswordLock: (
+      terminalDef: TerminalDef,
+      onCorrectPassword: () => void,
+      promptLabel?: string,
+    ) => void,
     getVaultPin: () => string,
   ) {
+    // Checkpoint 19 correction: reverted to local constructor variables --
+    // Room 3's door is now opened by its own password_lock (the same
+    // generic door.visible = false / onDoorStateChanged() mechanism every
+    // other locked door already uses), not programmatically from main.ts,
+    // so there's no longer any reason for doorMeshById to be a class field
+    // (it briefly was, exposed via a getDoorMesh() method, both now
+    // removed along with the mechanism that needed them).
+    const doorMeshById = new Map<string, THREE.Mesh>();
+    const computerPartMeshById = new Map<string, THREE.Mesh>();
+
     for (const entity of mapDef.entities) {
       if (entity.type === "door") {
-        this.doorMeshById.set(
+        doorMeshById.set(
           entity.id,
           this.createDoor(entity, runManager, raycastRegistry, onDoorStateChanged),
         );
       } else if (entity.type === "computer_part") {
-        this.computerPartMeshById.set(
+        computerPartMeshById.set(
           entity.id,
           this.createComputerPart(entity, runManager, raycastRegistry),
         );
@@ -88,17 +94,17 @@ export class MapEntitySystem {
 
     for (const entity of mapDef.entities) {
       if (entity.type === "button") {
-        this.createButton(entity, this.doorMeshById, raycastRegistry, onDoorStateChanged, gameState);
+        this.createButton(entity, doorMeshById, raycastRegistry, onDoorStateChanged, gameState);
       } else if (entity.type === "pickup") {
         this.createPickup(entity, weaponSystem, runManager, raycastRegistry);
       } else if (entity.type === "wall_buy") {
         this.createWallBuy(entity, weapons, weaponSystem, gameState, raycastRegistry);
       } else if (entity.type === "terminal") {
-        this.createTerminal(entity, terminals, raycastRegistry, openTerminal, this.computerPartMeshById);
+        this.createTerminal(entity, terminals, raycastRegistry, openTerminal, computerPartMeshById);
       } else if (entity.type === "password_lock") {
         this.createPasswordLock(
           entity,
-          this.doorMeshById,
+          doorMeshById,
           terminals,
           raycastRegistry,
           onDoorStateChanged,
@@ -111,12 +117,6 @@ export class MapEntitySystem {
 
   get doorMeshes(): THREE.Mesh[] {
     return this.doors.map((door) => door.mesh);
-  }
-
-  // Checkpoint 19: lets main.ts open a door that has no button/lock of its
-  // own (Room 3's door, opened programmatically when "whoami" runs).
-  getDoorMesh(id: string): THREE.Mesh | undefined {
-    return this.doorMeshById.get(id);
   }
 
   private createDoor(
@@ -229,15 +229,6 @@ export class MapEntitySystem {
     });
   }
 
-  // Checkpoint 19: structurally identical to createPickup() above (spawn,
-  // idempotent hide-on-interact, reset to visible on a new run) -- the
-  // only real difference is that collecting it has no direct gameplay
-  // effect of its own (unlike ammo pickups' addReserveAmmo() call); its
-  // only purpose is to be checked for by createTerminal()'s requiresPart
-  // gate below. Registered as resettable (unlike the checkpoint-11
-  // wall-buy, which has no visible on/off state to reset) because THIS
-  // entity's whole state IS its visible/hidden flag, exactly like a
-  // pickup's.
   private createComputerPart(
     entity: MapEntity,
     runManager: RunManager,
@@ -268,24 +259,6 @@ export class MapEntitySystem {
     return mesh;
   }
 
-  // The first real GameState.spendPoints() caller (checkpoint 11) — replaces
-  // the checkpoint-10 test terminal, which only proved the mechanism worked.
-  // linkedTo here is a Weapon id (content/weapons.ts), not another
-  // MapEntity's id — findById() throws by name if it doesn't resolve, same
-  // as every other content lookup in this codebase. No
-  // RunManager.registerResettable() call: like the test terminal before it,
-  // this has no visible on/off state of its own to reset — spendPoints()'s
-  // effect on pointsBalance already resets via RunManager ->
-  // GameState.resetScore(). What a new run does to an already-purchased
-  // weapon was originally an open question here — resolved at checkpoint 15,
-  // see below.
-  // (checkpoint 15: pickupWeapon() replaces the checkpoint-11 setWeapon() —
-  // it fills an empty inventory slot if one exists, or replaces the active
-  // slot if the inventory is full, rather than always overwriting a single
-  // current weapon. WeaponSystem.reset() now rebuilds the whole inventory
-  // back to the starting loadout on a new run, so a purchased weapon does
-  // NOT survive a run reset. See WeaponSystem.ts and the checkpoint-15
-  // decisions log.)
   private createWallBuy(
     entity: MapEntity,
     weapons: Weapon[],
@@ -326,18 +299,6 @@ export class MapEntitySystem {
     raycastRegistry.register(mesh);
   }
 
-  // Checkpoint 17: linkedTo here is a TerminalDef id (content/terminals.ts),
-  // resolved via findById() the same way createWallBuy() resolves a Weapon
-  // id -- same pattern, different content array. openTerminal is a generic
-  // UI-trigger callback (this class never imports ui/Terminal.ts directly),
-  // matching how onDoorStateChanged/onMeleeAttack are already injected
-  // elsewhere in this codebase rather than reached into directly.
-  //
-  // Checkpoint 19: entity.requiresPart gates this the same way createButton()
-  // already gates on cost -- checked before openTerminal() is even called.
-  // The flavor-message rejection follows this project's own established
-  // "rejection feedback is console.log-only" convention (see createButton()/
-  // createWallBuy() above), not a new on-screen HUD mechanism.
   private createTerminal(
     entity: MapEntity,
     terminals: TerminalDef[],
@@ -384,22 +345,31 @@ export class MapEntitySystem {
   // "check before doing anything" ordering createButton() already
   // establishes for its cost-gating.
   //
-  // Checkpoint 19: entity.checksVaultPin branches this into a second,
-  // separate check path -- a hardcoded boolean, not a generalized "secret
-  // source" abstraction, since there are exactly two cases. The vault lock
-  // has no real TerminalDef of its own (no filesystem, no fixed password),
-  // so a placeholder object is constructed inline with a live getVaultPin()
-  // read as its `password` and EMPTY_ROOT as its inert `root` -- reusing
-  // openPasswordLock()'s existing TerminalDef-shaped signature rather than
-  // adding a parallel UI method means ui/PasswordLock.ts needs zero changes
-  // for this checkpoint.
+  // Checkpoint 19 (corrected same checkpoint): entity.secretField picks
+  // which value this lock checks the player's input against. "password"
+  // (default) reads the linked terminal's TerminalDef.password --
+  // unchanged checkpoint-17 behavior. "vaultPin" reads Campaign's live
+  // vault pin via getVaultPin() -- unchanged checkpoint-19 behavior,
+  // previously gated by a now-removed checksVaultPin boolean. "username"
+  // reads the linked terminal's TerminalDef.username -- new this
+  // correction, used by Room 3's identity lock. The "vaultPin" and
+  // "username" branches both construct a TerminalDef-shaped object so they
+  // can reuse openPasswordLock()'s existing signature rather than adding a
+  // parallel UI path -- ui/PasswordLock.ts itself needed zero changes for
+  // either. entity.promptLabel threads through to all three branches via
+  // one shared onCorrectPassword closure, since the door-opening effect is
+  // identical regardless of which secretField was checked.
   private createPasswordLock(
     entity: MapEntity,
     doorMeshById: Map<string, THREE.Mesh>,
     terminals: TerminalDef[],
     raycastRegistry: RaycastRegistry,
     onDoorStateChanged: () => void,
-    openPasswordLock: (terminalDef: TerminalDef, onCorrectPassword: () => void) => void,
+    openPasswordLock: (
+      terminalDef: TerminalDef,
+      onCorrectPassword: () => void,
+      promptLabel?: string,
+    ) => void,
     getVaultPin: () => string,
   ): void {
     const door = entity.linkedTo ? doorMeshById.get(entity.linkedTo) : undefined;
@@ -421,11 +391,18 @@ export class MapEntitySystem {
     mesh.userData.onInteract = (): void => {
       if (!door.visible) return; // idempotent: door already open
 
-      if (entity.checksVaultPin) {
-        openPasswordLock({ id: entity.id, password: getVaultPin(), root: EMPTY_ROOT }, () => {
-          door.visible = false;
-          onDoorStateChanged();
-        });
+      const onCorrectPassword = (): void => {
+        door.visible = false;
+        onDoorStateChanged();
+      };
+      const secretField = entity.secretField ?? "password";
+
+      if (secretField === "vaultPin") {
+        openPasswordLock(
+          { id: entity.id, password: getVaultPin(), root: EMPTY_ROOT },
+          onCorrectPassword,
+          entity.promptLabel,
+        );
         return;
       }
 
@@ -433,10 +410,17 @@ export class MapEntitySystem {
         throw new Error(`Password lock "${entity.id}" has no terminalId`);
       }
       const terminalDef = findById(terminals, entity.terminalId);
-      openPasswordLock(terminalDef, () => {
-        door.visible = false;
-        onDoorStateChanged();
-      });
+
+      if (secretField === "username") {
+        openPasswordLock(
+          { ...terminalDef, password: terminalDef.username },
+          onCorrectPassword,
+          entity.promptLabel,
+        );
+        return;
+      }
+
+      openPasswordLock(terminalDef, onCorrectPassword, entity.promptLabel);
     };
 
     this.group.add(mesh);

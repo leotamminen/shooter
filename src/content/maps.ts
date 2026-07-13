@@ -195,15 +195,30 @@ export const MAPS: MapDef[] = [
         id: "campaign_lock_2",
         type: "password_lock",
         linkedTo: "campaign_door_3",
-        checksVaultPin: true,
+        secretField: "vaultPin",
         position: [20, 0.3, 12],
       },
       { id: "campaign_wall_buy_1", type: "wall_buy", linkedTo: "mac10", position: [24, 0.3, 12] },
-      // Room 3's connector: no button, no lock -- opened only
-      // programmatically by main.ts when room2_terminal's "whoami"
-      // succeeds. Room 3 itself (rows 0-3, cols 4-7) is deliberately empty
-      // this checkpoint.
+      // Room 3's connector door (checkpoint 19, corrected same checkpoint):
+      // originally opened programmatically when room2_terminal's "whoami"
+      // ran -- corrected to a real password_lock instead, the same
+      // mechanism every other locked door in this codebase uses.
+      // campaign_lock_3 checks room2_terminal's username (secretField:
+      // "username"), revealed by running whoami in that terminal (which no
+      // longer opens anything by itself). Positioned just south of the
+      // door's gap, in Room 2, so it's never trapped behind its own door --
+      // same placement discipline as every other lock in this file. Room 3
+      // itself (rows 0-3, cols 4-7) is deliberately empty this checkpoint.
       { id: "campaign_door_2", type: "door", position: [12, 1.5, 8] },
+      {
+        id: "campaign_lock_3",
+        type: "password_lock",
+        linkedTo: "campaign_door_2",
+        terminalId: "room2_terminal",
+        secretField: "username",
+        promptLabel: "Identity, who you are:",
+        position: [12, 0.3, 10],
+      },
     ],
   },
 ];
