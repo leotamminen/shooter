@@ -46,6 +46,13 @@ export class PasswordLock {
     this.onOpen = onOpen;
     this.onClose = onClose;
 
+    // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
+    // ui/MainMenu.ts's own root and ui/Terminal.ts's identical checkpoint-18
+    // fix) -- without this, clicking anywhere outside the small centered
+    // panel landed directly on the canvas underneath, and main.ts's canvas
+    // click handler (playerController.controls.lock()) would re-lock
+    // pointer and resume gameplay while this overlay was still visibly
+    // open.
     this.root = createDiv({
       position: "fixed",
       inset: "0",
