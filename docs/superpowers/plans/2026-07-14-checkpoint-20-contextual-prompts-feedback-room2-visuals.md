@@ -1632,11 +1632,275 @@ EOF
 
 ---
 
-### Task 7: Manual verification (controller-executed, not a subagent)
+## Mid-Checkpoint Correction (applied before Task 10/CLAUDE.md)
+
+Manual verification of Tasks 1-6 surfaced three real issues, all folded into checkpoint 20 as a correction rather than a new checkpoint: `campaign_terminal_1`'s computer mesh visually faces the wall behind it instead of into the room (its screen+keyboard protrusion, which sits at local +Z per `ComputerMesh.ts`'s construction, happens to point toward the room's south wall at this entity's position); `campaign_part_1` (the power cable) sits directly on the obvious straight-line path between the entry gap and the terminal, trivially found without exploring; and Room 2 could use 1-2 more decorations near the relocated cable so it isn't the one obviously-different prop sitting alone.
+
+The fix is a small, generic `MapEntity.rotationY?: number` field (degrees) wired into `createTerminal()`'s three `computerGroup.position.set(...)` call sites (initial build, power-on swap, run-reset revert-to-off) — all three must apply the same rotation or the mesh visually snaps to a different facing mid-swap. Rotation is deliberately NOT wired into any other `create*()` method this pass: every other entity's geometry (door, button, pickup, wall-buy, password-lock, decoration) is a horizontally symmetric cube, so a Y-rotation would have zero visible effect on any of them today — wiring it in now would be speculative, unused code. The type field itself is generic (any future entity type can read `entity.rotationY` once it has genuinely asymmetric geometry); only the *consumption* is terminal-only for now.
+
+Determining `campaign_terminal_1`'s correct `rotationY` value requires live visual confirmation (three.js's rotation sign isn't reliably guessable from the geometry alone) — Task 9 below is an interactive verification/iteration pass with the human partner, not a blind code change.
+
+### Task 7: `types/index.ts` and `core/MapEntitySystem.ts` — generic `rotationY` field + terminal wiring
+
+**Files:**
+- Modify: `src/types/index.ts`
+- Modify: `src/core/MapEntitySystem.ts`
+
+**Interfaces:**
+- Produces: `MapEntity.rotationY?: number` (degrees, defaults to `0`/unchanged facing when absent) — consumed by `createTerminal()`'s three `computerGroup.position.set(...)` call sites, and later by `content/maps.ts` (Task 8).
+
+- [ ] **Step 1: Add `MapEntity.rotationY`**
+
+Open `src/types/index.ts`. Find the `MapEntity` interface's newly-added `variant` field (added by Task 1):
+
+```typescript
+  variant?: "crate" | "debris"; // "decoration" only (checkpoint 20): a
+  // purely cosmetic size/color hint -- no gameplay meaning. Absent defaults
+  // to "crate". Kept deliberately minimal (two variants, one field) rather
+  // than a richer theming system, since decorations are inert clutter.
+}
+```
+
+Replace with:
+
+```typescript
+  variant?: "crate" | "debris"; // "decoration" only (checkpoint 20): a
+  // purely cosmetic size/color hint -- no gameplay meaning. Absent defaults
+  // to "crate". Kept deliberately minimal (two variants, one field) rather
+  // than a richer theming system, since decorations are inert clutter.
+  rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
+  // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
+  // hand-edited content file), defaulting to 0 (unchanged facing) when
+  // absent. Only createTerminal() currently reads this -- every other
+  // create*() method's geometry is a horizontally symmetric cube, so a
+  // Y-rotation would have zero visible effect on it today. The field
+  // itself is generic and available to any future entity type once its
+  // geometry is genuinely asymmetric; see CLAUDE.md's decisions log.
+}
+```
+
+- [ ] **Step 2: Apply the rotation at all three `createTerminal()` call sites**
+
+Open `src/core/MapEntitySystem.ts`. `createTerminal()` currently has exactly three occurrences of `computerGroup.position.set(...entity.position);` — the initial build, the power-on swap, and the run-reset revert-to-off. Each must be followed immediately by a rotation line. Find each of the three (they are textually identical, so replace all three — your editor/tool must handle all three occurrences, not just the first):
+
+```typescript
+    computerGroup.position.set(...entity.position);
+```
+
+At every one of the three occurrences, add this line immediately after it:
+
+```typescript
+    computerGroup.position.set(...entity.position);
+    computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+```
+
+Concretely, the three sites end up as:
+
+1. Inside `handleInteract`'s power-on-swap block:
+```typescript
+        computerGroup = createComputerMesh(true);
+        computerGroup.position.set(...entity.position);
+        computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+        this.group.add(computerGroup);
+        bodyMesh = attachBody(computerGroup);
+```
+
+2. The initial build (just before the `if (entity.requiresPart !== undefined)` resettable-registration block):
+```typescript
+    computerGroup = createComputerMesh(poweredOn);
+    computerGroup.position.set(...entity.position);
+    computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(computerGroup);
+    bodyMesh = attachBody(computerGroup);
+```
+
+3. Inside the run-reset resettable's revert-to-off block:
+```typescript
+        computerGroup = createComputerMesh(false);
+        computerGroup.position.set(...entity.position);
+        computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+        this.group.add(computerGroup);
+        bodyMesh = attachBody(computerGroup);
+```
+
+`THREE.MathUtils` is available via the file's existing `import * as THREE from "three";` — no new import needed.
+
+- [ ] **Step 3: Verify the build is clean**
+
+Run: `npx tsc --noEmit`
+Expected: zero errors.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/types/index.ts src/core/MapEntitySystem.ts
+git commit -m "$(cat <<'EOF'
+Checkpoint 20 correction task 7: add MapEntity.rotationY + terminal wiring
+
+A generic, degrees-based Y-axis facing field, applied at all three of
+createTerminal()'s computerGroup.position.set() call sites (initial
+build, power-on swap, run-reset revert-to-off) so a terminal's facing
+survives every mesh rebuild identically. Not wired into any other
+create*() method this pass -- their geometry is horizontally
+symmetric, so rotation would have no visible effect yet.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 8: `content/maps.ts` — relocate power cable, add clutter, first-guess terminal rotation
+
+**Files:**
+- Modify: `src/content/maps.ts`
+
+**Interfaces:**
+- Consumes: `MapEntity.rotationY` (Task 7).
+
+This task lands a *first guess* at `campaign_terminal_1`'s `rotationY` value (`180`, reasoned from its position sitting close to Room 1's south wall — see the Design Reference addendum below) — Task 9 confirms or corrects this value in-browser with the human partner. It also relocates the power cable and adds one more decoration.
+
+- [ ] **Step 1: Relocate `campaign_part_1`, add a decoration near it, and set `campaign_terminal_1`'s rotation**
+
+Open `src/content/maps.ts`. Find (added by Task 6):
+
+```typescript
+      // campaign_part_1's position (col 3 / row 7) is deliberately kept as
+      // the same column as both the entry gap (row 10) and the terminal
+      // (row 5) -- checkpoint 20 confirmed this already satisfies "a
+      // corner of Room 2" loosely (west portion of the room, not center)
+      // without breaking the straight-path design documented above.
+      { id: "campaign_part_1", type: "computer_part", position: [6, 0.3, 14] },
+      {
+        id: "campaign_terminal_2",
+        type: "terminal",
+        linkedTo: "room2_terminal",
+        requiresPart: "campaign_part_1",
+        position: [6, 0.3, 10],
+      },
+      // Checkpoint 20: purely visual clutter, positioned clearly off every
+      // required path -- the column-3 entry/part/terminal path, the
+      // column-6 Room-3 connector, and the row-6 vault corridor. No
+      // collision (see MapEntitySystem.createDecoration()).
+      { id: "campaign_decoration_1", type: "decoration", variant: "crate", position: [18, 0.3, 10] },
+      { id: "campaign_decoration_2", type: "decoration", variant: "debris", position: [16, 0.3, 18] },
+      { id: "campaign_decoration_3", type: "decoration", variant: "crate", position: [8, 0.3, 18] },
+```
+
+Replace with:
+
+```typescript
+      // Checkpoint 20 correction: campaign_part_1 moved from the same
+      // column as the entry/terminal (col 3, directly on the obvious
+      // straight-line path) to Room 2's far southeast corner (col 10 /
+      // row 9) -- the corner diagonally farthest from campaign_terminal_2
+      // (col 3 / row 5), forcing the player to actually search rather than
+      // trivially find it on the way to the terminal. Confirmed clear of
+      // every wall, decoration, and the row-6 vault corridor.
+      { id: "campaign_part_1", type: "computer_part", position: [20, 0.3, 18] },
+      {
+        id: "campaign_terminal_2",
+        type: "terminal",
+        linkedTo: "room2_terminal",
+        requiresPart: "campaign_part_1",
+        position: [6, 0.3, 10],
+      },
+      // Checkpoint 20: purely visual clutter, positioned clearly off every
+      // required path -- the column-3 entry/part/terminal path, the
+      // column-6 Room-3 connector, and the row-6 vault corridor. No
+      // collision (see MapEntitySystem.createDecoration()).
+      { id: "campaign_decoration_1", type: "decoration", variant: "crate", position: [18, 0.3, 10] },
+      { id: "campaign_decoration_2", type: "decoration", variant: "debris", position: [16, 0.3, 18] },
+      { id: "campaign_decoration_3", type: "decoration", variant: "crate", position: [8, 0.3, 18] },
+      // Checkpoint 20 correction: one more decoration near the relocated
+      // power cable above, so the cable isn't the one obviously-different
+      // object sitting alone in that corner.
+      { id: "campaign_decoration_4", type: "decoration", variant: "crate", position: [18, 0.3, 16] },
+```
+
+Then find `campaign_terminal_1`'s entity:
+
+```typescript
+      {
+        id: "campaign_terminal_1",
+        type: "terminal",
+        linkedTo: "room1_terminal",
+        position: [10, 0.3, 24],
+      },
+```
+
+Replace with:
+
+```typescript
+      // Checkpoint 20 correction: rotationY: 180 is a FIRST GUESS, not yet
+      // visually confirmed in-browser -- this entity sits close to Room
+      // 1's south wall, and createComputerMesh()'s screen/keyboard
+      // protrude toward local +Z by default, which (unrotated) would face
+      // that nearby wall instead of the room interior. Task 9 confirms or
+      // corrects this value with the human partner before the checkpoint
+      // is finalized.
+      {
+        id: "campaign_terminal_1",
+        type: "terminal",
+        linkedTo: "room1_terminal",
+        rotationY: 180,
+        position: [10, 0.3, 24],
+      },
+```
+
+- [ ] **Step 2: Verify the build is clean**
+
+Run: `npx tsc --noEmit`
+Expected: zero errors.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/content/maps.ts
+git commit -m "$(cat <<'EOF'
+Checkpoint 20 correction task 8: relocate power cable, add clutter,
+first-guess campaign_terminal_1's rotation
+
+campaign_part_1 moves from the entry/terminal column to Room 2's far
+southeast corner, diagonally opposite the terminal, so it's no longer
+trivially found on the obvious path. One more decoration added near
+its new position. campaign_terminal_1 gets a first-guess rotationY:
+180 (not yet visually confirmed -- see Task 9).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 9: Interactive rotation verification (controller-executed with human partner)
+
+**Files:** possibly `src/content/maps.ts` (direct controller edits, no subagent dispatch — this is a fast iterate-and-confirm loop, not a reviewable unit of work).
+
+- [ ] **Step 1: Start (or reuse) the dev server and check `campaign_terminal_1`'s facing**
+
+Start a fresh Campaign run. Look at `campaign_terminal_1` from where the player would naturally stand/approach after spawning. Confirm the screen+keyboard protrusion faces into the room, not into/toward the wall behind it.
+
+- If `rotationY: 180` looks correct: done, no further change needed.
+- If it still faces the wall, or now faces a different wrong direction: the controller directly edits `campaign_terminal_1`'s `rotationY` value in `src/content/maps.ts` (try `0` if 180 overshot back to the original wrong facing, or `90`/`-90` if the geometry's "front" turns out to be a side rather than the exact opposite of the default) and asks the human partner to check again. Repeat until confirmed correct. Commit the final correct value with a short message once confirmed (e.g. `git commit -am "Checkpoint 20 correction: confirm campaign_terminal_1's rotationY"`).
+
+- [ ] **Step 2: Check `campaign_terminal_2`'s facing**
+
+Confirm `campaign_terminal_2` (which received no `rotationY` this pass, defaulting to `0`) still faces a sensible direction into Room 2. If it looks wrong, add a `rotationY` value the same way as Step 1 and confirm.
+
+- [ ] **Step 3: Confirm rotation survives both mesh-rebuild paths**
+
+With Room 2's terminal powered on (cable collected, terminal interacted with once), die/respawn, then power it on again. Confirm the facing is identical at every stage (initial build → power-on swap → run-reset revert-to-off → power-on swap again) — it must never visually snap to a different rotation at any point in this cycle.
+
+---
+
+### Task 10: Full manual verification (controller-executed, not a subagent)
 
 **Files:** none (verification only).
 
-This task requires live browser interaction and judgment a subagent cannot reliably perform — executed by the session controller together with the human partner.
+This task requires live browser interaction and judgment a subagent cannot reliably perform — executed by the session controller together with the human partner. It supersedes the original Task 7 checklist (interrupted mid-flight by the mid-checkpoint correction above, once its first pass found the terminal-facing and cable-placement issues) — everything from the original Task 7 is re-covered here, alongside the correction's own checks (folded into Steps 5 and new Steps 10-11 below).
 
 - [ ] **Step 1: Start the dev server**
 
@@ -1662,9 +1926,9 @@ In a Campaign run, before collecting the power cable, interact with `campaign_te
 
 With points below a wall-buy's cost (or a paid button's cost), attempt the purchase/open. Confirm: an on-screen message with the correct numbers appears (e.g. "Not enough points (need 1200, have 340)"), auto-hides after ~2.5s, and the console still also logs the rejection.
 
-- [ ] **Step 5: Verify Room 1's terminal renders via the new computer mesh**
+- [ ] **Step 5: Verify Room 1's terminal renders via the new computer mesh, correctly facing the room**
 
-Look at `campaign_terminal_1` from the start of a Campaign run. Confirm: it's a body/screen/keyboard shape (not a plain box), and the screen shows the "on" (green text) texture immediately, since Room 1's terminal is never gated.
+Look at `campaign_terminal_1` from the start of a Campaign run. Confirm: it's a body/screen/keyboard shape (not a plain box), the screen shows the "on" (green text) texture immediately (Room 1's terminal is never gated), AND — per the correction above — its screen+keyboard protrusion faces into the room/toward the player, not toward the wall behind it. If Task 9's rotation value was already confirmed correct, this should already pass; if not, resolve it here before continuing.
 
 - [ ] **Step 6: Verify Room 2's terminal power-on swap**
 
@@ -1682,9 +1946,17 @@ After powering on `campaign_terminal_2` in one run, die/respawn (or start a new 
 
 Reload the page. Play Zombie Survival and Shooting Range on both `test-grid` and `corridors` — confirm every prior checkpoint's behavior (wall-buys, buttons, pickups, rounds, HUD) is unaffected, and confirm their interact prompts now also show contextual text without looking broken (e.g. no literal "undefined" or missing text anywhere).
 
+- [ ] **Step 10: Verify the relocated power cable**
+
+Confirm `campaign_part_1` is now in Room 2's far corner (not on the obvious entry-to-terminal path) and requires actually walking around/exploring to find — not visible or obviously reachable immediately on entering Room 2.
+
+- [ ] **Step 11: Verify no other entity's facing changed**
+
+Spot-check a door, button, pickup, wall-buy, password lock, and decoration on any map — confirm none of them visually rotated or changed appearance (rotation was wired only into `createTerminal()` this pass).
+
 ---
 
-### Task 8: Update CLAUDE.md and commit
+### Task 11: Update CLAUDE.md and commit
 
 **Files:**
 - Modify: `CLAUDE.md`
@@ -1729,7 +2001,7 @@ Reload the page. Play Zombie Survival and Shooting Range on both `test-grid` and
 ```
 →
 ```
-    MapEntitySystem.ts          [6, spawns door/button/pickup/wall_buy meshes from MapDef.entities; onDoorStateChanged callback added at 8.5; checkpoint-10 test_terminal scaffolding removed and replaced by createWallBuy() at 11; createButton() gains an optional per-button cost at 12; createTerminal()/createPasswordLock() added at 17, taking two new injected UI-trigger callbacks (openTerminal/openPasswordLock) so this core/ file never imports ui/Terminal.ts or ui/PasswordLock.ts directly; 19 adds createComputerPart(), a requiresPart gate on createTerminal(), and a secretField branch on createPasswordLock() (password/vaultPin/username, plus a getVaultPin constructor param and a promptLabel argument threaded through openPasswordLock) — a brief same-checkpoint intermediate design (a checksVaultPin boolean, plus a getDoorMesh(id) method for opening a button/lock-less door) was corrected before shipping, see the decisions log; 20 adds userData.interactPrompt to every create*() method, gameState.showFeedback() calls at every rejection site, createDecoration() for the new "decoration" entity type, and retrofits createTerminal() onto createComputerMesh() with an interact-time (not pickup-time) power-on swap]
+    MapEntitySystem.ts          [6, spawns door/button/pickup/wall_buy meshes from MapDef.entities; onDoorStateChanged callback added at 8.5; checkpoint-10 test_terminal scaffolding removed and replaced by createWallBuy() at 11; createButton() gains an optional per-button cost at 12; createTerminal()/createPasswordLock() added at 17, taking two new injected UI-trigger callbacks (openTerminal/openPasswordLock) so this core/ file never imports ui/Terminal.ts or ui/PasswordLock.ts directly; 19 adds createComputerPart(), a requiresPart gate on createTerminal(), and a secretField branch on createPasswordLock() (password/vaultPin/username, plus a getVaultPin constructor param and a promptLabel argument threaded through openPasswordLock) — a brief same-checkpoint intermediate design (a checksVaultPin boolean, plus a getDoorMesh(id) method for opening a button/lock-less door) was corrected before shipping, see the decisions log; 20 adds userData.interactPrompt to every create*() method, gameState.showFeedback() calls at every rejection site, createDecoration() for the new "decoration" entity type, and retrofits createTerminal() onto createComputerMesh() with an interact-time (not pickup-time) power-on swap; 20's own mid-checkpoint correction applies entity.rotationY at all three of createTerminal()'s mesh-rebuild call sites]
 ```
 
 `src/ui/HUD.ts` — find its checkpoint-10 annotation (the last bracketed note in its multi-line entry) and append a new bracket:
@@ -1750,7 +2022,7 @@ Reload the page. Play Zombie Survival and Shooting Range on both `test-grid` and
 ```
 →
 ```
-    maps.ts                       [1, populated at 5; name field + second map ("corridors") added at 9.5; checkpoint-10 test_terminal scaffolding removed and replaced with one wall_buy entity per map at 11; corridors gains a paid door/vault room at 12; third map ("campaign_room1") added at 17, the first to set supportedModes; 19 extends campaign_room1 (not a new map) with Room 2 (vault side-path + part/terminal puzzle) and an empty Room 3, whose door is gated by a real password_lock (corrected same checkpoint) rather than opening from a terminal command; 20 adds three "decoration" clutter entities to Room 2, no grid/mechanics changes]
+    maps.ts                       [1, populated at 5; name field + second map ("corridors") added at 9.5; checkpoint-10 test_terminal scaffolding removed and replaced with one wall_buy entity per map at 11; corridors gains a paid door/vault room at 12; third map ("campaign_room1") added at 17, the first to set supportedModes; 19 extends campaign_room1 (not a new map) with Room 2 (vault side-path + part/terminal puzzle) and an empty Room 3, whose door is gated by a real password_lock (corrected same checkpoint) rather than opening from a terminal command; 20 adds four "decoration" clutter entities to Room 2 and sets campaign_terminal_1's rotationY, no grid/mechanics changes — 20's own mid-checkpoint correction also relocates campaign_part_1 from the entry/terminal column to Room 2's far corner]
 ```
 
 `src/types/index.ts` — find the checkpoint-19 annotation and append:
@@ -1760,7 +2032,7 @@ Reload the page. Play Zombie Survival and Shooting Range on both `test-grid` and
 ```
 →
 ```
-    index.ts                      [1; MapEntity gains "terminal"/"password_lock" types + terminalId at 17; TerminalFile/TerminalDirectory/TerminalDef interfaces added at 17; MapDef.supportedModes added at 17; 19 adds "computer_part", MapEntity.requiresPart, MapEntity.secretField ("password"/"vaultPin"/"username", a corrected-same-checkpoint replacement for an original checksVaultPin boolean) + MapEntity.promptLabel, TerminalDef.password becomes optional, and TerminalDef gains username + unlockedCommands; 20 adds "decoration" + MapEntity.variant, and GameState gains interactPromptText/feedbackMessage/showFeedback()]
+    index.ts                      [1; MapEntity gains "terminal"/"password_lock" types + terminalId at 17; TerminalFile/TerminalDirectory/TerminalDef interfaces added at 17; MapDef.supportedModes added at 17; 19 adds "computer_part", MapEntity.requiresPart, MapEntity.secretField ("password"/"vaultPin"/"username", a corrected-same-checkpoint replacement for an original checksVaultPin boolean) + MapEntity.promptLabel, TerminalDef.password becomes optional, and TerminalDef gains username + unlockedCommands; 20 adds "decoration" + MapEntity.variant, and GameState gains interactPromptText/feedbackMessage/showFeedback() — 20's own mid-checkpoint correction adds MapEntity.rotationY (degrees, terminal-only consumer so far)]
 ```
 
 - [ ] **Step 2: Update the Checkpoints list**
@@ -1768,7 +2040,7 @@ Reload the page. Play Zombie Survival and Shooting Range on both `test-grid` and
 Add a new line immediately after checkpoint 19's line:
 
 ```
-20. Contextual interact prompts, on-screen feedback, Room 2 visual pass — GameState.interactPromptText (written every frame by InteractSystem from the looked-at entity's own userData.interactPrompt) replaces HUD's hardcoded "Press E to interact"; GameState.feedbackMessage/showFeedback() surfaces wall-buy/paid-door/gated-terminal rejections on screen (auto-cleared by HUD via the existing Countdown utility) instead of console.log-only; a new core/utils/ComputerMesh.ts factory (procedural body+screen+keyboard, screen textured via a generated CanvasTexture) replaces Room 2's terminal placeholder box, swapping from "off" to "on" the first time the player interacts with it after the power cable has been collected (not at pickup time); Room 2 gains a few purely-visual, non-collidable "decoration" clutter entities
+20. Contextual interact prompts, on-screen feedback, Room 2 visual pass — GameState.interactPromptText (written every frame by InteractSystem from the looked-at entity's own userData.interactPrompt) replaces HUD's hardcoded "Press E to interact"; GameState.feedbackMessage/showFeedback() surfaces wall-buy/paid-door/gated-terminal rejections on screen (auto-cleared by HUD via the existing Countdown utility) instead of console.log-only; a new core/utils/ComputerMesh.ts factory (procedural body+screen+keyboard, screen textured via a generated CanvasTexture) replaces Room 2's terminal placeholder box, swapping from "off" to "on" the first time the player interacts with it after the power cable has been collected (not at pickup time); Room 2 gains a few purely-visual, non-collidable "decoration" clutter entities — a same-checkpoint correction adds a generic MapEntity.rotationY (degrees) field, applied to fix campaign_terminal_1's mesh facing the wall instead of the room, and relocates the power cable off its trivially-findable straight-line path to Room 2's far corner
 ```
 
 - [ ] **Step 3: Update "Current status"**
@@ -1779,8 +2051,9 @@ Change the opening sentence from `Checkpoint 19 complete.` to `Checkpoint 20 com
 - Which `create*()` methods now set `interactPrompt` and with what text (briefly list door-button free/paid, pickup, wall-buy, terminal, password-lock, power-cable), and that the defensive "Press E to interact" fallback in `InteractSystem` is confirmed to never actually trigger, since every entity type sets one.
 - `gameState.showFeedback()` and the three call sites that now use it (wall-buy rejection, paid-button rejection, gated-terminal attempt) alongside their pre-existing `console.log` calls, and `HUD.updateFeedbackMessage()`'s Countdown-based auto-clear (2.5s), including the "compare against the previously-rendered message to detect a new one" mechanism and that an identical repeated message does not restart the timer.
 - `core/utils/ComputerMesh.ts`'s `createComputerMesh()`/`createScreenTexture()`, the `COMPUTER_BODY_NAME`-named-child pattern and why it exists (non-recursive raycasting can't hit a `THREE.Group` directly), and `createTerminal()`'s retrofit — Room 1's terminal always powered, Room 2's terminal starting "off" and swapping to "on" (same position, once) on the first interact after the gate passes, plus the `RunManager`-registered resettable that reverts a powered-on terminal on a new run.
-- Room 2's three new `"decoration"` entities and the deliberate no-collision/no-interaction simplification.
-- A "Verified in-browser" sentence summarizing what Task 7's manual verification actually confirmed — write this only after Task 7 has been completed and confirmed by the user, not from the plan's expected behavior alone.
+- Room 2's `"decoration"` entities and the deliberate no-collision/no-interaction simplification.
+- **A dedicated paragraph on the mid-checkpoint correction**: manual verification of the first pass found `campaign_terminal_1`'s mesh visually facing the wall behind it instead of into the room, and `campaign_part_1` (the power cable) sitting directly on the obvious straight-line path between the entry and the terminal, trivially found without exploring. State plainly what was added to fix these: a generic `MapEntity.rotationY?: number` field (degrees, defaulting to 0), wired into all three of `createTerminal()`'s mesh-rebuild call sites (initial build, power-on swap, run-reset revert-to-off) so a terminal's facing survives every rebuild identically; and why rotation was deliberately NOT wired into any other `create*()` method (every other entity's geometry is a horizontally symmetric cube, so it would have no visible effect yet). State the confirmed-correct `rotationY` value(s) actually used (from Task 9's in-browser verification, not the first-guess value alone if it changed) and the cable's new position (Room 2's far corner, diagonally opposite the terminal), plus the one additional decoration added near it.
+- A "Verified in-browser" sentence summarizing what Task 10's manual verification actually confirmed, including the correction's own checks (terminal facing, cable relocation, rotation surviving both mesh-rebuild paths) — write this only after Task 10 has been completed and confirmed by the user, not from the plan's expected behavior alone.
 
 - [ ] **Step 4: Add decisions log entries**
 
@@ -1792,6 +2065,8 @@ Append after the last existing decisions-log line, before `## Future mechanics`:
 - `core/utils/ComputerMesh.ts`'s `createComputerMesh()` (checkpoint 20) returns a `THREE.Group`, but `MapEntitySystem.createTerminal()` registers only its named `COMPUTER_BODY_NAME` child mesh with `RaycastRegistry`, not the Group itself — `core/utils/Raycast.ts`'s `cast()` calls `intersectObjects(targets, false)` (non-recursive), and a `THREE.Group` has no geometry of its own, so it can never be hit directly regardless of what children it has. Every other entity type in this codebase already follows the "one Mesh carries `userData.interactable`/`onInteract`/`interactPrompt` and is the thing registered" shape; the named-child lookup (`group.getObjectByName(COMPUTER_BODY_NAME)`) is what lets a multi-mesh visual (body + screen + keyboard) keep following that same shape without changing `Raycast.ts`'s recursion setting globally, which would have touched every other raycasting system in the game (`WeaponSystem`'s fire, `EnemyAI`'s line-of-sight, `HUD`'s occlusion check) for a change only this one entity type needed.
 - The Room 2 terminal's power-on swap happens on the first *interact* after the gate passes, not at the moment the power cable is *picked up* (checkpoint 20) — deliberately, per the original request: collecting the cable only satisfies the existing (checkpoint-19) gate check inside `createTerminal()`'s `onInteract`, it does not itself trigger any visual change. This means a player can collect the cable and walk away without the terminal ever visually changing, and only sees it swap to "on" the moment they actually interact with it again. The swap itself is tracked by three `let`-bound closure variables local to `createTerminal()` (`computerGroup`, `bodyMesh`, `poweredOn`) rather than a class field or a cross-entity lookup map — `createTerminal()` already holds the part's mesh reference for the gate check, so no new lookup mechanism was needed. A `RunManager`-registered resettable (only for terminals with `requiresPart` set) reverts a powered-on terminal's mesh back to `createComputerMesh(false)` on a new run, mirroring `createComputerPart()`'s own existing resettable for the cable itself — without this, a new run would restore the cable (making the gate check fail again) while the terminal kept visually showing "on" from the previous run, a visible contradiction between what the gate check says and what the player sees.
 - Room 2's `"decoration"` entities (checkpoint 20) are deliberately given no collision box, no `RaycastRegistry` registration, and no `userData.interactable` — the player walks straight through them for free, since nothing in `PlayerController`'s manual AABB collision or any raycasting system ever receives them. This is an intentional simplification for this checkpoint's scope (visual clutter, not physical obstacles), not an oversight — flagged here explicitly so it isn't mistaken for one later. A future checkpoint wanting solid decorations would need to opt specific `"decoration"` entities into `computeCollisionBox()` + `PlayerController.setWallBoxes()`/`setDoors()`-style registration, which nothing here currently does.
+- `MapEntity.rotationY` (checkpoint 20, mid-checkpoint correction) is degrees, not radians, deliberately — every other numeric field a map author hand-edits in `content/maps.ts` (`position`, `cost`) is already a plain human-scale number, and radians would be the one field breaking that pattern for no benefit; `createTerminal()` converts via `THREE.MathUtils.degToRad()` at the point of use, so the stored content data stays the friendly unit. It's applied at all three of `createTerminal()`'s `computerGroup.position.set(...)` call sites (initial build, power-on swap, run-reset revert-to-off) — missing even one would make the mesh visually snap to its default (unrotated) facing the moment that particular rebuild path runs, which would have been a confusing, hard-to-reproduce bug (only visible after collecting the power cable, or only after a death/respawn cycle) rather than an immediately obvious one. Rotation was deliberately not wired into `createDoor()`/`createButton()`/`createPickup()`/`createWallBuy()`/`createPasswordLock()`/`createDecoration()` this pass, even though the field itself is generic and available to any entity type — every one of those meshes is a horizontally symmetric cube (equal width/depth), so a Y-rotation would have zero visible effect on any of them today; wiring it in now would be unused, unverifiable code. This is the same "minimal concrete mechanism over speculative generalization" precedent already established at checkpoints 16/17/19 (`assertRangedWeapon()`/`assertMeleeWeapon()`, `Weapon.meleeRange`, `MapEntity.secretField`) — the data field is generic, only the consumption is scoped to what actually needs it today.
+- `campaign_part_1` (the power cable, checkpoint 20 mid-checkpoint correction) moved from the same column as the entry gap and `campaign_terminal_2` (where it was found trivially, on the direct walking path) to Room 2's far corner, diagonally opposite the terminal — a deliberate difficulty/exploration change: the original placement made the "puzzle" of finding the part effectively free, since walking toward the terminal (the required destination either way) already passed directly over it.
 ```
 
 - [ ] **Step 5: Add future-mechanics entries**
@@ -1817,6 +2092,7 @@ Read the entire CLAUDE.md document (not just the sections edited above) and spec
 - Any sentence describing wall-buy/paid-door/gated-terminal rejections as "`console.log`-only" (the checkpoint-11 future-mechanics entry "HUD purchase feedback" specifically predicted this being built — it should now be marked superseded, not left claiming the gap is still open).
 - Any sentence describing `MapEntitySystem.createTerminal()` as building a plain box mesh.
 - Any sentence describing `HUD.update()` as taking no parameters.
+- Any sentence describing `campaign_part_1` as sitting on the same column as the entry gap/terminal, or as trivially found on the direct path.
 - Any other claim this checkpoint's changes would now contradict.
 
 If you find staleness, fix it using the established `**Superseded at checkpoint N** (was: "...")` convention for decisions-log/future-mechanics entries, or an inline parenthetical for "Current status" prose. Pay particular attention to the checkpoint-11 future-mechanics entry "HUD purchase feedback" (`— worth adding once the HUD has a natural place for transient messages; not designed yet.`), since this checkpoint is exactly that follow-through and the entry should be marked superseded, not left as an open gap. If you find nothing beyond what Steps 1-5 already added, say so explicitly in your commit's task report.
@@ -1851,6 +2127,13 @@ terminal on a new run, mirroring the cable's own existing reset.
 Room 2 also gains a few purely-visual "decoration" clutter entities
 (new MapEntity type) -- no collision, no interaction, deliberately.
 
+A same-checkpoint correction, applied after manual verification of the
+above, adds a generic MapEntity.rotationY (degrees) field -- wired
+into all three of createTerminal()'s mesh-rebuild call sites -- to
+fix campaign_terminal_1's mesh facing the wall instead of the room,
+and relocates the power cable off its trivially-findable straight-line
+path to Room 2's far corner, plus one more decoration near it.
+
 Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
 EOF
 )"
@@ -1859,7 +2142,7 @@ EOF
 - [ ] **Step 9: Verify the commit**
 
 Run: `git status` and `git log -1 --stat`
-Expected: working tree clean; the commit touches `CLAUDE.md` (plus this plan doc, if not already committed) — `src/state/GameState.ts`, `src/types/index.ts`, `src/core/utils/ComputerMesh.ts`, `src/core/MapEntitySystem.ts`, `src/core/InteractSystem.ts`, `src/ui/HUD.ts`, `src/main.ts`, and `src/content/maps.ts` should all show no changes from this task, since they were already committed by Tasks 1-6.
+Expected: working tree clean; the commit touches `CLAUDE.md` (plus this plan doc, if not already committed) — `src/state/GameState.ts`, `src/types/index.ts`, `src/core/utils/ComputerMesh.ts`, `src/core/MapEntitySystem.ts`, `src/core/InteractSystem.ts`, `src/ui/HUD.ts`, `src/main.ts`, and `src/content/maps.ts` should all show no changes from this task, since they were already committed by Tasks 1-6 and 7-9 (the correction).
 
 ---
 
