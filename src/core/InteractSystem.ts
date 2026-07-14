@@ -20,17 +20,36 @@ export class InteractSystem {
     window.addEventListener("keydown", this.handleKeyDown);
   }
 
+  // Checkpoint 20: also writes the looked-at interactable's own
+  // userData.interactPrompt into gameState.interactPromptText each frame
+  // (null when not looking at one) -- ui/HUD.ts reads this instead of a
+  // hardcoded generic string, matching this project's "HUD reads only
+  // GameState" rule. Falls back to a generic "Press E to interact" string
+  // if userData.interactable is true but userData.interactPrompt was
+  // somehow left unset -- defensive, shouldn't normally trigger now that
+  // every MapEntitySystem.create*() method sets one.
   update(): void {
-    this.gameState.canInteract = !this.gameState.paused && this.isLookingAtInteractable();
-  }
+    if (this.gameState.paused) {
+      this.gameState.canInteract = false;
+      this.gameState.interactPromptText = null;
+      return;
+    }
 
-  isLookingAtInteractable(): boolean {
     const hit = this.raycast.fromCamera(
       this.camera,
       this.raycastRegistry.getAll(),
       INTERACT_DISTANCE,
     );
-    return hit !== null && hit.object.userData.interactable === true;
+
+    if (hit === null || hit.object.userData.interactable !== true) {
+      this.gameState.canInteract = false;
+      this.gameState.interactPromptText = null;
+      return;
+    }
+
+    this.gameState.canInteract = true;
+    const prompt = hit.object.userData.interactPrompt as string | undefined;
+    this.gameState.interactPromptText = prompt ?? "Press E to interact";
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
