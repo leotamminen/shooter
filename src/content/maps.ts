@@ -177,6 +177,11 @@ export const MAPS: MapDef[] = [
       // The terminal sits at the far (north) end of the same column as
       // Room 1's entry gap (row10/col3), so walking straight in from Room
       // 1 leads directly to it, passing the part along the way.
+      // campaign_part_1's position (col 3 / row 7) is deliberately kept as
+      // the same column as both the entry gap (row 10) and the terminal
+      // (row 5) -- checkpoint 20 confirmed this already satisfies "a
+      // corner of Room 2" loosely (west portion of the room, not center)
+      // without breaking the straight-path design documented above.
       { id: "campaign_part_1", type: "computer_part", position: [6, 0.3, 14] },
       {
         id: "campaign_terminal_2",
@@ -185,6 +190,13 @@ export const MAPS: MapDef[] = [
         requiresPart: "campaign_part_1",
         position: [6, 0.3, 10],
       },
+      // Checkpoint 20: purely visual clutter, positioned clearly off every
+      // required path -- the column-3 entry/part/terminal path, the
+      // column-6 Room-3 connector, and the row-6 vault corridor. No
+      // collision (see MapEntitySystem.createDecoration()).
+      { id: "campaign_decoration_1", type: "decoration", variant: "crate", position: [18, 0.3, 10] },
+      { id: "campaign_decoration_2", type: "decoration", variant: "debris", position: [16, 0.3, 18] },
+      { id: "campaign_decoration_3", type: "decoration", variant: "crate", position: [8, 0.3, 18] },
       // Room 2's optional vault side-path: a password_lock checking
       // Campaign's live vault pin (not a terminal's fixed password),
       // sitting just outside the vault's own doorway so it's never trapped
