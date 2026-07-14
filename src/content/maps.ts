@@ -159,10 +159,18 @@ export const MAPS: MapDef[] = [
     ],
     entities: [
       { id: "campaign_spawn_1", type: "spawn", position: [2, 0, 24] },
+      // Checkpoint 20 correction: rotationY: 180 is a FIRST GUESS, not yet
+      // visually confirmed in-browser -- this entity sits close to Room
+      // 1's south wall, and createComputerMesh()'s screen/keyboard
+      // protrude toward local +Z by default, which (unrotated) would face
+      // that nearby wall instead of the room interior. Task 9 confirms or
+      // corrects this value with the human partner before the checkpoint
+      // is finalized.
       {
         id: "campaign_terminal_1",
         type: "terminal",
         linkedTo: "room1_terminal",
+        rotationY: 180,
         position: [10, 0.3, 24],
       },
       { id: "campaign_door_1", type: "door", position: [6, 1.5, 20] },
@@ -173,16 +181,14 @@ export const MAPS: MapDef[] = [
         terminalId: "room1_terminal",
         position: [6, 0.3, 22],
       },
-      // Room 2's required path: the power cable and the terminal it feeds.
-      // The terminal sits at the far (north) end of the same column as
-      // Room 1's entry gap (row10/col3), so walking straight in from Room
-      // 1 leads directly to it, passing the part along the way.
-      // campaign_part_1's position (col 3 / row 7) is deliberately kept as
-      // the same column as both the entry gap (row 10) and the terminal
-      // (row 5) -- checkpoint 20 confirmed this already satisfies "a
-      // corner of Room 2" loosely (west portion of the room, not center)
-      // without breaking the straight-path design documented above.
-      { id: "campaign_part_1", type: "computer_part", position: [6, 0.3, 14] },
+      // Checkpoint 20 correction: campaign_part_1 moved from the same
+      // column as the entry/terminal (col 3, directly on the obvious
+      // straight-line path) to Room 2's far southeast corner (col 10 /
+      // row 9) -- the corner diagonally farthest from campaign_terminal_2
+      // (col 3 / row 5), forcing the player to actually search rather than
+      // trivially find it on the way to the terminal. Confirmed clear of
+      // every wall, decoration, and the row-6 vault corridor.
+      { id: "campaign_part_1", type: "computer_part", position: [20, 0.3, 18] },
       {
         id: "campaign_terminal_2",
         type: "terminal",
@@ -197,6 +203,10 @@ export const MAPS: MapDef[] = [
       { id: "campaign_decoration_1", type: "decoration", variant: "crate", position: [18, 0.3, 10] },
       { id: "campaign_decoration_2", type: "decoration", variant: "debris", position: [16, 0.3, 18] },
       { id: "campaign_decoration_3", type: "decoration", variant: "crate", position: [8, 0.3, 18] },
+      // Checkpoint 20 correction: one more decoration near the relocated
+      // power cable above, so the cable isn't the one obviously-different
+      // object sitting alone in that corner.
+      { id: "campaign_decoration_4", type: "decoration", variant: "crate", position: [18, 0.3, 16] },
       // Room 2's optional vault side-path: a password_lock checking
       // Campaign's live vault pin (not a terminal's fixed password),
       // sitting just outside the vault's own doorway so it's never trapped
