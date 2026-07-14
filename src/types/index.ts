@@ -39,7 +39,8 @@ export interface MapEntity {
     | "wall_buy"
     | "terminal"
     | "password_lock"
-    | "computer_part";
+    | "computer_part"
+    | "decoration";
   position: [number, number, number];
   linkedTo?: string; // a related entity's id (e.g. button -> door), or for
   // "wall_buy", a Weapon id in content/weapons.ts, or for "terminal", a
@@ -74,6 +75,10 @@ export interface MapEntity {
   // same checkpoint): the overlay's prompt text. Defaults to
   // ui/PasswordLock.ts's own generic label when absent -- Room 1's and the
   // vault's locks don't set this.
+  variant?: "crate" | "debris"; // "decoration" only (checkpoint 20): a
+  // purely cosmetic size/color hint -- no gameplay meaning. Absent defaults
+  // to "crate". Kept deliberately minimal (two variants, one field) rather
+  // than a richer theming system, since decorations are inert clutter.
 }
 
 export interface MapDef {
