@@ -75,18 +75,31 @@ export interface MapEntity {
   // same checkpoint): the overlay's prompt text. Defaults to
   // ui/PasswordLock.ts's own generic label when absent -- Room 1's and the
   // vault's locks don't set this.
-  variant?: "crate" | "debris"; // "decoration" only (checkpoint 20): a
-  // purely cosmetic size/color hint -- no gameplay meaning. Absent defaults
-  // to "crate". Kept deliberately minimal (two variants, one field) rather
-  // than a richer theming system, since decorations are inert clutter.
+  variant?: "crate" | "debris" | "desk" | "chair" | "outlet"; // "decoration"
+  // only (checkpoint 20, "desk"/"chair" added in the same checkpoint's
+  // addendum, "outlet" added by the boot-sequence follow-up): a cosmetic
+  // hint controlling which prop shape gets built -- "crate"/"debris"/
+  // "outlet" are a single sized/colored cube (outlet reuses
+  // PASSWORD_LOCK_SIZE for its dimensions rather than either decoration
+  // size), "desk"/"chair" are a small THREE.Group of several boxes (see
+  // MapEntitySystem.ts's createDeskDecoration()/createChairDecoration()).
+  // No gameplay meaning either way. Absent defaults to "crate".
   rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
   // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
   // hand-edited content file), defaulting to 0 (unchanged facing) when
-  // absent. Only createTerminal() currently reads this -- every other
-  // create*() method's geometry is a horizontally symmetric cube, so a
-  // Y-rotation would have zero visible effect on it today. The field
+  // absent. createTerminal() and, as of the checkpoint-20 addendum,
+  // createDeskDecoration()/createChairDecoration() read this -- every
+  // other create*() method's geometry is a horizontally symmetric cube, so
+  // a Y-rotation would have zero visible effect on it today. The field
   // itself is generic and available to any future entity type once its
   // geometry is genuinely asymmetric; see CLAUDE.md's decisions log.
+  outletPosition?: [number, number, number]; // "terminal" only, and only
+  // meaningful alongside requiresPart (checkpoint 20 boot-sequence
+  // follow-up): the world position of the wall outlet this terminal's
+  // connecting cable should route to once it powers on. Kept in sync by
+  // hand with the matching "outlet" decoration entity's own position --
+  // both are manually positioned in content/maps.ts, the same as
+  // everything else in this room right now.
 }
 
 export interface MapDef {

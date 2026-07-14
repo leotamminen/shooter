@@ -74,6 +74,15 @@ export function createComputerMesh(poweredOn: boolean): THREE.Group {
   return group;
 }
 
+// Local-space point where a power cable visually connects, on the body's
+// back face (opposite the screen, which faces local +Z) -- exported so
+// MapEntitySystem can transform it into world space via
+// computerGroup.localToWorld() and get the correct point regardless of
+// whatever rotationY the terminal entity has.
+export function getCableAnchorLocalPosition(): THREE.Vector3 {
+  return new THREE.Vector3(0, BODY_HEIGHT / 2, -BODY_DEPTH / 2);
+}
+
 // Drawn once onto an offscreen <canvas> (not redrawn per frame -- no
 // animation loop, kept cheap) -- dark and mostly blank when off, a dark
 // green-tinted background with a few lines of monospace-ish "code" marks

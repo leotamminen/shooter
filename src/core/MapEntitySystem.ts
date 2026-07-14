@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CELL_SIZE, WALL_HEIGHT } from "./MapLoader";
 import { computeCollisionBox } from "./utils/CollisionBox";
 import { findById } from "./utils/Lookup";
-import { createComputerMesh, COMPUTER_BODY_NAME } from "./utils/ComputerMesh";
+import { createComputerMesh, COMPUTER_BODY_NAME, getCableAnchorLocalPosition } from "./utils/ComputerMesh";
 import type { MapDef, MapEntity, Weapon, TerminalDef, TerminalDirectory } from "../types";
 import type { WeaponSystem } from "./WeaponSystem";
 import type { RunManager } from "./RunManager";
@@ -23,15 +23,92 @@ const WALL_BUY_SIZE = 0.5;
 const PASSWORD_LOCK_COLOR = 0x1a1a1a;
 const PASSWORD_LOCK_EMISSIVE = 0x000000;
 const PASSWORD_LOCK_SIZE = 0.3;
+// Boot-sequence follow-up: an independently-tunable constant even though
+// it starts similar to PASSWORD_LOCK_COLOR -- a wall outlet and a
+// password-lock panel are unrelated props that just happen to both be
+// dark, and tying them to the same constant would make future retuning of
+// one silently affect the other.
+const DECORATION_OUTLET_COLOR = 0x2a2a2a;
 const COMPUTER_PART_COLOR = 0x212427;
 const COMPUTER_PART_EMISSIVE = 0x000000;
-const COMPUTER_PART_SIZE = 0.35;
+// Power cable visual: a coiled cable + two plugs, replacing the plain box
+// this used to be. COMPUTER_PART_COLOR is already a near-black tone,
+// reused as-is for the coil's rubber-black; the plugs get their own
+// slightly-lighter dark-metal constant so the pieces still read as
+// distinct parts against each other. The coil itself is a swept tube
+// following a hand-generated spiral path (see createCoilPoints() below),
+// not a flat TorusGeometry ring -- a closed uniform loop read as a plain
+// donut shape, not a coiled cable with two ends for plugs to attach to.
+// All of these are first-guess values tuned by eye in-browser, not
+// measured against anything.
+const COMPUTER_PART_PLUG_COLOR = 0x4a4a4a;
+const COMPUTER_PART_PLUG_SIZE: [number, number, number] = [0.1, 0.04, 0.04];
+// Second pass: the gameplay camera looks down at the floor at a steep
+// angle, so the previous constant-radius/rising-Y version barely read as
+// anything but a single ring from that angle -- the Y variation it relied
+// on for a "coiled" look was nearly invisible from directly overhead. This
+// version varies radius (shrinking each turn, spiraling inward like a
+// garden hose rolled up on the ground) instead of height, which is the
+// axis a top-down camera actually sees clearly. totalRise is now barely
+// anything -- just enough that not every loop sits in the exact same
+// plane, not a real "coiled height" cue like before.
+const COMPUTER_PART_COIL_TURNS = 3.5;
+const COMPUTER_PART_COIL_POINTS_PER_TURN = 16;
+const COMPUTER_PART_COIL_START_RADIUS = 0.22;
+const COMPUTER_PART_COIL_END_RADIUS = 0.06;
+const COMPUTER_PART_COIL_BASE_Y = 0.03;
+const COMPUTER_PART_COIL_RISE = 0.015;
+const COMPUTER_PART_COIL_TUBE_RADIUS = 0.025;
+const COMPUTER_PART_COIL_TUBULAR_SEGMENTS = 128;
+const COMPUTER_PART_COIL_RADIAL_SEGMENTS = 8;
 const DECORATION_CRATE_COLOR = 0x6b4a2a;
 const DECORATION_CRATE_SIZE = 0.6;
 const DECORATION_DEBRIS_COLOR = 0x555555;
 const DECORATION_DEBRIS_SIZE = 0.35;
+// Checkpoint 20 addendum: desk/chair reuse the crate's wood tone rather than
+// introducing a new color constant -- plain furniture-grade wood fits both
+// just as well as a crate.
+const DECORATION_DESK_COLOR = DECORATION_CRATE_COLOR;
+const DECORATION_CHAIR_COLOR = DECORATION_CRATE_COLOR;
+// Desk geometry (checkpoint 20 addendum), relative to the desk group's own
+// local origin at floor level. campaign_terminal_2 sits at y = 1.1, so the
+// tabletop's top face is deliberately tuned to land exactly there (1.07 +
+// 0.06 / 2 = 1.10) -- see CLAUDE.md's checkpoint-20 decisions log.
+const DESK_TABLETOP_SIZE: [number, number, number] = [0.9, 0.06, 0.5];
+const DESK_TABLETOP_Y = 1.07;
+const DESK_LEG_SIZE: [number, number, number] = [0.04, 1.04, 0.04];
+const DESK_LEG_Y = 0.52;
+const DESK_LEG_OFFSETS: [number, number][] = [
+  [0.4, 0.2],
+  [0.4, -0.2],
+  [-0.4, 0.2],
+  [-0.4, -0.2],
+];
+// Chair geometry (checkpoint 20 addendum) -- a generic nearby seating prop,
+// not load-bearing for anything else, so no exact-height tuning like the
+// desk's.
+const CHAIR_SEAT_SIZE: [number, number, number] = [0.4, 0.05, 0.4];
+const CHAIR_SEAT_Y = 0.25;
+const CHAIR_BACKREST_SIZE: [number, number, number] = [0.4, 0.35, 0.05];
+const CHAIR_BACKREST_POSITION: [number, number, number] = [0, 0.45, -0.18];
+const CHAIR_LEG_SIZE: [number, number, number] = [0.04, 0.25, 0.04];
+const CHAIR_LEG_Y = 0.125;
+const CHAIR_LEG_OFFSETS: [number, number][] = [
+  [0.16, 0.16],
+  [0.16, -0.16],
+  [-0.16, 0.16],
+  [-0.16, -0.16],
+];
 const TERMINAL_INTERACT_PROMPT = "Press E to use terminal";
 const TERMINAL_GATED_MESSAGE = "The screen is dark. It needs power.";
+const TERMINAL_BOOTING_MESSAGE = "Booting...";
+const TERMINAL_BOOT_DELAY_MS = 1000;
+// Straight cable connecting a booted terminal to its wall outlet -- same
+// tube radius as the coiled power-cable pickup, so it visually reads as
+// the same cable, uncoiled.
+const TERMINAL_CABLE_TUBE_RADIUS = 0.025;
+const TERMINAL_CABLE_TUBULAR_SEGMENTS = 32;
+const TERMINAL_CABLE_RADIAL_SEGMENTS = 8;
 
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
@@ -81,7 +158,7 @@ export class MapEntitySystem {
     // (it briefly was, exposed via a getDoorMesh() method, both now
     // removed along with the mechanism that needed them).
     const doorMeshById = new Map<string, THREE.Mesh>();
-    const computerPartMeshById = new Map<string, THREE.Mesh>();
+    const computerPartMeshById = new Map<string, THREE.Group>();
 
     for (const entity of mapDef.entities) {
       if (entity.type === "door") {
@@ -254,35 +331,103 @@ export class MapEntitySystem {
     });
   }
 
+  // Traces a flat, inward-winding spiral (shrinking radius each turn, like
+  // a garden hose rolled up on the ground) rather than a flat closed loop
+  // or a constant-radius/rising-Y helix -- fed through
+  // CatmullRomCurve3/TubeGeometry in createComputerPart() below, so the
+  // coil has two distinguishable ends (one near the outer edge, one near
+  // the center) for the two plug meshes to sit at.
+  private createCoilPoints(): THREE.Vector3[] {
+    const points: THREE.Vector3[] = [];
+    const totalSteps = COMPUTER_PART_COIL_TURNS * COMPUTER_PART_COIL_POINTS_PER_TURN;
+
+    for (let i = 0; i <= totalSteps; i++) {
+      const t = i / totalSteps;
+      const angle = t * COMPUTER_PART_COIL_TURNS * Math.PI * 2;
+      const radius =
+        COMPUTER_PART_COIL_START_RADIUS +
+        (COMPUTER_PART_COIL_END_RADIUS - COMPUTER_PART_COIL_START_RADIUS) * t;
+      points.push(
+        new THREE.Vector3(
+          Math.cos(angle) * radius,
+          COMPUTER_PART_COIL_BASE_Y + t * COMPUTER_PART_COIL_RISE,
+          Math.sin(angle) * radius,
+        ),
+      );
+    }
+    return points;
+  }
+
+  // Power cable visual: a coiled cable (a swept tube along the spiral
+  // createCoilPoints() traces) + two plug boxes at its ends, grouped
+  // together the same procedural-boxes-and-primitives approach as
+  // ComputerMesh.ts. userData/raycast registration lives on the coil mesh
+  // specifically -- the one concrete mesh RaycastRegistry/InteractSystem
+  // target, mirroring how ComputerMesh.ts's named body mesh (not its
+  // group) carries those. Plugs are simple axis-aligned boxes positioned
+  // at the curve's two ends -- no tangent-based orientation matching,
+  // since the fixed rotation reads fine at this scale.
   private createComputerPart(
     entity: MapEntity,
     runManager: RunManager,
     raycastRegistry: RaycastRegistry,
-  ): THREE.Mesh {
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(COMPUTER_PART_SIZE, COMPUTER_PART_SIZE, COMPUTER_PART_SIZE),
+  ): THREE.Group {
+    const group = new THREE.Group();
+
+    const curve = new THREE.CatmullRomCurve3(this.createCoilPoints());
+    const coil = new THREE.Mesh(
+      new THREE.TubeGeometry(
+        curve,
+        COMPUTER_PART_COIL_TUBULAR_SEGMENTS,
+        COMPUTER_PART_COIL_TUBE_RADIUS,
+        COMPUTER_PART_COIL_RADIAL_SEGMENTS,
+        false,
+      ),
       new THREE.MeshStandardMaterial({
         color: COMPUTER_PART_COLOR,
         emissive: COMPUTER_PART_EMISSIVE,
       }),
     );
-    mesh.position.set(...entity.position);
-    mesh.userData.interactable = true;
-    mesh.userData.interactPrompt = "Press E to pick up power cable";
-    mesh.userData.onInteract = (): void => {
-      if (!mesh.visible) return; // idempotent: already collected
-      mesh.visible = false;
+    group.add(coil);
+
+    const startPlug = new THREE.Mesh(
+      new THREE.BoxGeometry(...COMPUTER_PART_PLUG_SIZE),
+      new THREE.MeshStandardMaterial({ color: COMPUTER_PART_PLUG_COLOR }),
+    );
+    startPlug.position.copy(curve.getPointAt(0));
+    group.add(startPlug);
+
+    const endPlug = new THREE.Mesh(
+      new THREE.BoxGeometry(...COMPUTER_PART_PLUG_SIZE),
+      new THREE.MeshStandardMaterial({ color: COMPUTER_PART_PLUG_COLOR }),
+    );
+    endPlug.position.copy(curve.getPointAt(1));
+    group.add(endPlug);
+
+    group.position.set(...entity.position);
+    coil.userData.interactable = true;
+    coil.userData.interactPrompt = "Press E to pick up power cable";
+    coil.userData.onInteract = (): void => {
+      if (!group.visible) return; // idempotent: already collected
+      group.visible = false;
+      // Raycast.ts's visibility filter checks the specific hit object's own
+      // .visible, not its ancestors' -- coil (not group) is the registered
+      // raycast target, so it needs its own flag cleared too, or it would
+      // stay hittable/interactable (and the HUD prompt would keep showing)
+      // even after the group is visually hidden.
+      coil.visible = false;
     };
 
-    this.group.add(mesh);
-    this.interactables.push(mesh);
-    raycastRegistry.register(mesh);
+    this.group.add(group);
+    this.interactables.push(coil);
+    raycastRegistry.register(coil);
 
     runManager.registerResettable(() => {
-      mesh.visible = true;
+      group.visible = true;
+      coil.visible = true;
     });
 
-    return mesh;
+    return group;
   }
 
   private createWallBuy(
@@ -352,7 +497,7 @@ export class MapEntitySystem {
     terminals: TerminalDef[],
     raycastRegistry: RaycastRegistry,
     openTerminal: (terminalDef: TerminalDef) => void,
-    computerPartMeshById: Map<string, THREE.Mesh>,
+    computerPartMeshById: Map<string, THREE.Group>,
     gameState: GameState,
     runManager: RunManager,
   ): void {
@@ -362,6 +507,19 @@ export class MapEntitySystem {
     const terminalDef = findById(terminals, entity.linkedTo);
 
     let poweredOn = entity.requiresPart === undefined;
+    // Boot-sequence follow-up: `booting` gates repeated E presses during the
+    // 1s delay (no message, just a silent no-op -- the "Booting..."
+    // feedback was already shown once, when the delay started).
+    // `bootTimeoutId` is what a mid-boot death/respawn cancels, so a stale
+    // callback can never fire into a freshly-reset run (see the resettable
+    // below). setTimeout, not a per-frame Countdown (see CLAUDE.md's
+    // decisions log for why): this delay has no per-frame visual (no
+    // progress bar, nothing ticking), so there's nothing for a
+    // per-frame-driven mechanism to buy here that a one-shot timer doesn't
+    // already give for free.
+    let booting = false;
+    let bootTimeoutId: ReturnType<typeof setTimeout> | undefined;
+    let cableMesh: THREE.Mesh | undefined;
     let computerGroup: THREE.Group;
     let bodyMesh: THREE.Mesh;
 
@@ -389,19 +547,39 @@ export class MapEntitySystem {
           return;
         }
 
-        // Gate just passed for the first time -- swap the mesh in place,
-        // once, at the same position. poweredOn guards this so later
-        // interacts with the same terminal never repeat the swap.
-        this.group.remove(computerGroup);
-        raycastRegistry.unregister(bodyMesh);
+        if (booting) return; // already booting -- ignore repeated E presses, no message
 
-        computerGroup = createComputerMesh(true);
-        computerGroup.position.set(...entity.position);
-        computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
-        this.group.add(computerGroup);
-        bodyMesh = attachBody(computerGroup);
+        booting = true;
+        gameState.showFeedback(TERMINAL_BOOTING_MESSAGE);
 
-        poweredOn = true;
+        bootTimeoutId = setTimeout(() => {
+          this.group.remove(computerGroup);
+          raycastRegistry.unregister(bodyMesh);
+
+          computerGroup = createComputerMesh(true);
+          computerGroup.position.set(...entity.position);
+          computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+          this.group.add(computerGroup);
+          bodyMesh = attachBody(computerGroup);
+
+          if (entity.outletPosition) {
+            // localToWorld() reads matrixWorld, which a just-constructed
+            // group has never had computed (that normally happens lazily
+            // during the next render) -- force it now so the anchor point
+            // is correct the instant this setTimeout callback runs,
+            // regardless of render timing.
+            computerGroup.updateMatrixWorld(true);
+            const anchorWorld = computerGroup.localToWorld(getCableAnchorLocalPosition());
+            cableMesh = this.createStraightCable(anchorWorld, new THREE.Vector3(...entity.outletPosition));
+            this.group.add(cableMesh);
+          }
+
+          poweredOn = true;
+          booting = false;
+          bootTimeoutId = undefined;
+        }, TERMINAL_BOOT_DELAY_MS);
+
+        return; // does NOT open the terminal on this press
       }
       openTerminal(terminalDef);
     };
@@ -414,10 +592,20 @@ export class MapEntitySystem {
 
     if (entity.requiresPart !== undefined) {
       runManager.registerResettable(() => {
+        if (bootTimeoutId !== undefined) {
+          clearTimeout(bootTimeoutId);
+          bootTimeoutId = undefined;
+        }
+        booting = false;
+
         if (!poweredOn) return; // already off, nothing to revert
 
         this.group.remove(computerGroup);
         raycastRegistry.unregister(bodyMesh);
+        if (cableMesh) {
+          this.group.remove(cableMesh);
+          cableMesh = undefined;
+        }
 
         computerGroup = createComputerMesh(false);
         computerGroup.position.set(...entity.position);
@@ -428,6 +616,30 @@ export class MapEntitySystem {
         poweredOn = false;
       });
     }
+  }
+
+  // Boot-sequence follow-up: a straight run from a booted terminal's
+  // cable-anchor point to its wall outlet, reusing the coiled power
+  // cable's own swept-tube technique (CatmullRomCurve3 -> TubeGeometry,
+  // same tube radius) so it reads as the same cable, just uncoiled. Two
+  // intermediate control points (rather than a straight two-point line)
+  // give the curve a gentle bend instead of a perfectly rigid rod: mid1
+  // rises to the outlet's height close to the terminal end, mid2 carries
+  // most of the horizontal travel -- both fractions (0.4/0.7) are
+  // first-guess values, tuned by eye in-browser, not measured against
+  // anything.
+  private createStraightCable(start: THREE.Vector3, end: THREE.Vector3): THREE.Mesh {
+    const mid1 = start.clone().lerp(new THREE.Vector3(start.x, end.y, start.z), 0.4);
+    const mid2 = start.clone().lerp(new THREE.Vector3(end.x, end.y, end.z), 0.7);
+    const curve = new THREE.CatmullRomCurve3([start, mid1, mid2, end]);
+    const geometry = new THREE.TubeGeometry(
+      curve,
+      TERMINAL_CABLE_TUBULAR_SEGMENTS,
+      TERMINAL_CABLE_TUBE_RADIUS,
+      TERMINAL_CABLE_RADIAL_SEGMENTS,
+      false,
+    );
+    return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: COMPUTER_PART_COLOR }));
   }
 
   // Checkpoint 17: mirrors createButton()'s shape closely, reusing the same
@@ -530,6 +742,29 @@ export class MapEntitySystem {
   // against them; an intentional simplification for this checkpoint, not
   // an oversight (see CLAUDE.md's checkpoint-20 decisions log).
   private createDecoration(entity: MapEntity): void {
+    if (entity.variant === "desk") {
+      this.createDeskDecoration(entity);
+      return;
+    }
+    if (entity.variant === "chair") {
+      this.createChairDecoration(entity);
+      return;
+    }
+    if (entity.variant === "outlet") {
+      // Present from the start of the run regardless of terminal/power
+      // state -- a single box like crate/debris, just reusing
+      // PASSWORD_LOCK_SIZE for its dimensions instead of either decoration
+      // size, since it's meant to read as a small wall-mounted panel, not
+      // a floor prop.
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(PASSWORD_LOCK_SIZE, PASSWORD_LOCK_SIZE, PASSWORD_LOCK_SIZE),
+        new THREE.MeshStandardMaterial({ color: DECORATION_OUTLET_COLOR }),
+      );
+      mesh.position.set(...entity.position);
+      this.group.add(mesh);
+      return;
+    }
+
     const isDebris = entity.variant === "debris";
     const size = isDebris ? DECORATION_DEBRIS_SIZE : DECORATION_CRATE_SIZE;
     const color = isDebris ? DECORATION_DEBRIS_COLOR : DECORATION_CRATE_COLOR;
@@ -540,5 +775,53 @@ export class MapEntitySystem {
     );
     mesh.position.set(...entity.position);
     this.group.add(mesh);
+  }
+
+  // Shared by createDeskDecoration()/createChairDecoration() below: adds one
+  // box, positioned relative to the parent group's own local origin, as a
+  // child of that group. The group itself (not its individual box children)
+  // is what entity.position/rotationY get applied to.
+  private addDecorationBox(
+    group: THREE.Group,
+    size: [number, number, number],
+    position: [number, number, number],
+    color: number,
+  ): void {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(...size),
+      new THREE.MeshStandardMaterial({ color }),
+    );
+    mesh.position.set(...position);
+    group.add(mesh);
+  }
+
+  // Checkpoint 20 addendum: a desk built to support campaign_terminal_2
+  // resting directly on top of it -- see DESK_TABLETOP_Y's comment above for
+  // the exact top-surface-at-y=1.1 math. Same rotationY handling as
+  // createTerminal(), so a desk can be turned to match whatever sits on it.
+  private createDeskDecoration(entity: MapEntity): void {
+    const group = new THREE.Group();
+    this.addDecorationBox(group, DESK_TABLETOP_SIZE, [0, DESK_TABLETOP_Y, 0], DECORATION_DESK_COLOR);
+    for (const [x, z] of DESK_LEG_OFFSETS) {
+      this.addDecorationBox(group, DESK_LEG_SIZE, [x, DESK_LEG_Y, z], DECORATION_DESK_COLOR);
+    }
+    group.position.set(...entity.position);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
+  }
+
+  // Checkpoint 20 addendum: a generic seating prop, no precise height
+  // requirement (unlike the desk above) -- just a nearby, reasonably-sized
+  // companion to a desk entity.
+  private createChairDecoration(entity: MapEntity): void {
+    const group = new THREE.Group();
+    this.addDecorationBox(group, CHAIR_SEAT_SIZE, [0, CHAIR_SEAT_Y, 0], DECORATION_CHAIR_COLOR);
+    this.addDecorationBox(group, CHAIR_BACKREST_SIZE, CHAIR_BACKREST_POSITION, DECORATION_CHAIR_COLOR);
+    for (const [x, z] of CHAIR_LEG_OFFSETS) {
+      this.addDecorationBox(group, CHAIR_LEG_SIZE, [x, CHAIR_LEG_Y, z], DECORATION_CHAIR_COLOR);
+    }
+    group.position.set(...entity.position);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
   }
 }

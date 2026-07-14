@@ -181,7 +181,7 @@ export const MAPS: MapDef[] = [
       // (col 3 / row 5), forcing the player to actually search rather than
       // trivially find it on the way to the terminal. Confirmed clear of
       // every wall, decoration, and the row-6 vault corridor.
-      { id: "campaign_part_1", type: "computer_part", position: [20, 0.2, 18] },
+      { id: "campaign_part_1", type: "computer_part", position: [20.3, 0, 18] },
       {
         id: "campaign_terminal_2",
         type: "terminal",
@@ -189,7 +189,29 @@ export const MAPS: MapDef[] = [
         requiresPart: "campaign_part_1",
         rotationY: 90,
         position: [1.4, 1.1, 13],
+        // Boot-sequence follow-up: matches campaign_outlet_1's own position
+        // below by hand -- the connecting cable that appears once this
+        // terminal finishes booting routes to this exact point.
+        outletPosition: [1.0, 0.6, 13],
       },
+      // Boot-sequence follow-up: the wall outlet campaign_terminal_2's
+      // outletPosition above targets. Sits on the same wall the terminal's
+      // back faces (rotationY 90 means the screen faces east/+X, so the
+      // back -- and this outlet -- are on the west wall behind it), partly
+      // embedded into the wall like this project's other wall-mounted
+      // panels (password locks, wall-buys). Present from the start of the
+      // run regardless of power state.
+      { id: "campaign_outlet_1", type: "decoration", variant: "outlet", position: [1.0, 0.6, 13] },
+      // Checkpoint 20 addendum: a desk for campaign_terminal_2 to rest on.
+      // Same (x, z) and rotationY as the terminal above, y = 0 (floor
+      // level) -- the desk's own geometry is tuned so its tabletop's top
+      // face lands exactly at y = 1.1, matching the terminal's position
+      // with no gap or clipping. The chair sits east of the desk, facing
+      // west (rotationY 270) toward the screen, which itself faces east
+      // (see createComputerMesh()'s local +Z protrusion, rotated 90
+      // degrees) -- the side a person would actually sit to use it.
+      { id: "campaign_desk_1", type: "decoration", variant: "desk", rotationY: 90, position: [1.4, 0, 13] },
+      { id: "campaign_chair_1", type: "decoration", variant: "chair", rotationY: 270, position: [2.4, 0, 13] },
       // Checkpoint 20: purely visual clutter, positioned clearly off every
       // required path -- the column-3 entry/part/terminal path, the
       // column-6 Room-3 connector, and the row-6 vault corridor. No
