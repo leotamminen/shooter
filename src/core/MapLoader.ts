@@ -31,7 +31,7 @@ export function loadMap(grid: number[][], raycastRegistry: RaycastRegistry): Loa
   group.add(floor);
 
   const wallGeometry = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
-  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+  const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xc6c58b });
 
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
