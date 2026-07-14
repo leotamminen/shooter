@@ -40,9 +40,10 @@ vault pin: {{VAULT_PIN}}`,
       ],
     },
   },
-  // room2_terminal (checkpoint 19): no password, no files -- its only
-  // purpose is the "whoami" command, watched for by main.ts's onCommand
-  // callback to open Room 3's door and advance Campaign to "complete".
+  // room2_terminal (checkpoint 19): no password, no files -- its username
+  // is revealed by the "whoami" command and checked by Room 3's real
+  // password_lock (campaign_lock_3, secretField: "username" in
+  // content/maps.ts), which is what actually opens the door.
   {
     id: "room2_terminal",
     username: "svc-maintenance",

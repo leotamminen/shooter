@@ -69,8 +69,8 @@ export class Campaign implements GameMode {
     this.stage = "power_terminal";
   }
 
-  // Called by main.ts's room2_terminal onCommand callback when "whoami"
-  // runs successfully.
+  // Called by main.ts's openPasswordLock callback when Room 3's identity
+  // lock (campaign_lock_3, secretField: "username") is solved.
   markComplete(): void {
     this.stage = "complete";
   }
