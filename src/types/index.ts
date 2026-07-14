@@ -79,6 +79,14 @@ export interface MapEntity {
   // purely cosmetic size/color hint -- no gameplay meaning. Absent defaults
   // to "crate". Kept deliberately minimal (two variants, one field) rather
   // than a richer theming system, since decorations are inert clutter.
+  rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
+  // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
+  // hand-edited content file), defaulting to 0 (unchanged facing) when
+  // absent. Only createTerminal() currently reads this -- every other
+  // create*() method's geometry is a horizontally symmetric cube, so a
+  // Y-rotation would have zero visible effect on it today. The field
+  // itself is generic and available to any future entity type once its
+  // geometry is genuinely asymmetric; see CLAUDE.md's decisions log.
 }
 
 export interface MapDef {

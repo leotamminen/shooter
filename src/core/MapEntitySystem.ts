@@ -397,6 +397,7 @@ export class MapEntitySystem {
 
         computerGroup = createComputerMesh(true);
         computerGroup.position.set(...entity.position);
+        computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
         this.group.add(computerGroup);
         bodyMesh = attachBody(computerGroup);
 
@@ -407,6 +408,7 @@ export class MapEntitySystem {
 
     computerGroup = createComputerMesh(poweredOn);
     computerGroup.position.set(...entity.position);
+    computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
     this.group.add(computerGroup);
     bodyMesh = attachBody(computerGroup);
 
@@ -419,6 +421,7 @@ export class MapEntitySystem {
 
         computerGroup = createComputerMesh(false);
         computerGroup.position.set(...entity.position);
+        computerGroup.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
         this.group.add(computerGroup);
         bodyMesh = attachBody(computerGroup);
 
