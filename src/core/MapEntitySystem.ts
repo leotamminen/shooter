@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { CELL_SIZE, WALL_HEIGHT } from "./MapLoader";
 import { computeCollisionBox } from "./utils/CollisionBox";
 import { findById } from "./utils/Lookup";
+import { createComputerMesh, COMPUTER_BODY_NAME } from "./utils/ComputerMesh";
 import type { MapDef, MapEntity, Weapon, TerminalDef, TerminalDirectory } from "../types";
 import type { WeaponSystem } from "./WeaponSystem";
 import type { RunManager } from "./RunManager";
@@ -19,15 +20,18 @@ const PICKUP_AMMO_AMOUNT = 24;
 const WALL_BUY_COLOR = 0xffd700;
 const WALL_BUY_EMISSIVE = 0x554400;
 const WALL_BUY_SIZE = 0.5;
-const TERMINAL_COLOR = 0x223344;
-const TERMINAL_EMISSIVE = 0x114477;
-const TERMINAL_SIZE = 0.6;
 const PASSWORD_LOCK_COLOR = 0x444444;
 const PASSWORD_LOCK_EMISSIVE = 0x552200;
 const PASSWORD_LOCK_SIZE = 0.3;
 const COMPUTER_PART_COLOR = 0x888800;
 const COMPUTER_PART_EMISSIVE = 0x333300;
 const COMPUTER_PART_SIZE = 0.35;
+const DECORATION_CRATE_COLOR = 0x6b4a2a;
+const DECORATION_CRATE_SIZE = 0.6;
+const DECORATION_DEBRIS_COLOR = 0x555555;
+const DECORATION_DEBRIS_SIZE = 0.35;
+const TERMINAL_INTERACT_PROMPT = "Press E to use terminal";
+const TERMINAL_GATED_MESSAGE = "The screen is dark. It needs power.";
 
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
@@ -41,10 +45,11 @@ export interface DoorEntry {
   box: THREE.Box3;
 }
 
-// Spawns one mesh per door/button/pickup/wall_buy/terminal/password_lock/
-// computer_part MapEntity and wires their interaction behavior. Kept
-// separate from MapLoader: MapLoader's job is grid-to-geometry and spawn
-// lookup, this is entity behavior — a different responsibility per the
+// Spawns one mesh (or, for terminals, one THREE.Group) per door/button/
+// pickup/wall_buy/terminal/password_lock/computer_part/decoration
+// MapEntity and wires their interaction behavior. Kept separate from
+// MapLoader: MapLoader's job is grid-to-geometry and spawn lookup, this is
+// entity behavior — a different responsibility per the
 // single-responsibility-per-file rule.
 export class MapEntitySystem {
   readonly group = new THREE.Group();
@@ -100,7 +105,15 @@ export class MapEntitySystem {
       } else if (entity.type === "wall_buy") {
         this.createWallBuy(entity, weapons, weaponSystem, gameState, raycastRegistry);
       } else if (entity.type === "terminal") {
-        this.createTerminal(entity, terminals, raycastRegistry, openTerminal, computerPartMeshById);
+        this.createTerminal(
+          entity,
+          terminals,
+          raycastRegistry,
+          openTerminal,
+          computerPartMeshById,
+          gameState,
+          runManager,
+        );
       } else if (entity.type === "password_lock") {
         this.createPasswordLock(
           entity,
@@ -111,6 +124,8 @@ export class MapEntitySystem {
           openPasswordLock,
           getVaultPin,
         );
+      } else if (entity.type === "decoration") {
+        this.createDecoration(entity);
       }
     }
   }
@@ -173,6 +188,12 @@ export class MapEntitySystem {
     );
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
+    // Checkpoint 20: built once here, from data already known at
+    // construction time -- no need for live/dynamic text.
+    mesh.userData.interactPrompt =
+      entity.cost !== undefined
+        ? `For ${entity.cost} points, Press E to open door`
+        : "Press E to open door";
     mesh.userData.onInteract = (): void => {
       if (!door.visible) return; // idempotent: door already open — checked
       // before any spend attempt below, so this never charges twice.
@@ -182,6 +203,9 @@ export class MapEntitySystem {
         if (!paid) {
           console.log(
             `Button "${entity.id}": rejected (need ${entity.cost}, have ${gameState.pointsBalance}) — door stays closed`,
+          );
+          gameState.showFeedback(
+            `Not enough points (need ${entity.cost}, have ${gameState.pointsBalance})`,
           );
           return;
         }
@@ -214,6 +238,7 @@ export class MapEntitySystem {
     );
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = "Press E to pick up ammo";
     mesh.userData.onInteract = (): void => {
       if (!mesh.visible) return; // idempotent: already collected
       weaponSystem.addReserveAmmo(PICKUP_AMMO_AMOUNT);
@@ -243,6 +268,7 @@ export class MapEntitySystem {
     );
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = "Press E to pick up power cable";
     mesh.userData.onInteract = (): void => {
       if (!mesh.visible) return; // idempotent: already collected
       mesh.visible = false;
@@ -280,6 +306,7 @@ export class MapEntitySystem {
     );
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = `For ${weapon.cost} points, Press E to buy ${weapon.name}`;
     mesh.userData.onInteract = (): void => {
       const purchased = gameState.spendPoints(weapon.cost);
       if (purchased) {
@@ -291,6 +318,9 @@ export class MapEntitySystem {
         console.log(
           `Wall-buy: rejected (need ${weapon.cost}, have ${gameState.pointsBalance}) — balance unchanged`,
         );
+        gameState.showFeedback(
+          `Not enough points (need ${weapon.cost}, have ${gameState.pointsBalance})`,
+        );
       }
     };
 
@@ -299,41 +329,102 @@ export class MapEntitySystem {
     raycastRegistry.register(mesh);
   }
 
+  // Checkpoint 20: retrofitted to use the shared createComputerMesh()
+  // factory (core/utils/ComputerMesh.ts) instead of a plain box. A gated
+  // terminal (entity.requiresPart set) starts visually "off"
+  // (createComputerMesh(false)) and only swaps to the "on" mesh
+  // (createComputerMesh(true), rebuilt at the same position) the first
+  // time the player interacts with it AFTER the gate has already passed --
+  // collecting the power cable alone only satisfies the gate check below,
+  // it does not change appearance by itself (see CLAUDE.md's checkpoint-20
+  // decisions log for why this is interact-time, not pickup-time). The
+  // swap is tracked entirely by this method's own local closure state
+  // (computerGroup/bodyMesh/poweredOn, all reassigned in place via the
+  // handleInteract/attachBody closures below) -- no cross-entity lookup
+  // map is needed, since this method already holds the part's mesh
+  // reference for the gate check. A resettable is registered only for
+  // gated terminals, so a new run reverts a powered-on terminal back to
+  // its "off" mesh in step with the power cable's own reset (otherwise the
+  // mesh would stay lit while the freshly-reset gate check, seeing the
+  // cable visible again, would contradict what the player sees).
   private createTerminal(
     entity: MapEntity,
     terminals: TerminalDef[],
     raycastRegistry: RaycastRegistry,
     openTerminal: (terminalDef: TerminalDef) => void,
     computerPartMeshById: Map<string, THREE.Mesh>,
+    gameState: GameState,
+    runManager: RunManager,
   ): void {
     if (!entity.linkedTo) {
       throw new Error(`Terminal "${entity.id}" has no linkedTo terminal id`);
     }
     const terminalDef = findById(terminals, entity.linkedTo);
 
-    const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(TERMINAL_SIZE, TERMINAL_SIZE, TERMINAL_SIZE),
-      new THREE.MeshStandardMaterial({
-        color: TERMINAL_COLOR,
-        emissive: TERMINAL_EMISSIVE,
-      }),
-    );
-    mesh.position.set(...entity.position);
-    mesh.userData.interactable = true;
-    mesh.userData.onInteract = (): void => {
-      if (entity.requiresPart) {
+    let poweredOn = entity.requiresPart === undefined;
+    let computerGroup: THREE.Group;
+    let bodyMesh: THREE.Mesh;
+
+    const attachBody = (group: THREE.Group): THREE.Mesh => {
+      const body = group.getObjectByName(COMPUTER_BODY_NAME) as THREE.Mesh | undefined;
+      if (!body) {
+        throw new Error(
+          `Terminal "${entity.id}": createComputerMesh() had no named body child`,
+        );
+      }
+      body.userData.interactable = true;
+      body.userData.interactPrompt = TERMINAL_INTERACT_PROMPT;
+      body.userData.onInteract = handleInteract;
+      raycastRegistry.register(body);
+      this.interactables.push(body);
+      return body;
+    };
+
+    const handleInteract = (): void => {
+      if (entity.requiresPart !== undefined && !poweredOn) {
         const partMesh = computerPartMeshById.get(entity.requiresPart);
         if (partMesh && partMesh.visible) {
-          console.log("The screen is dark. It needs power.");
+          console.log(TERMINAL_GATED_MESSAGE);
+          gameState.showFeedback(TERMINAL_GATED_MESSAGE);
           return;
         }
+
+        // Gate just passed for the first time -- swap the mesh in place,
+        // once, at the same position. poweredOn guards this so later
+        // interacts with the same terminal never repeat the swap.
+        this.group.remove(computerGroup);
+        raycastRegistry.unregister(bodyMesh);
+
+        computerGroup = createComputerMesh(true);
+        computerGroup.position.set(...entity.position);
+        this.group.add(computerGroup);
+        bodyMesh = attachBody(computerGroup);
+
+        poweredOn = true;
       }
       openTerminal(terminalDef);
     };
 
-    this.group.add(mesh);
-    this.interactables.push(mesh);
-    raycastRegistry.register(mesh);
+    computerGroup = createComputerMesh(poweredOn);
+    computerGroup.position.set(...entity.position);
+    this.group.add(computerGroup);
+    bodyMesh = attachBody(computerGroup);
+
+    if (entity.requiresPart !== undefined) {
+      runManager.registerResettable(() => {
+        if (!poweredOn) return; // already off, nothing to revert
+
+        this.group.remove(computerGroup);
+        raycastRegistry.unregister(bodyMesh);
+
+        computerGroup = createComputerMesh(false);
+        computerGroup.position.set(...entity.position);
+        this.group.add(computerGroup);
+        bodyMesh = attachBody(computerGroup);
+
+        poweredOn = false;
+      });
+    }
   }
 
   // Checkpoint 17: mirrors createButton()'s shape closely, reusing the same
@@ -388,6 +479,7 @@ export class MapEntitySystem {
     );
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = "Press E to unlock";
     mesh.userData.onInteract = (): void => {
       if (!door.visible) return; // idempotent: door already open
 
@@ -426,5 +518,24 @@ export class MapEntitySystem {
     this.group.add(mesh);
     this.interactables.push(mesh);
     raycastRegistry.register(mesh);
+  }
+
+  // Checkpoint 20: purely visual clutter -- deliberately no
+  // userData.interactable, no raycastRegistry.register(), no collision box
+  // (never added to this.doors or given to PlayerController). The player
+  // walks straight through these for free, since nothing checks collision
+  // against them; an intentional simplification for this checkpoint, not
+  // an oversight (see CLAUDE.md's checkpoint-20 decisions log).
+  private createDecoration(entity: MapEntity): void {
+    const isDebris = entity.variant === "debris";
+    const size = isDebris ? DECORATION_DEBRIS_SIZE : DECORATION_CRATE_SIZE;
+    const color = isDebris ? DECORATION_DEBRIS_COLOR : DECORATION_CRATE_COLOR;
+
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(size, size, size),
+      new THREE.MeshStandardMaterial({ color }),
+    );
+    mesh.position.set(...entity.position);
+    this.group.add(mesh);
   }
 }
