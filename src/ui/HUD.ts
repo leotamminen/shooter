@@ -1,10 +1,16 @@
 import * as THREE from "three";
 import { Raycast } from "../core/utils/Raycast";
+import { Countdown } from "../core/utils/Countdown";
 import type { GameState } from "../state/GameState";
 import type { GameMode } from "../modes/GameMode";
 import type { RaycastRegistry } from "../core/RaycastRegistry";
 
 const RELOAD_PROMPT_DELAY_MS = 1000;
+// Checkpoint 20: how long a feedback message stays on screen before
+// ui/HUD.ts clears it, via the same Countdown utility ZombieSurvival's
+// round timer and ShootingRange's target cooldown already use. Seconds,
+// matching every other Countdown consumer's deltaTime unit.
+const FEEDBACK_DISPLAY_DURATION = 2.5;
 
 function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
   const el = document.createElement("div");
@@ -46,6 +52,7 @@ export class HUD {
   private readonly ammoCountEl: HTMLDivElement;
   private readonly statusEl: HTMLDivElement;
   private readonly interactEl: HTMLDivElement;
+  private readonly feedbackEl: HTMLDivElement;
   private readonly healthEl: HTMLDivElement;
   private readonly pointsEl: HTMLDivElement;
   private readonly modeStatusEl: HTMLDivElement;
@@ -55,8 +62,10 @@ export class HUD {
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
   private readonly raycast = new Raycast();
+  private readonly feedbackCountdown = new Countdown();
 
   private emptySince: number | null = null;
+  private lastFeedbackMessage: string | null = null;
 
   constructor(
     gameState: GameState,
@@ -102,6 +111,23 @@ export class HUD {
     promptStack.appendChild(this.statusEl);
     promptStack.appendChild(this.interactEl);
     root.appendChild(promptStack);
+
+    // Checkpoint 20: a separate, distinctly colored element for transient
+    // rejection/flavor feedback -- positioned below promptStack so it
+    // never visually overlaps the interact prompt when both are showing
+    // at once (e.g. looking at a wall-buy the instant its purchase is
+    // rejected).
+    this.feedbackEl = createDiv({
+      position: "absolute",
+      top: "64%",
+      left: "50%",
+      transform: "translateX(-50%)",
+      fontSize: "14px",
+      color: "#ffaa33",
+      textAlign: "center",
+      maxWidth: "480px",
+    });
+    root.appendChild(this.feedbackEl);
 
     const ammoBox = createDiv({
       position: "absolute",
@@ -231,7 +257,7 @@ export class HUD {
     return crosshair;
   }
 
-  update(): void {
+  update(deltaTime: number): void {
     const alive = this.gameState.playerState === "alive";
     this.crosshairEl.style.display = alive ? "block" : "none";
 
@@ -240,6 +266,7 @@ export class HUD {
       this.updateStatusPrompt();
       this.updateInteractPrompt();
       this.updateHealth();
+      this.updateFeedbackMessage(deltaTime);
     } else {
       this.clearAliveOnlyText();
     }
@@ -256,6 +283,7 @@ export class HUD {
     this.statusEl.textContent = "";
     this.interactEl.textContent = "";
     this.healthEl.textContent = "";
+    this.feedbackEl.textContent = "";
   }
 
   private updateAmmo(): void {
@@ -290,10 +318,33 @@ export class HUD {
     this.statusEl.textContent = "";
   }
 
+  // Checkpoint 20: reads the per-entity text InteractSystem wrote this
+  // frame instead of a hardcoded generic string -- "Press E to interact"
+  // is now InteractSystem's own defensive fallback, not a decision made
+  // here. Visibility is unchanged: an empty string renders as nothing.
   private updateInteractPrompt(): void {
-    this.interactEl.textContent = this.gameState.canInteract
-      ? "Press E to interact"
-      : "";
+    this.interactEl.textContent = this.gameState.interactPromptText ?? "";
+  }
+
+  // Checkpoint 20: HUD owns clearing gameState.feedbackMessage after a
+  // fixed display duration, the same "HUD owns presentation timing, not
+  // gameplay logic" pattern the reload-prompt delay above already
+  // established. A new message is detected by comparing against the
+  // previously-rendered value each frame, which (re)starts the countdown
+  // -- an identical message shown twice in a row does not restart it, a
+  // deliberate consequence of this comparison, not a bug.
+  private updateFeedbackMessage(deltaTime: number): void {
+    const message = this.gameState.feedbackMessage;
+    if (message !== null && message !== this.lastFeedbackMessage) {
+      this.feedbackCountdown.start(FEEDBACK_DISPLAY_DURATION);
+    }
+    this.lastFeedbackMessage = message;
+
+    this.feedbackCountdown.update(deltaTime, () => {
+      this.gameState.feedbackMessage = null;
+    });
+
+    this.feedbackEl.textContent = this.gameState.feedbackMessage ?? "";
   }
 
   private updateHealth(): void {
@@ -386,7 +437,7 @@ export class HUD {
   // userData.enemyId in EnemyAI's constructor), not a shared type/tag — ids
   // are guaranteed unique per live enemy (the same invariant
   // gameState.enemyHealth's dictionary keys already rely on), so this can
-  // never exclude a different enemy's mesh from the occlusion check.
+  // never exclude a different enemy's mesh.
   private isOccluded(worldPos: THREE.Vector3, excludeEnemyId: string): boolean {
     const origin = this.camera.position;
     const toTarget = worldPos.clone().sub(origin);

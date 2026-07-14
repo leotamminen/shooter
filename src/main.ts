@@ -289,7 +289,7 @@ function startGame(selections: GameSelections): void {
     if (gameState.playerState === "alive") {
       gameMode.update(delta);
     }
-    hud.update();
+    hud.update(delta);
     sceneManager.render();
     if (gameState.playerState === "alive") {
       weaponViewmodel.update(playerController.getSpeed(), delta);
