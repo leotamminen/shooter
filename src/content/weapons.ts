@@ -34,7 +34,7 @@ export const WEAPONS: Weapon[] = [
     reloadTime: 1.2,
     startingReserveAmmo: 240,
     cost: 1200,
-    fireSoundId: "pistol_fire",
+    fireSoundId: "mac10_fire",
     // Checkpoint 21: noticeably larger than the pistol's 0.3 -- individually
     // small per-shot at this fireRate, but stacks fast under full-auto fire
     // (see WeaponSystem.fire()'s onFire() call and ImpulseOffset's own
@@ -58,8 +58,8 @@ export const WEAPONS: Weapon[] = [
     magSize: 30,
     reloadTime: 2.5,
     startingReserveAmmo: 90,
-    cost: 2500,
-    fireSoundId: "pistol_fire",
+    cost: 500,
+    fireSoundId: "ak47_single",
     // Between the M1911's 0.3 and the MAC-10's 0.8 -- a heavier per-shot
     // kick than either single-shot weapon, but still bounded by the same
     // clamped ceiling (core/utils/ImpulseOffset.ts) full-auto fire already
