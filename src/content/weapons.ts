@@ -15,6 +15,10 @@ export const WEAPONS: Weapon[] = [
     // -- a small, snappy kick befitting a semi-auto pistol, clearly weaker
     // than the MAC-10's below.
     kickStrength: 0.3,
+    // Checkpoint 24: a one-handed pistol has no foregrip to support -- no
+    // second hand shown while this is equipped. Explicit false, not left
+    // unset, per this checkpoint's own "always decide per-weapon" rule.
+    hasSupportHand: false,
   },
   // MAC-10 (checkpoint 15): the first full-auto weapon. No new firing
   // mechanics needed -- WeaponSystem.update() already fires repeatedly at
@@ -40,6 +44,11 @@ export const WEAPONS: Weapon[] = [
     // (see WeaponSystem.fire()'s onFire() call and ImpulseOffset's own
     // summed-magnitude clamp). First-guess value, tuned by eye in-browser.
     kickStrength: 0.8,
+    // Checkpoint 24: two-handed SMG -- a persistent left-hand grip shows on
+    // the generic box's underside/front while equipped. First-guess offset,
+    // forward and under the box, tune by eye in-browser.
+    hasSupportHand: true,
+    supportHandOffset: { x: -0.05, y: -0.08, z: -0.25 },
   },
   // AK-47 (checkpoint 23): the first weapon with a real per-weapon viewmodel
   // mesh (core/utils/WeaponMesh.ts's createAK47Mesh(), swapped in by
@@ -65,6 +74,12 @@ export const WEAPONS: Weapon[] = [
     // clamped ceiling (core/utils/ImpulseOffset.ts) full-auto fire already
     // stacks against.
     kickStrength: 0.6,
+    // Checkpoint 24: a rifle needs a support hand on the handguard, not the
+    // magazine -- offset chosen to roughly match createAK47Mesh()'s own
+    // handguard placement (core/utils/WeaponMesh.ts), first-guess, tune by
+    // eye against the actual mesh.
+    hasSupportHand: true,
+    supportHandOffset: { x: -0.08, y: -0.05, z: -0.35 },
   },
   // Knife (checkpoint 16): the first melee weapon -- no magSize/reloadTime/
   // startingReserveAmmo (all now optional on Weapon), meleeRange present

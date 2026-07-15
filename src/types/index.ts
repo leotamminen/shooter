@@ -11,6 +11,8 @@ export interface Weapon {
   model?: string; // path to .glb, added when 3D models exist
   meleeRange?: number; // melee only (checkpoint 16) -- presence of this field IS the ranged-vs-melee discriminator: a Weapon with meleeRange set is melee, one without is ranged. No separate "kind"/"type" tag, to avoid two fields that could disagree with each other.
   kickStrength?: number; // ranged only (checkpoint 21) -- scales the fire-kick viewmodel impulse WeaponSystem's onFire callback passes to WeaponViewmodel.addImpulse(); read as 0 (no kick) via `weapon.kickStrength ?? 0` if unset, so the melee-only knife entry can leave this out entirely.
+  hasSupportHand?: boolean; // ranged only (checkpoint 24) -- whether WeaponViewmodel shows a persistent left-hand grip on the foregrip/handguard while this weapon is equipped. No default is assumed for weapons that omit it (WeaponViewmodel treats a missing value as falsy) -- always set this explicitly on new weapons rather than relying on that fallback, since whether a weapon "should" have one is a real per-weapon decision, not a safe guess.
+  supportHandOffset?: { x: number; y: number; z: number }; // ranged only, only meaningful when hasSupportHand is true (checkpoint 24) -- the support hand's local position within WeaponViewmodel's displayGroup, alongside the weapon mesh it's gripping.
 }
 
 export interface EnemyDef {

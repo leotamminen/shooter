@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { Weapon } from "../types";
 import { ImpulseOffset } from "./utils/ImpulseOffset";
 import { createAK47Mesh } from "./utils/WeaponMesh";
+import { createFistMesh } from "./utils/HandMesh";
 
 const VIEWMODEL_FOV = 50;
 const VIEWMODEL_NEAR = 0.01;
@@ -104,6 +105,14 @@ const AK47_OFFSET = { x: -0.15, y: 0.18, z: 0 };
 // position math below is otherwise unaffected and now applies to a wrapper
 // group (displayGroup) instead of a single mesh directly, so it keeps
 // working identically regardless of which child is currently visible.
+//
+// Checkpoint 24: a persistent left-hand support grip (Weapon.hasSupportHand)
+// is a third permanent child of displayGroup alongside genericMesh/
+// ak47Mesh -- static once positioned (no grip/finger animation yet, see
+// CLAUDE.md future mechanics for the reload checkpoint that will need to
+// actually move it), but it inherits every existing displayGroup transform
+// for free simply by being parented there, the same way ak47Mesh already
+// does.
 export class WeaponViewmodel {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
@@ -117,6 +126,18 @@ export class WeaponViewmodel {
   private readonly displayGroup: THREE.Group;
   private readonly genericMesh: THREE.Mesh;
   private readonly ak47Mesh: THREE.Group;
+  // Checkpoint 24: a persistent left-hand grip for two-handed weapons
+  // (Weapon.hasSupportHand) -- also a child of displayGroup, so it inherits
+  // every existing transform (walk bob, fire-kick/swap-dip impulses, the
+  // melee sequencer's retract/return offset) for free, with zero new
+  // per-frame math of its own. Reuses utils/HandMesh.ts's createFistMesh()
+  // (the same closed-fist shape MeleeViewmodel already uses) rather than
+  // the open-palm createHandMesh() -- a fist gripping a handguard reads
+  // better than a flat open hand. Mirrored via scale.x = -1, the same
+  // technique HandsViewmodel already uses for its own left hand -- harmless
+  // even though this particular mesh (unlike createHandMesh()'s thumb) has
+  // no asymmetric detail to actually mirror today.
+  private readonly supportHandMesh: THREE.Group;
   // Checkpoint 23: the weapon id displayGroup's visible child was last set
   // for -- update() only touches the two meshes' .visible flags when this
   // actually changes, not every frame, per this checkpoint's own
@@ -188,6 +209,15 @@ export class WeaponViewmodel {
     this.ak47Mesh.position.set(AK47_OFFSET.x, AK47_OFFSET.y, AK47_OFFSET.z);
     this.displayGroup.add(this.ak47Mesh);
 
+    // Checkpoint 24: built once here too, alongside the other two meshes --
+    // same "cheap procedural boxes, no reason to defer" reasoning as
+    // ak47Mesh above. Starts hidden; update() below decides visibility and
+    // position per equipped weapon.
+    this.supportHandMesh = createFistMesh();
+    this.supportHandMesh.scale.x = -1;
+    this.supportHandMesh.visible = false;
+    this.displayGroup.add(this.supportHandMesh);
+
     window.addEventListener("resize", this.handleResize);
   }
 
@@ -216,6 +246,24 @@ export class WeaponViewmodel {
       const showAK47 = weaponId === "ak47";
       this.ak47Mesh.visible = showAK47;
       this.genericMesh.visible = !showAK47;
+
+      // Checkpoint 24: the support hand's own visibility/position is a
+      // separate decision from which weapon mesh is shown above -- keyed
+      // off Weapon.hasSupportHand, not the AK-47 id check. If a weapon
+      // claims hasSupportHand but is somehow missing its offset (shouldn't
+      // happen given content/weapons.ts, but this file doesn't control
+      // that data), hide the hand rather than showing it at a stale or
+      // undefined position.
+      if (activeWeapon?.hasSupportHand && activeWeapon.supportHandOffset) {
+        this.supportHandMesh.visible = true;
+        this.supportHandMesh.position.set(
+          activeWeapon.supportHandOffset.x,
+          activeWeapon.supportHandOffset.y,
+          activeWeapon.supportHandOffset.z,
+        );
+      } else {
+        this.supportHandMesh.visible = false;
+      }
     }
 
     // Smoothing raw speed (which can jump instantly between 0 and a
