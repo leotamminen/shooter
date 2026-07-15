@@ -11,6 +11,10 @@ export const WEAPONS: Weapon[] = [
     startingReserveAmmo: 48,
     cost: 500,
     fireSoundId: "pistol_fire",
+    // Checkpoint 21: first-guess fire-kick strength, tuned by eye in-browser
+    // -- a small, snappy kick befitting a semi-auto pistol, clearly weaker
+    // than the MAC-10's below.
+    kickStrength: 0.3,
   },
   // MAC-10 (checkpoint 15): the first full-auto weapon. No new firing
   // mechanics needed -- WeaponSystem.update() already fires repeatedly at
@@ -31,6 +35,11 @@ export const WEAPONS: Weapon[] = [
     startingReserveAmmo: 240,
     cost: 1200,
     fireSoundId: "pistol_fire",
+    // Checkpoint 21: noticeably larger than the pistol's 0.3 -- individually
+    // small per-shot at this fireRate, but stacks fast under full-auto fire
+    // (see WeaponSystem.fire()'s onFire() call and ImpulseOffset's own
+    // summed-magnitude clamp). First-guess value, tuned by eye in-browser.
+    kickStrength: 0.8,
   },
   // Knife (checkpoint 16): the first melee weapon -- no magSize/reloadTime/
   // startingReserveAmmo (all now optional on Weapon), meleeRange present

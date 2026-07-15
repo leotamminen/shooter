@@ -292,7 +292,19 @@ export class HUD {
   }
 
   private updateStatusPrompt(): void {
-    const { currentAmmo, reserveAmmo, isReloading } = this.gameState;
+    const { currentAmmo, reserveAmmo, isReloading, weaponName } = this.gameState;
+
+    // Checkpoint 21: no active weapon at all (Campaign's starting
+    // hands-only state, see WeaponSystem.hasActiveWeapon()) is a different
+    // case from a real weapon that's simply run dry -- "No ammo" would
+    // misleadingly imply the player is holding an empty gun. Nothing to
+    // show here in that case; HandsViewmodel's own rendering (bare hands,
+    // not a weapon) already tells the player they're unarmed.
+    if (weaponName === "") {
+      this.emptySince = null;
+      this.statusEl.textContent = "";
+      return;
+    }
 
     if (isReloading) {
       this.emptySince = null;

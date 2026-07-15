@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ImpulseOffset } from "./utils/ImpulseOffset";
 
 const VIEWMODEL_FOV = 50;
 const VIEWMODEL_NEAR = 0.01;
@@ -55,12 +56,6 @@ export const VIEWMODEL_CONFIG = {
   mirrored: false,
 };
 
-interface Impulse {
-  offset: { x: number; y: number; z: number };
-  elapsed: number;
-  decayTime: number;
-}
-
 // Renders the player's held weapon as a placeholder shape, always drawn in
 // front of world geometry regardless of proximity to a wall. A naive
 // single-pass render (the weapon mesh parented directly into the main
@@ -92,8 +87,15 @@ export class WeaponViewmodel {
 
   private smoothedSpeed = 0;
   private bobPhase = 0;
-  private jitterPhase = 0;
-  private readonly impulses: Impulse[] = [];
+  // Checkpoint 21: the summing/clamping/jitter logic itself now lives in
+  // the shared ImpulseOffset class (extracted once HandsViewmodel became a
+  // second consumer) -- constructed here with the exact constants above,
+  // unchanged behavior from before the extraction.
+  private readonly impulseOffset = new ImpulseOffset(
+    MAX_IMPULSE_MAGNITUDE,
+    JITTER_FREQUENCY,
+    JITTER_MAX_AMPLITUDE,
+  );
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -156,68 +158,27 @@ export class WeaponViewmodel {
     // horizontal cycle.
     const bobY = Math.sin(this.bobPhase * 2) * this.smoothedSpeed * BOB_AMPLITUDE_Y_SCALE;
 
-    let impulseX = 0;
-    let impulseY = 0;
-    let impulseZ = 0;
-    for (let i = this.impulses.length - 1; i >= 0; i--) {
-      const impulse = this.impulses[i];
-      impulse.elapsed += deltaTime;
-      if (impulse.elapsed >= impulse.decayTime) {
-        this.impulses.splice(i, 1);
-        continue;
-      }
-      const remaining = 1 - impulse.elapsed / impulse.decayTime;
-      impulseX += impulse.offset.x * remaining;
-      impulseY += impulse.offset.y * remaining;
-      impulseZ += impulse.offset.z * remaining;
-    }
-
-    // Clamp the combined magnitude, preserving direction -- this is what
-    // lets many overlapping/rapid impulses visibly stack up to the ceiling
-    // and hold there (rather than being rejected outright), while
-    // guaranteeing the mesh can never be pushed past MAX_IMPULSE_MAGNITUDE
-    // from its bob-adjusted base position.
-    const impulseMagnitude = Math.hypot(impulseX, impulseY, impulseZ);
-    if (impulseMagnitude > MAX_IMPULSE_MAGNITUDE) {
-      const scale = MAX_IMPULSE_MAGNITUDE / impulseMagnitude;
-      impulseX *= scale;
-      impulseY *= scale;
-      impulseZ *= scale;
-    }
-
-    // Proximity to the cap, measured against the pre-clamp magnitude so it
-    // reads as 1 (full jitter) throughout a spam/hold, not just at the
-    // instant the sum first crosses the cap. Cubed easing keeps jitter
-    // negligible at low proximity (a single normal impulse) and only makes
-    // it clearly visible once several impulses have stacked close to or
-    // past the cap -- a smooth ramp, not a threshold snap.
-    this.jitterPhase += JITTER_FREQUENCY * deltaTime;
-    const proximity = Math.min(1, impulseMagnitude / MAX_IMPULSE_MAGNITUDE);
-    const jitterAmount = proximity * proximity * proximity * JITTER_MAX_AMPLITUDE;
-    // Different multipliers on the two axes' phases (not both 1x) avoid a
-    // clean back-and-forth line, giving a small chaotic wobble that reads
-    // more like straining than a mechanical metronome.
-    const jitterX = Math.sin(this.jitterPhase) * jitterAmount;
-    const jitterY = Math.sin(this.jitterPhase * 1.3) * jitterAmount;
+    const impulse = this.impulseOffset.update(deltaTime);
 
     const baseX = VIEWMODEL_CONFIG.mirrored
       ? -VIEWMODEL_CONFIG.offset.x
       : VIEWMODEL_CONFIG.offset.x;
     this.weaponMesh.position.set(
-      baseX + bobX + impulseX + jitterX,
-      VIEWMODEL_CONFIG.offset.y + bobY + impulseY + jitterY,
-      VIEWMODEL_CONFIG.offset.z + impulseZ,
+      baseX + bobX + impulse.x,
+      VIEWMODEL_CONFIG.offset.y + bobY + impulse.y,
+      VIEWMODEL_CONFIG.offset.z + impulse.z,
     );
   }
 
   // Adds a temporary offset that decays linearly from its full value back
   // to zero over decayTime seconds, then is discarded. Multiple concurrent
-  // impulses sum rather than overwrite each other -- the intended hook for
-  // future fire-kick, reload-dip, damage-flinch, weapon-switch-dip,
-  // melee-swing, etc. (none implemented yet; see CLAUDE.md future
-  // mechanics). Consumed every frame by update() above.
-  addImpulse(offset: { x: number; y: number; z: number }, decayTime: number): void {
-    this.impulses.push({ offset, elapsed: 0, decayTime });
+  // impulses sum rather than overwrite each other -- the fire-kick and
+  // weapon-swap-dip hook (checkpoint 21; melee-swing already used this at
+  // checkpoint 16). Consumed every frame by update() above, via the shared
+  // ImpulseOffset instance -- this method's own signature is unchanged
+  // from before the checkpoint-21 extraction, so no caller needed updating.
+  addImpulse(offset: THREE.Vector3Like, decayTime: number): void {
+    this.impulseOffset.addImpulse(offset, decayTime);
   }
 
   // The second render pass -- must run after the main scene's render() this

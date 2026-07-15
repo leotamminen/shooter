@@ -87,7 +87,11 @@ export class WeaponSystem {
   // weapon -- simpler, and matches most FPS games' weapon-switch behavior.
   private slots: (WeaponSlot | null)[];
   private activeSlotIndex = 0;
-  private readonly startingWeapon: RangedWeapon;
+  // Checkpoint 21: nullable -- Campaign now starts with no ranged weapon at
+  // all (hands only, see core/HandsViewmodel.ts), while Zombie
+  // Survival/Shooting Range still pass the M1911 unconditionally. null means
+  // buildStartingSlots() leaves every slot empty, not just slot 1.
+  private readonly startingWeapon: RangedWeapon | null;
 
   // Melee (checkpoint 16, corrected after manual testing): V is a quick
   // ATTACK ACTION, not a weapon-equip toggle -- the currently-held gun
@@ -110,22 +114,38 @@ export class WeaponSystem {
   // dependency-injection pattern PlayerState's onDeath callback already
   // uses.
   private readonly onMeleeAttack: () => void;
+  // Checkpoint 21: fired from fire() on every successful shot, scaled by
+  // the active weapon's own kickStrength -- see content/weapons.ts and
+  // CLAUDE.md's checkpoint-21 decisions log.
+  private readonly onFire: (kickStrength: number) => void;
+  // Checkpoint 21: fired whenever the active slot changes to a different,
+  // already-occupied slot (number-key/scroll switching) or pickupWeapon()
+  // replaces/adds a weapon while one was already active -- never on the
+  // very first hands->weapon transition from an empty starting loadout
+  // (see pickupWeapon() below).
+  private readonly onWeaponSwap: () => void;
 
   constructor(
     camera: THREE.Camera,
-    weapon: Weapon,
+    weapon: Weapon | null,
     meleeWeapon: Weapon,
     audioSystem: AudioSystem,
     gameState: GameState,
     runManager: RunManager,
     raycastRegistry: RaycastRegistry,
     onMeleeAttack: () => void,
+    onFire: (kickStrength: number) => void,
+    onWeaponSwap: () => void,
   ) {
-    assertRangedWeapon(weapon);
+    if (weapon === null) {
+      this.startingWeapon = null;
+    } else {
+      assertRangedWeapon(weapon);
+      this.startingWeapon = weapon;
+    }
     assertMeleeWeapon(meleeWeapon);
 
     this.camera = camera;
-    this.startingWeapon = weapon;
     this.slots = this.buildStartingSlots();
     this.startingMeleeWeapon = meleeWeapon;
     this.meleeWeapon = meleeWeapon;
@@ -133,6 +153,8 @@ export class WeaponSystem {
     this.gameState = gameState;
     this.raycastRegistry = raycastRegistry;
     this.onMeleeAttack = onMeleeAttack;
+    this.onFire = onFire;
+    this.onWeaponSwap = onWeaponSwap;
 
     window.addEventListener("mousedown", this.handleMouseDown);
     window.addEventListener("mouseup", this.handleMouseUp);
@@ -144,12 +166,23 @@ export class WeaponSystem {
 
   private buildStartingSlots(): (WeaponSlot | null)[] {
     const slots: (WeaponSlot | null)[] = new Array(MAX_SLOTS).fill(null);
-    slots[0] = {
-      weapon: this.startingWeapon,
-      currentAmmo: this.startingWeapon.magSize,
-      reserveAmmo: this.startingWeapon.startingReserveAmmo,
-    };
+    if (this.startingWeapon) {
+      slots[0] = {
+        weapon: this.startingWeapon,
+        currentAmmo: this.startingWeapon.magSize,
+        reserveAmmo: this.startingWeapon.startingReserveAmmo,
+      };
+    }
     return slots;
+  }
+
+  // The single source of truth for "should the hands or the weapon be
+  // rendered" (checkpoint 21) -- main.ts's render loop branches on this
+  // directly, and it's what gates every other weapon-dependent code path
+  // below (firing, reloading, the per-frame GameState ammo sync) now that
+  // an empty starting loadout is a real, reachable state.
+  hasActiveWeapon(): boolean {
+    return this.slots[this.activeSlotIndex] !== null;
   }
 
   private get activeSlot(): WeaponSlot {
@@ -200,7 +233,11 @@ export class WeaponSystem {
     this.raycastRegistry.unregister(target);
   }
 
+  // Checkpoint 21: a no-op with no active weapon -- an ammo pickup with no
+  // gun to put it in makes no sense, and the underlying reserveAmmo setter
+  // would otherwise throw via the now-possibly-empty activeSlot getter.
   addReserveAmmo(amount: number): void {
+    if (!this.hasActiveWeapon()) return;
     this.reserveAmmo += amount;
   }
 
@@ -213,6 +250,14 @@ export class WeaponSystem {
   // you're currently holding, not whatever else happens to be in inventory.
   pickupWeapon(weapon: Weapon): void {
     assertRangedWeapon(weapon);
+    // Checkpoint 21: captured before mutating slots -- the swap-dip only
+    // plays when a weapon is being replaced, or a second weapon becomes
+    // newly active while one was already equipped. The very first pickup
+    // from an empty starting loadout (Campaign) is a hands->weapon
+    // transition between two entirely different rendered objects, not a
+    // "dip" of the same persistent weapon model, so it's deliberately
+    // excluded.
+    const hadActiveWeapon = this.hasActiveWeapon();
     const emptySlotIndex = this.slots.findIndex((slot) => slot === null);
     const targetIndex = emptySlotIndex !== -1 ? emptySlotIndex : this.activeSlotIndex;
     this.slots[targetIndex] = {
@@ -221,6 +266,7 @@ export class WeaponSystem {
       reserveAmmo: weapon.startingReserveAmmo,
     };
     this.switchToSlot(targetIndex);
+    if (hadActiveWeapon) this.onWeaponSwap();
   }
 
   private switchToSlot(index: number): void {
@@ -252,24 +298,36 @@ export class WeaponSystem {
     this.timeSinceLastShot += delta;
     this.timeSinceLastMeleeAttack += delta;
 
-    if (this.isReloading) {
-      this.reloadTimeRemaining -= delta;
-      if (this.reloadTimeRemaining <= 0) this.finishReload();
-    } else if (
-      !this.isMeleeAttacking &&
-      !this.gameState.paused &&
-      this.gameState.playerState === "alive" &&
-      this.firing &&
-      this.currentAmmo > 0 &&
-      this.timeSinceLastShot >= this.weapon.fireRate
-    ) {
-      this.fire();
-    }
+    // Checkpoint 21: everything below reads this.weapon/this.currentAmmo/
+    // this.reserveAmmo, all of which throw via the activeSlot getter when
+    // no weapon is active (Campaign's starting hands-only state) -- gated
+    // on hasActiveWeapon() the same way main.ts's render loop is, rather
+    // than adding a null check inside each individual access.
+    if (this.hasActiveWeapon()) {
+      if (this.isReloading) {
+        this.reloadTimeRemaining -= delta;
+        if (this.reloadTimeRemaining <= 0) this.finishReload();
+      } else if (
+        !this.isMeleeAttacking &&
+        !this.gameState.paused &&
+        this.gameState.playerState === "alive" &&
+        this.firing &&
+        this.currentAmmo > 0 &&
+        this.timeSinceLastShot >= this.weapon.fireRate
+      ) {
+        this.fire();
+      }
 
-    this.gameState.weaponName = this.weapon.name;
-    this.gameState.currentAmmo = this.currentAmmo;
-    this.gameState.reserveAmmo = this.reserveAmmo;
-    this.gameState.isReloading = this.isReloading;
+      this.gameState.weaponName = this.weapon.name;
+      this.gameState.currentAmmo = this.currentAmmo;
+      this.gameState.reserveAmmo = this.reserveAmmo;
+      this.gameState.isReloading = this.isReloading;
+    } else {
+      this.gameState.weaponName = "";
+      this.gameState.currentAmmo = 0;
+      this.gameState.reserveAmmo = 0;
+      this.gameState.isReloading = false;
+    }
   }
 
   private fire(): void {
@@ -283,6 +341,12 @@ export class WeaponSystem {
     onHit?.(this.weapon.damage * this.damageMultiplier);
 
     this.audioSystem.play(this.weapon.fireSoundId);
+    // Checkpoint 21: fired on every successful shot, respecting the same
+    // fire-rate gate update() already checks -- for a full-auto weapon this
+    // means many small impulses in quick succession, exactly the
+    // "rapid-fire recoil stacking to a clamped ceiling" scenario
+    // checkpoint 14's own ImpulseOffset design already anticipated.
+    this.onFire(this.weapon.kickStrength ?? 0);
   }
 
   // The melee attack itself (checkpoint 16, corrected): fired the instant V
@@ -311,6 +375,13 @@ export class WeaponSystem {
   }
 
   private startReload(): void {
+    // Checkpoint 21: the "R" keydown handler below has no reason to know
+    // about hasActiveWeapon() itself (it only ever gates on paused/alive/
+    // isMeleeAttacking, matching the "V" handler's own shape) -- guarding
+    // here instead keeps that symmetry and avoids the weapon getter
+    // throwing when Campaign's starting hands-only state has no active
+    // weapon to reload.
+    if (!this.hasActiveWeapon()) return;
     if (this.isReloading) return;
     if (this.currentAmmo >= this.weapon.magSize) return;
     if (this.reserveAmmo <= 0) return;
@@ -371,8 +442,15 @@ export class WeaponSystem {
       this.gameState.playerState === "alive"
     ) {
       const slotIndex = Number(digitMatch[1]) - 1;
-      if (slotIndex < MAX_SLOTS && this.slots[slotIndex]) {
+      // Checkpoint 21: the `slotIndex !== this.activeSlotIndex` guard is
+      // new -- pressing the already-active slot's own number used to still
+      // call switchToSlot() (harmlessly resetting reload/fire-rate timing
+      // for no reason), and would now also incorrectly fire the swap-dip
+      // for a no-op "switch". Both are avoided by checking this here,
+      // before calling switchToSlot() at all.
+      if (slotIndex < MAX_SLOTS && this.slots[slotIndex] && slotIndex !== this.activeSlotIndex) {
         this.switchToSlot(slotIndex);
+        this.onWeaponSwap();
       }
     }
   };
@@ -394,6 +472,11 @@ export class WeaponSystem {
     const direction = event.deltaY < 0 ? 1 : -1;
     const nextPosition =
       (currentPosition + direction + occupiedIndices.length) % occupiedIndices.length;
+    // occupiedIndices.length > 1 (checked above) guarantees nextPosition
+    // !== currentPosition, so this is always a real switch to a different,
+    // already-occupied slot -- no extra pre-check needed before the dip
+    // (checkpoint 21), unlike the number-key handler above.
     this.switchToSlot(occupiedIndices[nextPosition]);
+    this.onWeaponSwap();
   };
 }

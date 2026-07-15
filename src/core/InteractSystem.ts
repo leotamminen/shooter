@@ -11,11 +11,24 @@ export class InteractSystem {
 
   private readonly camera: THREE.Camera;
   private readonly gameState: GameState;
+  // Checkpoint 21: an optional "interact succeeded" hook, invoked only when
+  // userData.onInteract() actually ran -- not on an E press that hits
+  // nothing interactable. main.ts wires this to a right-hand grab gesture
+  // on HandsViewmodel; InteractSystem itself has no idea hands or a
+  // viewmodel exist, the same dependency-injection pattern PlayerState's
+  // onDeath and WeaponSystem's onMeleeAttack callbacks already use.
+  private readonly onSuccessfulInteract?: () => void;
 
-  constructor(camera: THREE.Camera, gameState: GameState, raycastRegistry: RaycastRegistry) {
+  constructor(
+    camera: THREE.Camera,
+    gameState: GameState,
+    raycastRegistry: RaycastRegistry,
+    onSuccessfulInteract?: () => void,
+  ) {
     this.camera = camera;
     this.gameState = gameState;
     this.raycastRegistry = raycastRegistry;
+    this.onSuccessfulInteract = onSuccessfulInteract;
 
     window.addEventListener("keydown", this.handleKeyDown);
   }
@@ -67,6 +80,12 @@ export class InteractSystem {
     if (!hit || hit.object.userData.interactable !== true) return;
 
     const onInteract = hit.object.userData.onInteract as (() => void) | undefined;
-    onInteract?.();
+    if (!onInteract) return;
+    onInteract();
+    // Checkpoint 21: fired only after a real onInteract() call, never on a
+    // press that hit nothing interactable -- harmless to call even when no
+    // weapon/hands viewmodel is currently being rendered (main.ts's own
+    // branch decides whether this is visible).
+    this.onSuccessfulInteract?.();
   }
 }

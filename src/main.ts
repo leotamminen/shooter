@@ -10,6 +10,7 @@ import { RunManager } from "./core/RunManager";
 import { MapEntitySystem } from "./core/MapEntitySystem";
 import { RaycastRegistry } from "./core/RaycastRegistry";
 import { WeaponViewmodel } from "./core/WeaponViewmodel";
+import { HandsViewmodel } from "./core/HandsViewmodel";
 import type { GameMode } from "./modes/GameMode";
 import { ZombieSurvival } from "./modes/ZombieSurvival";
 import { ShootingRange } from "./modes/ShootingRange";
@@ -132,20 +133,29 @@ function startGame(selections: GameSelections): void {
   // rather than relying on closure-timing semantics to make a forward
   // reference safe.
   const weaponViewmodel = new WeaponViewmodel();
+  // Checkpoint 21: constructed alongside weaponViewmodel, for the same
+  // reason -- it has no dependency on anything else in this function, and
+  // interactSystem's onSuccessfulInteract callback below needs to
+  // reference it directly.
+  const handsViewmodel = new HandsViewmodel();
 
   const weaponSystem = new WeaponSystem(
     sceneManager.camera,
-    // Checkpoint 15: every run starts with M1911 in inventory slot 0,
-    // unconditionally -- the main menu's Weapon selection (selections.weaponId)
-    // no longer determines the starting loadout now that WeaponSystem is a
-    // slot-based inventory rather than a single current weapon. Confirmed
-    // with the user; the menu's Weapon group is left in place (still
-    // visible/selectable) but its choice is presently unused here. See
-    // CLAUDE.md's checkpoint-15 decisions log and future mechanics.
-    findById(WEAPONS, "pistol"),
+    // Checkpoint 15: every run starts with M1911 in inventory slot 0 --
+    // checkpoint 21 narrows this to only Zombie Survival/Shooting Range;
+    // Campaign now starts with no ranged weapon at all (null), so the
+    // player begins genuinely empty-handed (see core/HandsViewmodel.ts) and
+    // must find a wall-buy. The main menu's Weapon selection
+    // (selections.weaponId) still doesn't determine the starting loadout in
+    // either case -- confirmed with the user at checkpoint 15, unchanged
+    // since. See CLAUDE.md's checkpoint-15/21 decisions log and future
+    // mechanics.
+    selections.modeId === "campaign" ? null : findById(WEAPONS, "pistol"),
     // Checkpoint 16: the knife is always the starting/default melee weapon
     // -- there is no menu selection for melee (only one option exists), and
     // no wall-buy either (the knife is always available, never purchased).
+    // Unaffected by checkpoint 21's nullable ranged starting weapon: melee
+    // is always available regardless of ranged loadout.
     findById(WEAPONS, "knife"),
     audioSystem,
     gameState,
@@ -157,6 +167,17 @@ function startGame(selections: GameSelections): void {
     // intended integration point). Values are a first-cut guess, not tuned
     // against manual testing -- adjust here if they don't read well.
     () => weaponViewmodel.addImpulse({ x: 0, y: -0.06, z: 0.12 }, 0.15),
+    // Checkpoint 21: fire-kick, scaled per weapon by weapon.kickStrength
+    // (content/weapons.ts) -- a first-guess base vector, tuned by testing
+    // both the M1911 and MAC-10 in-browser.
+    (kickStrength) =>
+      weaponViewmodel.addImpulse(
+        { x: 0, y: -0.02 * kickStrength, z: 0.05 * kickStrength },
+        0.12,
+      ),
+    // Checkpoint 21: the weapon-swap dip -- a simple downward nudge, tuned
+    // by testing switching between two owned weapons in-browser.
+    () => weaponViewmodel.addImpulse({ x: 0, y: -0.08, z: 0 }, 0.25),
   );
 
   const mapEntitySystem = new MapEntitySystem(
@@ -202,7 +223,17 @@ function startGame(selections: GameSelections): void {
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);
 
-  const interactSystem = new InteractSystem(sceneManager.camera, gameState, raycastRegistry);
+  const interactSystem = new InteractSystem(
+    sceneManager.camera,
+    gameState,
+    raycastRegistry,
+    // Checkpoint 21: a quick forward-then-decay nudge on the right hand
+    // only, reading as a grab -- harmless to call even when the weapon
+    // viewmodel (not hands) is currently being rendered, since it just
+    // queues an impulse on an ImpulseOffset instance nothing is currently
+    // reading from.
+    () => handsViewmodel.addImpulse("right", { x: 0, y: 0, z: -0.04 }, 0.12),
+  );
 
   const enemySpawnPoints = mapDef.entities
     .filter((entity) => entity.type === "enemy_spawn")
@@ -291,9 +322,19 @@ function startGame(selections: GameSelections): void {
     }
     hud.update(delta);
     sceneManager.render();
+    // Checkpoint 21: mutually exclusive with the hands viewmodel --
+    // WeaponSystem.hasActiveWeapon() is the single source of truth for
+    // which one is currently "held," matching whatever the player's
+    // inventory actually shows (empty in Campaign until the first wall-buy,
+    // always occupied in Zombie Survival/Shooting Range).
     if (gameState.playerState === "alive") {
-      weaponViewmodel.update(playerController.getSpeed(), delta);
-      weaponViewmodel.render(sceneManager.renderer);
+      if (weaponSystem.hasActiveWeapon()) {
+        weaponViewmodel.update(playerController.getSpeed(), delta);
+        weaponViewmodel.render(sceneManager.renderer);
+      } else {
+        handsViewmodel.update(delta);
+        handsViewmodel.render(sceneManager.renderer);
+      }
     }
   }
 
