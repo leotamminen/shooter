@@ -164,9 +164,37 @@ function startGame(selections: GameSelections): void {
     // Checkpoint 16: a small viewmodel "lunge" as placeholder melee-attack
     // feedback, reusing the addImpulse() mechanism built at checkpoint 14
     // (its own future-mechanics notes already named melee-swing as an
-    // intended integration point). Values are a first-cut guess, not tuned
-    // against manual testing -- adjust here if they don't read well.
-    () => weaponViewmodel.addImpulse({ x: 0, y: -0.06, z: 0.12 }, 0.15),
+    // intended integration point).
+    //
+    // Checkpoint 21 addendum: expanded into a unified two-phase swing
+    // (down, then a right-to-left swing) played identically on whichever
+    // viewmodel is currently showing -- both are called unconditionally,
+    // regardless of hasActiveWeapon(), the same "harmless on the inactive
+    // one" reasoning already established for the interact grab gesture, so
+    // there's no branch to keep in sync here. The 70ms stagger between
+    // phases is what makes the swing read as two distinct beats rather
+    // than blending into one motion; the final setTimeout hides the knife
+    // once the whole sequence (phase1Decay + stagger + phase2Decay ≈
+    // 100 + 70 + 150 = 320ms) has visually finished decaying, rounded up
+    // to 350ms rather than cut off early. No clearTimeout/cancellation for
+    // either timer -- unlike the checkpoint-20 terminal boot delay, this
+    // window is short enough (under half a second) that a mid-swing death
+    // or reset is a negligible edge case, not worth the bookkeeping. All
+    // values are first-guess, tuned by eye in-browser.
+    () => {
+      weaponViewmodel.addImpulse({ x: 0, y: -0.08, z: 0.05 }, 0.1);
+      handsViewmodel.addImpulse("right", { x: 0, y: -0.08, z: 0.05 }, 0.1);
+      handsViewmodel.setKnifeVisible(true);
+
+      setTimeout(() => {
+        weaponViewmodel.addImpulse({ x: -0.12, y: 0, z: 0.03 }, 0.15);
+        handsViewmodel.addImpulse("right", { x: -0.12, y: 0, z: 0.03 }, 0.15);
+      }, 70);
+
+      setTimeout(() => {
+        handsViewmodel.setKnifeVisible(false);
+      }, 350);
+    },
     // Checkpoint 21: fire-kick, scaled per weapon by weapon.kickStrength
     // (content/weapons.ts) -- a first-guess base vector, tuned by testing
     // both the M1911 and MAC-10 in-browser.
@@ -327,6 +355,11 @@ function startGame(selections: GameSelections): void {
     // which one is currently "held," matching whatever the player's
     // inventory actually shows (empty in Campaign until the first wall-buy,
     // always occupied in Zombie Survival/Shooting Range).
+    //
+    // Future extension point (checkpoint 21 addendum, not built): a third
+    // state -- neither hands nor weapon rendered at all -- would branch
+    // here too, once something actually needs to hide both (e.g. a cutscene
+    // or a menu-like pause). No new flag/logic added for this yet.
     if (gameState.playerState === "alive") {
       if (weaponSystem.hasActiveWeapon()) {
         weaponViewmodel.update(playerController.getSpeed(), delta);

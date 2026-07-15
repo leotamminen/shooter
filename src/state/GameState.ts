@@ -18,6 +18,12 @@ export class GameState {
   currentAmmo = 0;
   reserveAmmo = 0;
   isReloading = false;
+  // Checkpoint 21 addendum: mirrors WeaponSystem.hasActiveWeapon(), written
+  // every frame by WeaponSystem.update() alongside the other ammo/weapon
+  // fields above -- ui/HUD.ts reads this instead of reaching into
+  // WeaponSystem directly, matching this project's established "HUD reads
+  // only GameState" rule.
+  hasActiveWeapon = false;
 
   canInteract = false;
 

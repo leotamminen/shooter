@@ -100,6 +100,45 @@ function createHandGroup(material: THREE.MeshStandardMaterial): THREE.Group {
   return group;
 }
 
+// Knife mesh (checkpoint 21 addendum) -- a child of the right hand group
+// only (never the left, never cloned onto it -- added after the left-hand
+// clone in HandsViewmodel's constructor), built once but starting hidden.
+// Shown only for the duration of a melee swing via setKnifeVisible(), not
+// permanently. Two boxes: a thin blade (dark metal tone) and a slightly
+// thicker hilt (dark grip color, matching the dark near-black tones this
+// project already uses elsewhere for grip/panel surfaces, e.g.
+// ComputerMesh.ts's keyboard), positioned as if gripped in the fist,
+// extending forward from the palm the same direction the fingers curl
+// toward.
+const KNIFE_BLADE_COLOR = 0x555555;
+const KNIFE_HILT_COLOR = 0x1a1a1a;
+const KNIFE_HILT_SIZE: [number, number, number] = [0.02, 0.02, 0.04];
+const KNIFE_BLADE_SIZE: [number, number, number] = [0.012, 0.008, 0.09];
+const KNIFE_Y = 0.02;
+const KNIFE_HILT_Z = PALM_HALF_DEPTH + KNIFE_HILT_SIZE[2] / 2;
+const KNIFE_BLADE_Z = KNIFE_HILT_Z + KNIFE_HILT_SIZE[2] / 2 + KNIFE_BLADE_SIZE[2] / 2;
+
+function createKnifeGroup(): THREE.Group {
+  const group = new THREE.Group();
+
+  const hilt = new THREE.Mesh(
+    new THREE.BoxGeometry(...KNIFE_HILT_SIZE),
+    new THREE.MeshStandardMaterial({ color: KNIFE_HILT_COLOR }),
+  );
+  hilt.position.set(0, KNIFE_Y, KNIFE_HILT_Z);
+  group.add(hilt);
+
+  const blade = new THREE.Mesh(
+    new THREE.BoxGeometry(...KNIFE_BLADE_SIZE),
+    new THREE.MeshStandardMaterial({ color: KNIFE_BLADE_COLOR }),
+  );
+  blade.position.set(0, KNIFE_Y, KNIFE_BLADE_Z);
+  group.add(blade);
+
+  group.visible = false;
+  return group;
+}
+
 // Positioning (checkpoint 21) -- same VIEWMODEL_CONFIG-style pattern
 // WeaponViewmodel.ts already established, one offset object per hand
 // instead of a single mirrored one, since hands (unlike the single weapon
@@ -144,6 +183,7 @@ export class HandsViewmodel {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly leftHand: THREE.Group;
   private readonly rightHand: THREE.Group;
+  private readonly knife: THREE.Group;
 
   private swayTime = 0;
   private readonly leftImpulse = new ImpulseOffset(
@@ -183,6 +223,11 @@ export class HandsViewmodel {
     // in-browser, not just assumed (see CLAUDE.md's checkpoint-21 decisions
     // log).
     this.leftHand.scale.x = -1;
+
+    // Added after the left-hand clone above, deliberately -- so the knife
+    // is never mirrored onto the left hand along with it.
+    this.knife = createKnifeGroup();
+    this.rightHand.add(this.knife);
 
     // Children of the camera, not the scene directly -- same "child
     // transform cancels the camera's own world rotation" trick
@@ -236,6 +281,13 @@ export class HandsViewmodel {
   addImpulse(hand: "left" | "right", offset: THREE.Vector3Like, decayTime: number): void {
     const target = hand === "left" ? this.leftImpulse : this.rightImpulse;
     target.addImpulse(offset, decayTime);
+  }
+
+  // Checkpoint 21 addendum: toggles the right hand's knife mesh -- shown
+  // only for the duration of a melee swing (see main.ts's onMeleeAttack
+  // wiring), not permanently equipped/visible at rest.
+  setKnifeVisible(visible: boolean): void {
+    this.knife.visible = visible;
   }
 
   // The second render pass -- identical technique to WeaponViewmodel's own

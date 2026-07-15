@@ -328,6 +328,11 @@ export class WeaponSystem {
       this.gameState.reserveAmmo = 0;
       this.gameState.isReloading = false;
     }
+    // Checkpoint 21 addendum: mirrors hasActiveWeapon() into GameState every
+    // frame, alongside the fields above -- ui/HUD.ts reads this to decide
+    // whether to render the ammo display at all, rather than reaching into
+    // WeaponSystem directly.
+    this.gameState.hasActiveWeapon = this.hasActiveWeapon();
   }
 
   private fire(): void {

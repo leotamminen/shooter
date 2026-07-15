@@ -48,6 +48,10 @@ export class HUD {
   private readonly root: HTMLDivElement;
 
   private readonly crosshairEl: HTMLDivElement;
+  // Checkpoint 21 addendum: the whole weapon-name-plus-count block, hidden
+  // entirely (not just blanked) whenever gameState.hasActiveWeapon is
+  // false -- see updateAmmo() below.
+  private readonly ammoBoxEl: HTMLDivElement;
   private readonly weaponNameEl: HTMLDivElement;
   private readonly ammoCountEl: HTMLDivElement;
   private readonly statusEl: HTMLDivElement;
@@ -129,7 +133,7 @@ export class HUD {
     });
     root.appendChild(this.feedbackEl);
 
-    const ammoBox = createDiv({
+    this.ammoBoxEl = createDiv({
       position: "absolute",
       right: "24px",
       bottom: "24px",
@@ -141,9 +145,9 @@ export class HUD {
       letterSpacing: "0.05em",
     });
     this.ammoCountEl = createDiv({ fontSize: "22px", fontWeight: "bold" });
-    ammoBox.appendChild(this.weaponNameEl);
-    ammoBox.appendChild(this.ammoCountEl);
-    root.appendChild(ammoBox);
+    this.ammoBoxEl.appendChild(this.weaponNameEl);
+    this.ammoBoxEl.appendChild(this.ammoCountEl);
+    root.appendChild(this.ammoBoxEl);
 
     this.healthEl = createDiv({
       position: "absolute",
@@ -287,6 +291,13 @@ export class HUD {
   }
 
   private updateAmmo(): void {
+    // Checkpoint 21 addendum: hidden entirely (not "0 / 0") with no active
+    // weapon -- HandsViewmodel's own rendering already tells the player
+    // they're unarmed, the same reasoning as updateStatusPrompt()'s "No
+    // ammo" fix below.
+    this.ammoBoxEl.style.display = this.gameState.hasActiveWeapon ? "" : "none";
+    if (!this.gameState.hasActiveWeapon) return;
+
     this.weaponNameEl.textContent = this.gameState.weaponName;
     this.ammoCountEl.textContent = `${this.gameState.currentAmmo} / ${this.gameState.reserveAmmo}`;
   }
