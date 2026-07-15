@@ -62,6 +62,16 @@ const BOLT_X = RECEIVER_SIZE[0] / 2 + BOLT_SIZE[0] / 2 - 0.005;
 const BOLT_Y = RECEIVER_SIZE[1] * 0.1;
 const BOLT_Z = -0.02;
 
+// Checkpoint 25: the magazine/bolt's own rest local positions (exactly what
+// createAK47Mesh() below sets each mesh's .position to), exported so
+// core/ReloadSequencer.ts can add its own animated offsets on top of these
+// rather than overwriting them or re-deriving them from a live mesh (which
+// would risk drifting once a reload is already in progress and the mesh's
+// current position is no longer the rest position). No geometry changed
+// here -- these are just named handles onto values that already existed.
+export const AK47_MAGAZINE_REST_POSITION = { x: 0, y: MAGAZINE_Y, z: MAGAZINE_Z };
+export const AK47_BOLT_REST_POSITION = { x: BOLT_X, y: BOLT_Y, z: BOLT_Z };
+
 // Checkpoint 23: the first weapon with a real per-weapon viewmodel mesh
 // instead of the generic gray box every weapon has used since checkpoint
 // 13 -- see WeaponViewmodel.ts's own checkpoint-23 comments for why only

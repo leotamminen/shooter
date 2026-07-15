@@ -54,4 +54,63 @@ export const SOUNDS: SoundDef[] = [
     positional: true,
     loop: false,
   },
+  // AK-47 reload sounds (checkpoint 25): six synthesized placeholder tones,
+  // the same Node-generated-PCM technique every other placeholder sound in
+  // this project already uses -- clearly named for later replacement, not
+  // meant to ship as final audio. All non-positional, same rationale as
+  // pistol_fire: always the local player's own action, never a 3D source.
+  // core/ReloadSequencer.ts plays each once, at the moment its own phase
+  // begins -- see that file for the phase-to-sound mapping.
+  {
+    id: "reload_mag_out",
+    path: "/sounds/reload_mag_out.wav",
+    volume: 0.5,
+    positional: false,
+    loop: false,
+  },
+  // A soft sway/rustle, not a hard sound -- deliberately quieter than the
+  // others, since this is the new magazine merely being brought into
+  // position, not an impact.
+  {
+    id: "reload_mag_rise",
+    path: "/sounds/reload_mag_rise.wav",
+    volume: 0.3,
+    positional: false,
+    loop: false,
+  },
+  {
+    id: "reload_mag_in",
+    path: "/sounds/reload_mag_in.wav",
+    volume: 0.5,
+    positional: false,
+    loop: false,
+  },
+  {
+    id: "reload_bolt_pull",
+    path: "/sounds/reload_bolt_pull.wav",
+    volume: 0.5,
+    positional: false,
+    loop: false,
+  },
+  // Deliberately the most percussive of the set -- a hard, sharp click,
+  // distinct in character from the other five, matching the "bolt snapping
+  // forward" moment it represents.
+  {
+    id: "reload_bolt_release",
+    path: "/sounds/reload_bolt_release.wav",
+    volume: 0.6,
+    positional: false,
+    loop: false,
+  },
+  // The one sound used for M1911/MAC-10's simple generic dip (see
+  // WeaponSystem.onReloadStart's non-AK-47 branch in main.ts) -- distinct
+  // from all five AK-47-specific phase sounds above, since neither of those
+  // weapons has named parts for a real phase sequence to play against.
+  {
+    id: "reload_generic",
+    path: "/sounds/reload_generic.wav",
+    volume: 0.5,
+    positional: false,
+    loop: false,
+  },
 ];

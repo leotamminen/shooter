@@ -127,6 +127,14 @@ export class WeaponSystem {
   // very first hands->weapon transition from an empty starting loadout
   // (see pickupWeapon() below).
   private readonly onWeaponSwap: () => void;
+  // Checkpoint 25: fired once, from startReload(), the instant a reload
+  // actually starts (not on every failed R press -- see startReload()'s own
+  // early-return guards, unchanged). emptyReload is captured before any
+  // ammo is touched (finishReload() is the only place ammo changes), so
+  // main.ts's ReloadSequencer/generic-dip wiring can decide up front
+  // whether this is a tactical reload (skip the bolt-rack phase) or an
+  // empty one (play it), without needing to inspect ammo state itself.
+  private readonly onReloadStart: (weapon: Weapon, emptyReload: boolean) => void;
 
   constructor(
     camera: THREE.Camera,
@@ -139,6 +147,7 @@ export class WeaponSystem {
     onMeleeAttack: (hitEnemy: boolean) => void,
     onFire: (kickStrength: number) => void,
     onWeaponSwap: () => void,
+    onReloadStart: (weapon: Weapon, emptyReload: boolean) => void,
   ) {
     if (weapon === null) {
       this.startingWeapon = null;
@@ -158,6 +167,7 @@ export class WeaponSystem {
     this.onMeleeAttack = onMeleeAttack;
     this.onFire = onFire;
     this.onWeaponSwap = onWeaponSwap;
+    this.onReloadStart = onReloadStart;
 
     window.addEventListener("mousedown", this.handleMouseDown);
     window.addEventListener("mouseup", this.handleMouseUp);
@@ -408,8 +418,14 @@ export class WeaponSystem {
     if (this.currentAmmo >= this.weapon.magSize) return;
     if (this.reserveAmmo <= 0) return;
 
+    // Checkpoint 25: captured before this.isReloading flips and before
+    // finishReload() ever touches ammo -- a tactical reload (some ammo
+    // still chambered) never racks the bolt, since a round is already
+    // chambered; an empty reload (fired the mag dry) always does.
+    const emptyReload = this.currentAmmo === 0;
     this.isReloading = true;
     this.reloadTimeRemaining = this.weapon.reloadTime;
+    this.onReloadStart(this.weapon, emptyReload);
   }
 
   private finishReload(): void {

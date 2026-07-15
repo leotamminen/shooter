@@ -13,6 +13,7 @@ import { WeaponViewmodel } from "./core/WeaponViewmodel";
 import { HandsViewmodel } from "./core/HandsViewmodel";
 import { MeleeViewmodel } from "./core/MeleeViewmodel";
 import { MeleeSequencer } from "./core/MeleeSequencer";
+import { ReloadSequencer } from "./core/ReloadSequencer";
 import type { GameMode } from "./modes/GameMode";
 import { ZombieSurvival } from "./modes/ZombieSurvival";
 import { ShootingRange } from "./modes/ShootingRange";
@@ -132,6 +133,17 @@ function startGame(selections: GameSelections): void {
   // preload, AudioSystem.play("melee_hit") would silently no-op (see
   // AudioSystem.play()'s early return when a sound was never load()ed).
   void audioSystem.load(findById(SOUNDS, "melee_hit"));
+  // Checkpoint 25: the six reload sounds (ReloadSequencer's five AK-47
+  // phase sounds plus the generic M1911/MAC-10 dip sound) -- every one of
+  // these needs both a content/sounds.ts SoundDef (already added) and this
+  // preload call, the exact two-step requirement the checkpoint-23 fix had
+  // to add retroactively for mac10_fire/ak47_single above.
+  void audioSystem.load(findById(SOUNDS, "reload_mag_out"));
+  void audioSystem.load(findById(SOUNDS, "reload_mag_rise"));
+  void audioSystem.load(findById(SOUNDS, "reload_mag_in"));
+  void audioSystem.load(findById(SOUNDS, "reload_bolt_pull"));
+  void audioSystem.load(findById(SOUNDS, "reload_bolt_release"));
+  void audioSystem.load(findById(SOUNDS, "reload_generic"));
   void audioSystem.load(findById(SOUNDS, "zombie_growl"));
   void audioSystem.load(findById(SOUNDS, "zombie_death"));
 
@@ -157,6 +169,11 @@ function startGame(selections: GameSelections): void {
   // forward-declaration pattern already used for gameMode above (assigned
   // later, only ever invoked after construction has long finished).
   let meleeSequencer: MeleeSequencer;
+  // Checkpoint 25: unlike meleeSequencer, this needs no forward declaration
+  // -- its only dependency is audioSystem (already constructed above), not
+  // weaponSystem, so it can be constructed directly before weaponSystem's
+  // own onReloadStart callback closure below references it.
+  const reloadSequencer = new ReloadSequencer(audioSystem);
 
   const weaponSystem = new WeaponSystem(
     sceneManager.camera,
@@ -199,6 +216,23 @@ function startGame(selections: GameSelections): void {
     // Checkpoint 21: the weapon-swap dip -- a simple downward nudge, tuned
     // by testing switching between two owned weapons in-browser.
     () => weaponViewmodel.addImpulse({ x: 0, y: -0.08, z: 0 }, 0.25),
+    // Checkpoint 25: the AK-47 gets the full ReloadSequencer choreography;
+    // every other ranged weapon (M1911/MAC-10 today) gets a much simpler
+    // generic dip reusing the existing ImpulseOffset mechanism -- one
+    // impulse whose own decayTime is set to weapon.reloadTime, so it eases
+    // back up over the whole reload with zero new phase logic, and
+    // automatically scales with any future reload-speed perk since it
+    // reads reloadTime directly at trigger time. Both branches also play
+    // their own sound -- ReloadSequencer plays its five phase sounds
+    // itself; the generic dip plays reload_generic once, here.
+    (weapon, emptyReload) => {
+      if (weapon.id === "ak47") {
+        reloadSequencer.trigger(weapon, emptyReload);
+      } else {
+        weaponViewmodel.addImpulse({ x: 0, y: -0.1, z: 0 }, weapon.reloadTime ?? 1);
+        audioSystem.play("reload_generic");
+      }
+    },
   );
 
   // Checkpoint 22: constructed immediately after weaponSystem, the earliest
@@ -349,6 +383,10 @@ function startGame(selections: GameSelections): void {
       // Checkpoint 22: driven every alive frame regardless of phase -- a
       // no-op while idle (StateMachine's "idle" phase has no onUpdate).
       meleeSequencer.update(delta);
+      // Checkpoint 25: driven every alive frame regardless of state -- a
+      // no-op while !isActive(), the same shape meleeSequencer.update()
+      // already has.
+      reloadSequencer.update(delta);
     }
     hud.update(delta);
     sceneManager.render();
@@ -367,7 +405,7 @@ function startGame(selections: GameSelections): void {
         weaponViewmodel.setSequencerOffset(new THREE.Vector3());
         handsViewmodel.setSequencerOffset(new THREE.Vector3());
         if (weaponSystem.hasActiveWeapon()) {
-          weaponViewmodel.update(playerController.getSpeed(), delta, weaponSystem.getActiveWeapon());
+          weaponViewmodel.update(playerController.getSpeed(), delta, weaponSystem.getActiveWeapon(), reloadSequencer);
           weaponViewmodel.render(sceneManager.renderer);
         } else {
           handsViewmodel.update(delta);
@@ -376,7 +414,7 @@ function startGame(selections: GameSelections): void {
       } else if (meleeSequencer.wasWeaponActive()) {
         weaponViewmodel.setSequencerOffset(meleeSequencer.getCarrierOffset());
         if (meleeSequencer.getActiveLayer() === "carrier") {
-          weaponViewmodel.update(playerController.getSpeed(), delta, weaponSystem.getActiveWeapon());
+          weaponViewmodel.update(playerController.getSpeed(), delta, weaponSystem.getActiveWeapon(), reloadSequencer);
           weaponViewmodel.render(sceneManager.renderer);
         } else {
           meleeViewmodel.render(sceneManager.renderer);

@@ -1,8 +1,15 @@
 import * as THREE from "three";
 import type { Weapon } from "../types";
 import { ImpulseOffset } from "./utils/ImpulseOffset";
-import { createAK47Mesh } from "./utils/WeaponMesh";
+import {
+  createAK47Mesh,
+  AK47_MAGAZINE_NAME,
+  AK47_BOLT_NAME,
+  AK47_MAGAZINE_REST_POSITION,
+  AK47_BOLT_REST_POSITION,
+} from "./utils/WeaponMesh";
 import { createFistMesh } from "./utils/HandMesh";
+import type { ReloadSequencer } from "./ReloadSequencer";
 
 const VIEWMODEL_FOV = 50;
 const VIEWMODEL_NEAR = 0.01;
@@ -113,6 +120,15 @@ const AK47_OFFSET = { x: -0.15, y: 0.18, z: 0 };
 // actually move it), but it inherits every existing displayGroup transform
 // for free simply by being parented there, the same way ak47Mesh already
 // does.
+//
+// Checkpoint 25: update() gains a reloadSequencer parameter. Unlike
+// MeleeSequencer, this never changes which mesh is rendered -- the AK-47
+// stays visible and rendered normally throughout a reload. While it's
+// active for the AK-47 specifically, this class layers ReloadSequencer's
+// tilt/magazine/bolt/support-hand values on top of the AK-47's normal
+// rendering; M1911/MAC-10 get a much simpler generic addImpulse() dip
+// instead, wired directly from main.ts's onReloadStart callback (see
+// CLAUDE.md's decisions log for why that split exists).
 export class WeaponViewmodel {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
@@ -126,6 +142,13 @@ export class WeaponViewmodel {
   private readonly displayGroup: THREE.Group;
   private readonly genericMesh: THREE.Mesh;
   private readonly ak47Mesh: THREE.Group;
+  // Checkpoint 25: handles onto the AK-47 mesh's own named magazine/bolt
+  // children (utils/WeaponMesh.ts), retrieved once at construction --
+  // ReloadSequencer's per-frame offsets are added on top of these meshes'
+  // rest positions during an active AK-47 reload, never overwriting the
+  // rest position constants themselves.
+  private readonly ak47Magazine: THREE.Object3D;
+  private readonly ak47Bolt: THREE.Object3D;
   // Checkpoint 24: a persistent left-hand grip for two-handed weapons
   // (Weapon.hasSupportHand) -- also a child of displayGroup, so it inherits
   // every existing transform (walk bob, fire-kick/swap-dip impulses, the
@@ -209,6 +232,22 @@ export class WeaponViewmodel {
     this.ak47Mesh.position.set(AK47_OFFSET.x, AK47_OFFSET.y, AK47_OFFSET.z);
     this.displayGroup.add(this.ak47Mesh);
 
+    // Checkpoint 25: these named children always exist on whatever
+    // createAK47Mesh() returns (see utils/WeaponMesh.ts) -- thrown errors
+    // here would only ever indicate that factory itself is broken, the same
+    // "fail loudly, don't silently no-op" precedent findById() already set
+    // for a missing content lookup.
+    const magazine = this.ak47Mesh.getObjectByName(AK47_MAGAZINE_NAME);
+    if (!magazine) {
+      throw new Error(`WeaponViewmodel: createAK47Mesh() is missing ${AK47_MAGAZINE_NAME}`);
+    }
+    this.ak47Magazine = magazine;
+    const bolt = this.ak47Mesh.getObjectByName(AK47_BOLT_NAME);
+    if (!bolt) {
+      throw new Error(`WeaponViewmodel: createAK47Mesh() is missing ${AK47_BOLT_NAME}`);
+    }
+    this.ak47Bolt = bolt;
+
     // Checkpoint 24: built once here too, alongside the other two meshes --
     // same "cheap procedural boxes, no reason to defer" reasoning as
     // ak47Mesh above. Starts hidden; update() below decides visibility and
@@ -230,7 +269,12 @@ export class WeaponViewmodel {
   // weapon mesh's local position from three summed sources: the static
   // VIEWMODEL_CONFIG base offset, a continuous speed-driven bob, and the
   // sum of any active addImpulse() calls.
-  update(speed: number, deltaTime: number, activeWeapon: Weapon | null): void {
+  update(
+    speed: number,
+    deltaTime: number,
+    activeWeapon: Weapon | null,
+    reloadSequencer: ReloadSequencer,
+  ): void {
     // Checkpoint 23: swap which mesh is displayed only when the equipped
     // weapon's id actually changed since last frame -- everything else
     // (mouse-move-driven camera rotation, bob, impulses) changes every
@@ -292,6 +336,64 @@ export class WeaponViewmodel {
       VIEWMODEL_CONFIG.offset.y + bobY + impulse.y + this.sequencerOffset.y,
       VIEWMODEL_CONFIG.offset.z + impulse.z + this.sequencerOffset.z,
     );
+
+    // Checkpoint 25: the AK-47's reload choreography -- unlike the melee
+    // sequencer, this never swaps which mesh renders; it only layers
+    // additional rotation/offsets on top of the AK-47's normal position
+    // while reloadSequencer.isActive() is true, and for any other weapon
+    // (or once the sequence finishes) resets to the exact rest pose rather
+    // than leaving whatever the sequencer's own last active frame happened
+    // to compute (which can land a hair short of a perfectly-zeroed offset
+    // -- see ReloadSequencer.update()'s own comments).
+    if (weaponId === "ak47" && reloadSequencer.isActive()) {
+      this.displayGroup.rotation.z = reloadSequencer.getTiltAngle();
+
+      const magOffset = reloadSequencer.getMagazineOffset();
+      this.ak47Magazine.position.set(
+        AK47_MAGAZINE_REST_POSITION.x + magOffset.x,
+        AK47_MAGAZINE_REST_POSITION.y + magOffset.y,
+        AK47_MAGAZINE_REST_POSITION.z + magOffset.z,
+      );
+
+      const boltOffset = reloadSequencer.getBoltOffset();
+      this.ak47Bolt.position.set(
+        AK47_BOLT_REST_POSITION.x + boltOffset.x,
+        AK47_BOLT_REST_POSITION.y + boltOffset.y,
+        AK47_BOLT_REST_POSITION.z + boltOffset.z,
+      );
+
+      const handOverride = reloadSequencer.getSupportHandOverride();
+      if (handOverride) {
+        this.supportHandMesh.position.copy(handOverride);
+      } else if (activeWeapon?.supportHandOffset) {
+        this.supportHandMesh.position.set(
+          activeWeapon.supportHandOffset.x,
+          activeWeapon.supportHandOffset.y,
+          activeWeapon.supportHandOffset.z,
+        );
+      }
+    } else {
+      this.displayGroup.rotation.z = 0;
+      if (weaponId === "ak47") {
+        this.ak47Magazine.position.set(
+          AK47_MAGAZINE_REST_POSITION.x,
+          AK47_MAGAZINE_REST_POSITION.y,
+          AK47_MAGAZINE_REST_POSITION.z,
+        );
+        this.ak47Bolt.position.set(
+          AK47_BOLT_REST_POSITION.x,
+          AK47_BOLT_REST_POSITION.y,
+          AK47_BOLT_REST_POSITION.z,
+        );
+        if (activeWeapon?.supportHandOffset) {
+          this.supportHandMesh.position.set(
+            activeWeapon.supportHandOffset.x,
+            activeWeapon.supportHandOffset.y,
+            activeWeapon.supportHandOffset.z,
+          );
+        }
+      }
+    }
   }
 
   // Checkpoint 22: MeleeSequencer holds this nonzero (translating the
