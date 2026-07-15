@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { createHandMesh, createKnifeMesh } from "./utils/HandMesh";
+import { createFistMesh, createKnifeMesh } from "./utils/HandMesh";
 
 const VIEWMODEL_FOV = 50;
 const VIEWMODEL_NEAR = 0.01;
@@ -92,8 +92,21 @@ export class MeleeViewmodel {
     this.scene.add(this.camera);
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
-    this.hand = createHandMesh();
-    this.hand.add(createKnifeMesh());
+    // Checkpoint 22 fix: a closed fist + forearm (createFistMesh()), not
+    // createHandMesh()'s open, fanned-fingers hand -- a different pose for
+    // gripping a knife, with a forearm segment long enough to always
+    // render off the bottom of the screen instead of visibly ending
+    // mid-air. HandsViewmodel's idle open-hand pair is unaffected -- it
+    // still calls createHandMesh() directly, unchanged.
+    this.hand = createFistMesh();
+    const knife = createKnifeMesh();
+    // createKnifeMesh() extends its blade along local +Z (the same
+    // direction createHandMesh()'s fingers curl toward, i.e. toward the
+    // camera once attached with no rotation) -- flipped 180° here so the
+    // blade points away from the camera (-Z, toward whatever's being
+    // attacked) with the hilt nearer the camera, matching a normal grip.
+    knife.rotation.y = Math.PI;
+    this.hand.add(knife);
     this.hand.position.set(GUARD_POSITION.x, GUARD_POSITION.y, GUARD_POSITION.z);
     this.camera.add(this.hand);
 

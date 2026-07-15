@@ -102,24 +102,84 @@ export function createHandMesh(): THREE.Group {
   return group;
 }
 
-// Knife mesh: two boxes, a thin blade (dark metal tone) and a slightly
-// thicker hilt (dark grip color, matching the dark near-black tones this
-// project already uses elsewhere for grip/panel surfaces, e.g.
-// ComputerMesh.ts's keyboard), positioned as if gripped in the fist,
-// extending forward in the same local +Z direction createHandMesh()'s
-// fingers curl toward. Visible by default -- unlike the checkpoint-21
-// version (a permanent-but-hidden child of HandsViewmodel's right hand,
-// toggled via a since-removed setKnifeVisible()), this factory has no
-// opinion about visibility; MeleeViewmodel (its only caller as of
-// checkpoint 22) always shows it, since a knife is the whole point of that
-// viewmodel.
+// Closed fist + forearm (checkpoint 22 fix): a different pose for a
+// different purpose than createHandMesh()'s open, fanned-fingers hand --
+// MeleeViewmodel grips a knife, it doesn't hold anything out flat, so a
+// blocky closed fist (main block + a small overlapping knuckle ridge) reads
+// correctly where fanned fingers wouldn't. The forearm is a separate,
+// narrower, elongated box directly below the fist, tall enough that its
+// far end always renders below the visible frame regardless of pose --
+// the same "let it run off-screen" trick every other viewmodel in this
+// project already relies on instead of literally terminating at the
+// screen edge -- with a deliberate Y overlap into the fist's own footprint
+// (FOREARM_OVERLAP) so there's no seam/gap at any viewing angle, per this
+// checkpoint's own verification requirement. Local +Z/-Z follow the same
+// convention createHandMesh()'s fingers already established (unchanged,
+// not re-tuned here) -- only the shape is different, not the orientation.
+const FIST_SIZE: [number, number, number] = [0.08, 0.07, 0.09];
+const FIST_HALF_DEPTH = FIST_SIZE[2] / 2;
+const FIST_KNUCKLE_SIZE: [number, number, number] = [0.075, 0.02, 0.03];
+const FIST_KNUCKLE_Y = FIST_SIZE[1] / 2 - FIST_KNUCKLE_SIZE[1] / 2;
+// Centered exactly on the fist's own +Z face: half the knuckle box overlaps
+// into the fist (no seam), half pokes out past it (a visible ridge).
+const FIST_KNUCKLE_Z = FIST_HALF_DEPTH;
+
+const FOREARM_SIZE: [number, number, number] = [0.06, 0.4, 0.075];
+const FOREARM_OVERLAP = 0.02;
+const FOREARM_Y = -(FIST_SIZE[1] / 2 + FOREARM_SIZE[1] / 2 - FOREARM_OVERLAP);
+
+export function createFistMesh(): THREE.Group {
+  const material = new THREE.MeshStandardMaterial({ map: createSkinTexture() });
+  const group = new THREE.Group();
+
+  const fist = new THREE.Mesh(new THREE.BoxGeometry(...FIST_SIZE), material);
+  group.add(fist);
+
+  const knuckles = new THREE.Mesh(new THREE.BoxGeometry(...FIST_KNUCKLE_SIZE), material);
+  knuckles.position.set(0, FIST_KNUCKLE_Y, FIST_KNUCKLE_Z);
+  group.add(knuckles);
+
+  const forearm = new THREE.Mesh(new THREE.BoxGeometry(...FOREARM_SIZE), material);
+  forearm.position.set(0, FOREARM_Y, 0);
+  group.add(forearm);
+
+  return group;
+}
+
+// Knife mesh: a grip (box, dark near-black -- matching the dark surface
+// tones this project already uses elsewhere for grip/panel surfaces, e.g.
+// ComputerMesh.ts's keyboard), a small hexagonal-prism guard between grip
+// and blade (a distinct lighter metal tone from both the blade and the
+// grip), and a tapered, faceted blade (a low-radial-segment cone, not a
+// box, for a dagger-like silhouette instead of a flat rectangular slab) --
+// all three extend along local +Z, the same axis convention
+// createHandMesh()'s fingers curl toward and createFistMesh() above keeps
+// unchanged; MeleeViewmodel is solely responsible for orienting the whole
+// group correctly on screen (a 180° Y rotation applied where it attaches
+// the knife -- unchanged here, not re-tuned). Visible by default -- unlike
+// the checkpoint-21 version (a permanent-but-hidden child of
+// HandsViewmodel's right hand, toggled via a since-removed
+// setKnifeVisible()), this factory has no opinion about visibility;
+// MeleeViewmodel (its only caller as of checkpoint 22) always shows it,
+// since a knife is the whole point of that viewmodel.
 const KNIFE_BLADE_COLOR = 0x555555;
+const KNIFE_GUARD_COLOR = 0x8c8c8c;
 const KNIFE_HILT_COLOR = 0x1a1a1a;
 const KNIFE_HILT_SIZE: [number, number, number] = [0.02, 0.02, 0.04];
-const KNIFE_BLADE_SIZE: [number, number, number] = [0.012, 0.008, 0.09];
+const KNIFE_GUARD_RADIUS = 0.018;
+const KNIFE_GUARD_HEIGHT = 0.012;
+const KNIFE_GUARD_SEGMENTS = 6;
+// Near-zero top radius, wider base, 6 radial segments -- a faceted,
+// non-round taper reading as a dagger rather than a round pin. Starting
+// guesses, tuned by eye in-browser against the mockups' proportions.
+const KNIFE_BLADE_TIP_RADIUS = 0.002;
+const KNIFE_BLADE_BASE_RADIUS = 0.02;
+const KNIFE_BLADE_LENGTH = 0.15;
+const KNIFE_BLADE_SEGMENTS = 6;
 const KNIFE_Y = 0.02;
-const KNIFE_HILT_Z = PALM_HALF_DEPTH + KNIFE_HILT_SIZE[2] / 2;
-const KNIFE_BLADE_Z = KNIFE_HILT_Z + KNIFE_HILT_SIZE[2] / 2 + KNIFE_BLADE_SIZE[2] / 2;
+const KNIFE_HILT_Z = FIST_HALF_DEPTH + KNIFE_HILT_SIZE[2] / 2;
+const KNIFE_GUARD_Z = KNIFE_HILT_Z + KNIFE_HILT_SIZE[2] / 2 + KNIFE_GUARD_HEIGHT / 2;
+const KNIFE_BLADE_Z = KNIFE_GUARD_Z + KNIFE_GUARD_HEIGHT / 2 + KNIFE_BLADE_LENGTH / 2;
 
 export function createKnifeMesh(): THREE.Group {
   const group = new THREE.Group();
@@ -131,10 +191,23 @@ export function createKnifeMesh(): THREE.Group {
   hilt.position.set(0, KNIFE_Y, KNIFE_HILT_Z);
   group.add(hilt);
 
+  // CylinderGeometry's default axis is local Y; rotating +90° about X maps
+  // its +Y (radiusTop) end to +Z, matching this file's Z-extending
+  // convention -- both the guard and the blade below need this same
+  // rotation for their "length" to run along Z instead of Y.
+  const guard = new THREE.Mesh(
+    new THREE.CylinderGeometry(KNIFE_GUARD_RADIUS, KNIFE_GUARD_RADIUS, KNIFE_GUARD_HEIGHT, KNIFE_GUARD_SEGMENTS),
+    new THREE.MeshStandardMaterial({ color: KNIFE_GUARD_COLOR }),
+  );
+  guard.rotation.x = Math.PI / 2;
+  guard.position.set(0, KNIFE_Y, KNIFE_GUARD_Z);
+  group.add(guard);
+
   const blade = new THREE.Mesh(
-    new THREE.BoxGeometry(...KNIFE_BLADE_SIZE),
+    new THREE.CylinderGeometry(KNIFE_BLADE_TIP_RADIUS, KNIFE_BLADE_BASE_RADIUS, KNIFE_BLADE_LENGTH, KNIFE_BLADE_SEGMENTS),
     new THREE.MeshStandardMaterial({ color: KNIFE_BLADE_COLOR }),
   );
+  blade.rotation.x = Math.PI / 2;
   blade.position.set(0, KNIFE_Y, KNIFE_BLADE_Z);
   group.add(blade);
 
