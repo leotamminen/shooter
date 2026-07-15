@@ -62,6 +62,10 @@ export const MAPS: MapDef[] = [
       // verified open floor, not shared with any other entity, now that the
       // terminal itself is gone.
       { id: "wall_buy_1", type: "wall_buy", linkedTo: "pistol", position: [12, 0.3, 12] },
+      // AK-47 wall-buy (checkpoint 23): row 1, col 1 — open floor, unused by
+      // any other entity. First guess, expect retuning like every other
+      // entity position in this project.
+      { id: "wall_buy_2", type: "wall_buy", linkedTo: "ak47", position: [2, 0.3, 2] },
     ],
   },
   {
@@ -118,6 +122,10 @@ export const MAPS: MapDef[] = [
         position: [16, 0.3, 14],
       },
       { id: "corridors_pickup_2", type: "pickup", position: [16, 0.3, 18] },
+      // AK-47 wall-buy (checkpoint 23): Room A, row 1, col 1 — open floor,
+      // unused by any other entity. First guess, expect retuning like every
+      // other entity position in this project.
+      { id: "corridors_wall_buy_2", type: "wall_buy", linkedTo: "ak47", position: [2, 0.3, 2] },
     ],
   },
   // campaign_room1 (checkpoint 17, extended at 19): Room 1 is unchanged in
@@ -257,6 +265,11 @@ export const MAPS: MapDef[] = [
         promptLabel: "Identity, who you are:",
         position: [13.4, 1.2, 9],
       },
+      // AK-47 wall-buy (checkpoint 23): Room 1, row 11, col 4 — open floor
+      // clear of the spawn/terminal/door/lock entities already in this
+      // room. First guess, expect retuning like every other entity
+      // position in this project.
+      { id: "campaign_wall_buy_2", type: "wall_buy", linkedTo: "ak47", position: [8, 1.3, 22] },
     ],
   },
 ];

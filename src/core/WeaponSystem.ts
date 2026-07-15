@@ -188,6 +188,16 @@ export class WeaponSystem {
     return this.slots[this.activeSlotIndex] !== null;
   }
 
+  // Checkpoint 23: a plain getter, no new callback plumbing -- main.ts
+  // reads this once per frame and passes it straight into
+  // WeaponViewmodel.update() so that class can decide which mesh to show
+  // (RangedWeapon's extra ammo-guarantee fields are structurally a Weapon,
+  // so no cast is needed). null exactly when hasActiveWeapon() is false.
+  getActiveWeapon(): Weapon | null {
+    const slot = this.slots[this.activeSlotIndex];
+    return slot ? slot.weapon : null;
+  }
+
   private get activeSlot(): WeaponSlot {
     const slot = this.slots[this.activeSlotIndex];
     if (!slot) {

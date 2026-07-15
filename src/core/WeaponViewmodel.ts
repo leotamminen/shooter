@@ -1,5 +1,7 @@
 import * as THREE from "three";
+import type { Weapon } from "../types";
 import { ImpulseOffset } from "./utils/ImpulseOffset";
+import { createAK47Mesh } from "./utils/WeaponMesh";
 
 const VIEWMODEL_FOV = 50;
 const VIEWMODEL_NEAR = 0.01;
@@ -80,10 +82,36 @@ export const VIEWMODEL_CONFIG = {
 // final local position is base + bob + summed active impulses; callers only
 // ever see update()/render()/addImpulse(), never the three pieces
 // separately.
+//
+// Checkpoint 23: update() gains an activeWeapon parameter so this class can
+// pick which mesh to display -- the generic box (every weapon before this
+// checkpoint, and M1911/MAC-10 still today) or utils/WeaponMesh.ts's
+// createAK47Mesh() (only for weapon id "ak47"). This is the one real
+// behavior change of that checkpoint; the base+bob+impulse+sequencer
+// position math below is otherwise unaffected and now applies to a wrapper
+// group (displayGroup) instead of a single mesh directly, so it keeps
+// working identically regardless of which child is currently visible.
 export class WeaponViewmodel {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
-  private readonly weaponMesh: THREE.Mesh;
+  // Checkpoint 23: the object actually repositioned every frame (base +
+  // bob + impulse + sequencer offset) is now this wrapper group, not a
+  // single mesh directly -- genericMesh/ak47Mesh are both its children,
+  // both built once at construction and left alone thereafter, toggled via
+  // .visible rather than added/removed/rebuilt on every weapon switch. Both
+  // sit at local (0,0,0) within displayGroup, so swapping which one is
+  // shown never changes the base offset math below.
+  private readonly displayGroup: THREE.Group;
+  private readonly genericMesh: THREE.Mesh;
+  private readonly ak47Mesh: THREE.Group;
+  // Checkpoint 23: the weapon id displayGroup's visible child was last set
+  // for -- update() only touches the two meshes' .visible flags when this
+  // actually changes, not every frame, per this checkpoint's own
+  // "swap, don't rebuild every frame" requirement. null covers both "no
+  // active weapon" (Campaign unarmed -- HandsViewmodel renders instead, but
+  // WeaponViewmodel.update() is simply never called then) and any future
+  // weapon id this file doesn't special-case.
+  private lastWeaponId: string | null = null;
 
   private smoothedSpeed = 0;
   private bobPhase = 0;
@@ -120,10 +148,6 @@ export class WeaponViewmodel {
     // the MeshStandardMaterial below would render solid black.
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
-    this.weaponMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(WEAPON_WIDTH, WEAPON_HEIGHT, WEAPON_LENGTH),
-      new THREE.MeshStandardMaterial({ color: WEAPON_COLOR }),
-    );
     // Child of the camera, not of the scene directly: this fixes the weapon
     // rigidly in this camera's view. Because a child mesh's view-space
     // transform is always just its local offset relative to the camera that
@@ -132,7 +156,23 @@ export class WeaponViewmodel {
     // of this camera's rotation -- there is no per-frame rotation sync, and
     // none is needed. Its local position is recomputed every frame by
     // update() below (base + bob + impulses), not set once here.
-    this.camera.add(this.weaponMesh);
+    this.displayGroup = new THREE.Group();
+    this.camera.add(this.displayGroup);
+
+    this.genericMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(WEAPON_WIDTH, WEAPON_HEIGHT, WEAPON_LENGTH),
+      new THREE.MeshStandardMaterial({ color: WEAPON_COLOR }),
+    );
+    this.displayGroup.add(this.genericMesh);
+
+    // Checkpoint 23: built once here, alongside the generic mesh, rather
+    // than lazily on first switch to AK-47 -- it's cheap procedural boxes,
+    // same as every other mesh in this project, so there's no real cost to
+    // building it up front and no benefit to deferring it. Starts hidden;
+    // update() below decides which of the two is actually shown.
+    this.ak47Mesh = createAK47Mesh();
+    this.ak47Mesh.visible = false;
+    this.displayGroup.add(this.ak47Mesh);
 
     window.addEventListener("resize", this.handleResize);
   }
@@ -146,7 +186,24 @@ export class WeaponViewmodel {
   // weapon mesh's local position from three summed sources: the static
   // VIEWMODEL_CONFIG base offset, a continuous speed-driven bob, and the
   // sum of any active addImpulse() calls.
-  update(speed: number, deltaTime: number): void {
+  update(speed: number, deltaTime: number, activeWeapon: Weapon | null): void {
+    // Checkpoint 23: swap which mesh is displayed only when the equipped
+    // weapon's id actually changed since last frame -- everything else
+    // (mouse-move-driven camera rotation, bob, impulses) changes every
+    // frame regardless, but there's no reason to touch two .visible flags
+    // on every one of those. Every weapon id other than "ak47" (including
+    // null, e.g. a theoretical future call before a weapon exists) keeps
+    // showing the generic box, unchanged from every checkpoint before this
+    // one -- M1911 and MAC-10 are not special-cased individually, "not
+    // ak47" is the only branch.
+    const weaponId = activeWeapon?.id ?? null;
+    if (weaponId !== this.lastWeaponId) {
+      this.lastWeaponId = weaponId;
+      const showAK47 = weaponId === "ak47";
+      this.ak47Mesh.visible = showAK47;
+      this.genericMesh.visible = !showAK47;
+    }
+
     // Smoothing raw speed (which can jump instantly between 0 and a
     // movement speed as keys are pressed/released) is what makes bob
     // amplitude both ramp up smoothly during acceleration and decay
@@ -168,7 +225,7 @@ export class WeaponViewmodel {
     const baseX = VIEWMODEL_CONFIG.mirrored
       ? -VIEWMODEL_CONFIG.offset.x
       : VIEWMODEL_CONFIG.offset.x;
-    this.weaponMesh.position.set(
+    this.displayGroup.position.set(
       baseX + bobX + impulse.x + this.sequencerOffset.x,
       VIEWMODEL_CONFIG.offset.y + bobY + impulse.y + this.sequencerOffset.y,
       VIEWMODEL_CONFIG.offset.z + impulse.z + this.sequencerOffset.z,

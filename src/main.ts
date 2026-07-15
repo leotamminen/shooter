@@ -361,7 +361,7 @@ function startGame(selections: GameSelections): void {
         weaponViewmodel.setSequencerOffset(new THREE.Vector3());
         handsViewmodel.setSequencerOffset(new THREE.Vector3());
         if (weaponSystem.hasActiveWeapon()) {
-          weaponViewmodel.update(playerController.getSpeed(), delta);
+          weaponViewmodel.update(playerController.getSpeed(), delta, weaponSystem.getActiveWeapon());
           weaponViewmodel.render(sceneManager.renderer);
         } else {
           handsViewmodel.update(delta);
@@ -370,7 +370,7 @@ function startGame(selections: GameSelections): void {
       } else if (meleeSequencer.wasWeaponActive()) {
         weaponViewmodel.setSequencerOffset(meleeSequencer.getCarrierOffset());
         if (meleeSequencer.getActiveLayer() === "carrier") {
-          weaponViewmodel.update(playerController.getSpeed(), delta);
+          weaponViewmodel.update(playerController.getSpeed(), delta, weaponSystem.getActiveWeapon());
           weaponViewmodel.render(sceneManager.renderer);
         } else {
           meleeViewmodel.render(sceneManager.renderer);

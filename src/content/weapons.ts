@@ -41,6 +41,31 @@ export const WEAPONS: Weapon[] = [
     // summed-magnitude clamp). First-guess value, tuned by eye in-browser.
     kickStrength: 0.8,
   },
+  // AK-47 (checkpoint 23): the first weapon with a real per-weapon viewmodel
+  // mesh (core/utils/WeaponMesh.ts's createAK47Mesh(), swapped in by
+  // WeaponViewmodel only for this id -- see its own checkpoint-23 comments).
+  // Full-auto like the MAC-10, but a heavier-hitting rifle: higher damage
+  // and a slightly slower cadence than the MAC-10's 0.08, a longer
+  // (full-rifle-reload-feeling) reloadTime, and the highest cost/kick of
+  // any ranged weapon so far. All stats are first-guess, tuned by manual
+  // verification rather than derived from a formula, same as every other
+  // weapon's stats before it.
+  {
+    id: "ak47",
+    name: "AK-47",
+    damage: 20,
+    fireRate: 0.1,
+    magSize: 30,
+    reloadTime: 2.5,
+    startingReserveAmmo: 90,
+    cost: 2500,
+    fireSoundId: "pistol_fire",
+    // Between the M1911's 0.3 and the MAC-10's 0.8 -- a heavier per-shot
+    // kick than either single-shot weapon, but still bounded by the same
+    // clamped ceiling (core/utils/ImpulseOffset.ts) full-auto fire already
+    // stacks against.
+    kickStrength: 0.6,
+  },
   // Knife (checkpoint 16): the first melee weapon -- no magSize/reloadTime/
   // startingReserveAmmo (all now optional on Weapon), meleeRange present
   // instead, which is what marks this as melee rather than ranged.
