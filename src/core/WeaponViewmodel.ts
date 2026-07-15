@@ -96,6 +96,11 @@ export class WeaponViewmodel {
     JITTER_FREQUENCY,
     JITTER_MAX_AMPLITUDE,
   );
+  // Checkpoint 22: an external offset an outside controller (MeleeSequencer)
+  // can hold nonzero to translate the weapon out of view during a melee
+  // performance, independent of and additive to the bob/impulse math below
+  // -- (0,0,0) whenever nothing is sequencing. See setSequencerOffset().
+  private readonly sequencerOffset = new THREE.Vector3();
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -164,10 +169,18 @@ export class WeaponViewmodel {
       ? -VIEWMODEL_CONFIG.offset.x
       : VIEWMODEL_CONFIG.offset.x;
     this.weaponMesh.position.set(
-      baseX + bobX + impulse.x,
-      VIEWMODEL_CONFIG.offset.y + bobY + impulse.y,
-      VIEWMODEL_CONFIG.offset.z + impulse.z,
+      baseX + bobX + impulse.x + this.sequencerOffset.x,
+      VIEWMODEL_CONFIG.offset.y + bobY + impulse.y + this.sequencerOffset.y,
+      VIEWMODEL_CONFIG.offset.z + impulse.z + this.sequencerOffset.z,
     );
+  }
+
+  // Checkpoint 22: MeleeSequencer holds this nonzero (translating the
+  // weapon out of view) while retracting/returning around a melee
+  // performance; zeroed by main.ts whenever the sequencer is idle so a
+  // stale offset can never leak into normal rendering.
+  setSequencerOffset(offset: THREE.Vector3): void {
+    this.sequencerOffset.copy(offset);
   }
 
   // Adds a temporary offset that decays linearly from its full value back

@@ -1,143 +1,10 @@
 import * as THREE from "three";
 import { ImpulseOffset } from "./utils/ImpulseOffset";
+import { createHandMesh } from "./utils/HandMesh";
 
 const VIEWMODEL_FOV = 50;
 const VIEWMODEL_NEAR = 0.01;
 const VIEWMODEL_FAR = 10;
-
-// Simple procedural-box hands (checkpoint 21) -- the same "no external
-// models/assets, everything's a box" aesthetic every other placeholder mesh
-// in this project already uses (ComputerMesh.ts, the coiled power cable,
-// the desk/chair decorations). Not anatomically precise: a palm slab, four
-// fanned fingers with a slight relaxed curl, and an opposable-looking thumb
-// is enough to read as "a hand" at viewmodel scale and distance.
-const PALM_SIZE: [number, number, number] = [0.09, 0.025, 0.11];
-const FINGER_SIZE: [number, number, number] = [0.018, 0.018, 0.055];
-const THUMB_SIZE: [number, number, number] = [0.02, 0.02, 0.05];
-
-// Local +Z is "toward the fingertips" (away from the wrist), matching the
-// same local-space convention ComputerMesh.ts uses for "toward the front."
-const PALM_HALF_DEPTH = PALM_SIZE[2] / 2;
-const FINGER_X_POSITIONS = [-0.03, -0.01, 0.01, 0.03];
-// Slight per-finger variation, not identical rotations, so the hand doesn't
-// read as four mechanically-identical rods -- first-guess values within the
-// -20/-35 degree range, tuned by eye in-browser.
-const FINGER_CURL_DEGREES = [-22, -30, -32, -25];
-const FINGER_Z = PALM_HALF_DEPTH + FINGER_SIZE[2] / 2 - 0.01;
-
-const THUMB_POSITION: [number, number, number] = [-0.055, -0.005, 0.01];
-const THUMB_ROTATION_Y_DEGREES = 45;
-const THUMB_ROTATION_Z_DEGREES = 45;
-
-// Skin texture (checkpoint 21): same technique as ComputerMesh.ts's
-// createScreenTexture() -- drawn once onto an offscreen canvas, not
-// per-frame, and reused as the one shared material map across every hand
-// part on both hands (cloning the right hand's group for the left, see
-// createHandGroup()/HandsViewmodel's constructor below, reuses the same
-// material/geometry references rather than duplicating them).
-const SKIN_TEXTURE_SIZE = 64;
-const SKIN_BASE_COLOR = "#d9a978";
-const SKIN_BLOTCH_COLORS = ["#c69465", "#e8bd94"];
-const SKIN_BLOTCH_COUNT = 10;
-
-function createSkinTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = SKIN_TEXTURE_SIZE;
-  canvas.height = SKIN_TEXTURE_SIZE;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    throw new Error("createSkinTexture: 2D canvas context unavailable");
-  }
-
-  ctx.fillStyle = SKIN_BASE_COLOR;
-  ctx.fillRect(0, 0, SKIN_TEXTURE_SIZE, SKIN_TEXTURE_SIZE);
-
-  ctx.globalAlpha = 0.18;
-  for (let i = 0; i < SKIN_BLOTCH_COUNT; i++) {
-    ctx.fillStyle = SKIN_BLOTCH_COLORS[i % SKIN_BLOTCH_COLORS.length];
-    const x = Math.random() * SKIN_TEXTURE_SIZE;
-    const y = Math.random() * SKIN_TEXTURE_SIZE;
-    const radius = 3 + Math.random() * 7;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-// Builds one hand (palm + four fingers + thumb) as a THREE.Group, all
-// sharing the one material passed in. Always built as the "right" hand
-// (thumb toward -X, i.e. toward the body's center when held at the right
-// hip) -- the left hand is never hand-built separately, see
-// HandsViewmodel's constructor, which clones this group and flips
-// scale.x to mirror it instead.
-function createHandGroup(material: THREE.MeshStandardMaterial): THREE.Group {
-  const group = new THREE.Group();
-
-  const palm = new THREE.Mesh(new THREE.BoxGeometry(...PALM_SIZE), material);
-  group.add(palm);
-
-  FINGER_X_POSITIONS.forEach((x, index) => {
-    const finger = new THREE.Mesh(new THREE.BoxGeometry(...FINGER_SIZE), material);
-    finger.position.set(x, 0, FINGER_Z);
-    finger.rotation.x = THREE.MathUtils.degToRad(FINGER_CURL_DEGREES[index]);
-    group.add(finger);
-  });
-
-  const thumb = new THREE.Mesh(new THREE.BoxGeometry(...THUMB_SIZE), material);
-  thumb.position.set(...THUMB_POSITION);
-  thumb.rotation.set(
-    0,
-    THREE.MathUtils.degToRad(THUMB_ROTATION_Y_DEGREES),
-    THREE.MathUtils.degToRad(THUMB_ROTATION_Z_DEGREES),
-  );
-  group.add(thumb);
-
-  return group;
-}
-
-// Knife mesh (checkpoint 21 addendum) -- a child of the right hand group
-// only (never the left, never cloned onto it -- added after the left-hand
-// clone in HandsViewmodel's constructor), built once but starting hidden.
-// Shown only for the duration of a melee swing via setKnifeVisible(), not
-// permanently. Two boxes: a thin blade (dark metal tone) and a slightly
-// thicker hilt (dark grip color, matching the dark near-black tones this
-// project already uses elsewhere for grip/panel surfaces, e.g.
-// ComputerMesh.ts's keyboard), positioned as if gripped in the fist,
-// extending forward from the palm the same direction the fingers curl
-// toward.
-const KNIFE_BLADE_COLOR = 0x555555;
-const KNIFE_HILT_COLOR = 0x1a1a1a;
-const KNIFE_HILT_SIZE: [number, number, number] = [0.02, 0.02, 0.04];
-const KNIFE_BLADE_SIZE: [number, number, number] = [0.012, 0.008, 0.09];
-const KNIFE_Y = 0.02;
-const KNIFE_HILT_Z = PALM_HALF_DEPTH + KNIFE_HILT_SIZE[2] / 2;
-const KNIFE_BLADE_Z = KNIFE_HILT_Z + KNIFE_HILT_SIZE[2] / 2 + KNIFE_BLADE_SIZE[2] / 2;
-
-function createKnifeGroup(): THREE.Group {
-  const group = new THREE.Group();
-
-  const hilt = new THREE.Mesh(
-    new THREE.BoxGeometry(...KNIFE_HILT_SIZE),
-    new THREE.MeshStandardMaterial({ color: KNIFE_HILT_COLOR }),
-  );
-  hilt.position.set(0, KNIFE_Y, KNIFE_HILT_Z);
-  group.add(hilt);
-
-  const blade = new THREE.Mesh(
-    new THREE.BoxGeometry(...KNIFE_BLADE_SIZE),
-    new THREE.MeshStandardMaterial({ color: KNIFE_BLADE_COLOR }),
-  );
-  blade.position.set(0, KNIFE_Y, KNIFE_BLADE_Z);
-  group.add(blade);
-
-  group.visible = false;
-  return group;
-}
 
 // Positioning (checkpoint 21) -- same VIEWMODEL_CONFIG-style pattern
 // WeaponViewmodel.ts already established, one offset object per hand
@@ -172,18 +39,18 @@ const HAND_JITTER_FREQUENCY = 40;
 const HAND_JITTER_MAX_AMPLITUDE = 0.006;
 
 // Renders the player's bare hands, mutually exclusive with WeaponViewmodel
-// -- main.ts's render loop shows exactly one of the two, branching on
-// WeaponSystem.hasActiveWeapon() (see CLAUDE.md's checkpoint-21 decisions
-// log). Copies WeaponViewmodel's proven dual-scene/camera, second-pass
-// depth-cleared render technique rather than inventing a new one -- see
-// that file's own class-level comment for why a single-pass render sharing
-// the main depth buffer wouldn't work.
+// -- main.ts's render loop shows exactly one of the two (or, as of
+// checkpoint 22, MeleeViewmodel during a melee performance), branching on
+// WeaponSystem.hasActiveWeapon() and MeleeSequencer's phase. Copies
+// WeaponViewmodel's proven dual-scene/camera, second-pass depth-cleared
+// render technique rather than inventing a new one -- see that file's own
+// class-level comment for why a single-pass render sharing the main depth
+// buffer wouldn't work.
 export class HandsViewmodel {
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.PerspectiveCamera;
   private readonly leftHand: THREE.Group;
   private readonly rightHand: THREE.Group;
-  private readonly knife: THREE.Group;
 
   private swayTime = 0;
   private readonly leftImpulse = new ImpulseOffset(
@@ -196,6 +63,11 @@ export class HandsViewmodel {
     HAND_JITTER_FREQUENCY,
     HAND_JITTER_MAX_AMPLITUDE,
   );
+  // Checkpoint 22: an external offset an outside controller (MeleeSequencer)
+  // can hold nonzero to translate both hands out of view during a melee
+  // performance, independent of and additive to the sway/impulse math
+  // above -- (0,0,0) whenever nothing is sequencing. See setSequencerOffset().
+  private readonly sequencerOffset = new THREE.Vector3();
 
   constructor() {
     this.scene = new THREE.Scene();
@@ -209,13 +81,11 @@ export class HandsViewmodel {
     this.scene.add(this.camera);
     this.scene.add(new THREE.AmbientLight(0xffffff, 1.0));
 
-    const skinMaterial = new THREE.MeshStandardMaterial({ map: createSkinTexture() });
-
     // Built once as the right hand, then cloned and mirrored for the left
     // -- not hand-built twice. Object3D.clone() copies geometry/material by
     // reference (not a deep clone), so both hands correctly share the one
-    // skinMaterial/its texture rather than duplicating it.
-    this.rightHand = createHandGroup(skinMaterial);
+    // skin material/its texture rather than duplicating it.
+    this.rightHand = createHandMesh();
     this.leftHand = this.rightHand.clone();
     // Negative-determinant transform: three.js automatically flips the
     // rendered triangle winding for a mirrored object, so this doesn't need
@@ -223,11 +93,6 @@ export class HandsViewmodel {
     // in-browser, not just assumed (see CLAUDE.md's checkpoint-21 decisions
     // log).
     this.leftHand.scale.x = -1;
-
-    // Added after the left-hand clone above, deliberately -- so the knife
-    // is never mirrored onto the left hand along with it.
-    this.knife = createKnifeGroup();
-    this.rightHand.add(this.knife);
 
     // Children of the camera, not the scene directly -- same "child
     // transform cancels the camera's own world rotation" trick
@@ -254,7 +119,8 @@ export class HandsViewmodel {
   // Called every frame gameplay is active and hasActiveWeapon() is false.
   // Recomputes both hands' local positions from their own static offset,
   // the continuous idle sway (phase-offset per hand so they don't move in
-  // lockstep), and their own independent summed impulses.
+  // lockstep), their own independent summed impulses, and the shared
+  // sequencer offset (checkpoint 22).
   update(deltaTime: number): void {
     this.swayTime += deltaTime;
 
@@ -264,14 +130,14 @@ export class HandsViewmodel {
     const rightImpulse = this.rightImpulse.update(deltaTime);
 
     this.leftHand.position.set(
-      LEFT_HAND_OFFSET.x + leftSway.x + leftImpulse.x,
-      LEFT_HAND_OFFSET.y + leftSway.y + leftImpulse.y,
-      LEFT_HAND_OFFSET.z + leftImpulse.z,
+      LEFT_HAND_OFFSET.x + leftSway.x + leftImpulse.x + this.sequencerOffset.x,
+      LEFT_HAND_OFFSET.y + leftSway.y + leftImpulse.y + this.sequencerOffset.y,
+      LEFT_HAND_OFFSET.z + leftImpulse.z + this.sequencerOffset.z,
     );
     this.rightHand.position.set(
-      RIGHT_HAND_OFFSET.x + rightSway.x + rightImpulse.x,
-      RIGHT_HAND_OFFSET.y + rightSway.y + rightImpulse.y,
-      RIGHT_HAND_OFFSET.z + rightImpulse.z,
+      RIGHT_HAND_OFFSET.x + rightSway.x + rightImpulse.x + this.sequencerOffset.x,
+      RIGHT_HAND_OFFSET.y + rightSway.y + rightImpulse.y + this.sequencerOffset.y,
+      RIGHT_HAND_OFFSET.z + rightImpulse.z + this.sequencerOffset.z,
     );
   }
 
@@ -283,11 +149,12 @@ export class HandsViewmodel {
     target.addImpulse(offset, decayTime);
   }
 
-  // Checkpoint 21 addendum: toggles the right hand's knife mesh -- shown
-  // only for the duration of a melee swing (see main.ts's onMeleeAttack
-  // wiring), not permanently equipped/visible at rest.
-  setKnifeVisible(visible: boolean): void {
-    this.knife.visible = visible;
+  // Checkpoint 22: MeleeSequencer holds this nonzero (translating both
+  // hands out of view together) while retracting/returning around a melee
+  // performance; zeroed by main.ts whenever the sequencer is idle so a
+  // stale offset can never leak into normal rendering.
+  setSequencerOffset(offset: THREE.Vector3): void {
+    this.sequencerOffset.copy(offset);
   }
 
   // The second render pass -- identical technique to WeaponViewmodel's own

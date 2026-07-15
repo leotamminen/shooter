@@ -11,6 +11,8 @@ import { MapEntitySystem } from "./core/MapEntitySystem";
 import { RaycastRegistry } from "./core/RaycastRegistry";
 import { WeaponViewmodel } from "./core/WeaponViewmodel";
 import { HandsViewmodel } from "./core/HandsViewmodel";
+import { MeleeViewmodel } from "./core/MeleeViewmodel";
+import { MeleeSequencer } from "./core/MeleeSequencer";
 import type { GameMode } from "./modes/GameMode";
 import { ZombieSurvival } from "./modes/ZombieSurvival";
 import { ShootingRange } from "./modes/ShootingRange";
@@ -138,6 +140,17 @@ function startGame(selections: GameSelections): void {
   // interactSystem's onSuccessfulInteract callback below needs to
   // reference it directly.
   const handsViewmodel = new HandsViewmodel();
+  // Checkpoint 22: constructed alongside the other two viewmodels, for the
+  // same reason -- meleeSequencer (below) needs it, and it has no
+  // dependency on anything else in this function.
+  const meleeViewmodel = new MeleeViewmodel();
+
+  // meleeSequencer itself can't be constructed until weaponSystem exists (it
+  // needs to call weaponSystem.hasActiveWeapon()), but weaponSystem's own
+  // onMeleeAttack callback needs to reference meleeSequencer -- the same
+  // forward-declaration pattern already used for gameMode above (assigned
+  // later, only ever invoked after construction has long finished).
+  let meleeSequencer: MeleeSequencer;
 
   const weaponSystem = new WeaponSystem(
     sceneManager.camera,
@@ -161,40 +174,14 @@ function startGame(selections: GameSelections): void {
     gameState,
     runManager,
     raycastRegistry,
-    // Checkpoint 16: a small viewmodel "lunge" as placeholder melee-attack
-    // feedback, reusing the addImpulse() mechanism built at checkpoint 14
-    // (its own future-mechanics notes already named melee-swing as an
-    // intended integration point).
-    //
-    // Checkpoint 21 addendum: expanded into a unified two-phase swing
-    // (down, then a right-to-left swing) played identically on whichever
-    // viewmodel is currently showing -- both are called unconditionally,
-    // regardless of hasActiveWeapon(), the same "harmless on the inactive
-    // one" reasoning already established for the interact grab gesture, so
-    // there's no branch to keep in sync here. The 70ms stagger between
-    // phases is what makes the swing read as two distinct beats rather
-    // than blending into one motion; the final setTimeout hides the knife
-    // once the whole sequence (phase1Decay + stagger + phase2Decay ≈
-    // 100 + 70 + 150 = 320ms) has visually finished decaying, rounded up
-    // to 350ms rather than cut off early. No clearTimeout/cancellation for
-    // either timer -- unlike the checkpoint-20 terminal boot delay, this
-    // window is short enough (under half a second) that a mid-swing death
-    // or reset is a negligible edge case, not worth the bookkeeping. All
-    // values are first-guess, tuned by eye in-browser.
-    () => {
-      weaponViewmodel.addImpulse({ x: 0, y: -0.08, z: 0.05 }, 0.1);
-      handsViewmodel.addImpulse("right", { x: 0, y: -0.08, z: 0.05 }, 0.1);
-      handsViewmodel.setKnifeVisible(true);
-
-      setTimeout(() => {
-        weaponViewmodel.addImpulse({ x: -0.12, y: 0, z: 0.03 }, 0.15);
-        handsViewmodel.addImpulse("right", { x: -0.12, y: 0, z: 0.03 }, 0.15);
-      }, 70);
-
-      setTimeout(() => {
-        handsViewmodel.setKnifeVisible(false);
-      }, 350);
-    },
+    // Checkpoint 22: replaces the checkpoint-21-addendum's two-phase-impulse
+    // trick (played identically on both viewmodels, with a permanent-but-
+    // hidden knife toggled on HandsViewmodel) with a proper three-phase
+    // sequence -- see core/MeleeSequencer.ts and CLAUDE.md's decisions log
+    // for why. WeaponSystem itself has no idea what a "sequence" is; it just
+    // reports whether the swing connected, the same hitEnemy boolean
+    // meleeAttack() already computes for scoring purposes.
+    (hitEnemy) => meleeSequencer.trigger(hitEnemy),
     // Checkpoint 21: fire-kick, scaled per weapon by weapon.kickStrength
     // (content/weapons.ts) -- a first-guess base vector, tuned by testing
     // both the M1911 and MAC-10 in-browser.
@@ -207,6 +194,12 @@ function startGame(selections: GameSelections): void {
     // by testing switching between two owned weapons in-browser.
     () => weaponViewmodel.addImpulse({ x: 0, y: -0.08, z: 0 }, 0.25),
   );
+
+  // Checkpoint 22: constructed immediately after weaponSystem, the earliest
+  // point its own dependency (weaponSystem.hasActiveWeapon()) exists --
+  // fulfills the forward declaration above, before anything else in this
+  // function has a chance to trigger a melee attack.
+  meleeSequencer = new MeleeSequencer(weaponSystem, meleeViewmodel);
 
   const mapEntitySystem = new MapEntitySystem(
     mapDef,
@@ -347,26 +340,49 @@ function startGame(selections: GameSelections): void {
     const delta = modeClock.getDelta();
     if (gameState.playerState === "alive") {
       gameMode.update(delta);
+      // Checkpoint 22: driven every alive frame regardless of phase -- a
+      // no-op while idle (StateMachine's "idle" phase has no onUpdate).
+      meleeSequencer.update(delta);
     }
     hud.update(delta);
     sceneManager.render();
-    // Checkpoint 21: mutually exclusive with the hands viewmodel --
-    // WeaponSystem.hasActiveWeapon() is the single source of truth for
-    // which one is currently "held," matching whatever the player's
-    // inventory actually shows (empty in Campaign until the first wall-buy,
-    // always occupied in Zombie Survival/Shooting Range).
-    //
-    // Future extension point (checkpoint 21 addendum, not built): a third
-    // state -- neither hands nor weapon rendered at all -- would branch
-    // here too, once something actually needs to hide both (e.g. a cutscene
-    // or a menu-like pause). No new flag/logic added for this yet.
+    // Checkpoint 22: exactly one of the three viewmodels renders per frame.
+    // While meleeSequencer is idle, this is unchanged from checkpoint 21 --
+    // WeaponSystem.hasActiveWeapon() alone decides weapon vs. hands. While a
+    // melee sequence is active, meleeSequencer.wasWeaponActive() (captured
+    // once at trigger(), not re-read from hasActiveWeapon() here) decides
+    // which carrier retracts/returns around the performance, and
+    // getActiveLayer() decides whether that carrier or MeleeViewmodel is the
+    // one actually drawn this frame. The carrier's sequencer offset is
+    // explicitly zeroed whenever idle, so a stale offset from a previous
+    // sequence can never leak into normal rendering.
     if (gameState.playerState === "alive") {
-      if (weaponSystem.hasActiveWeapon()) {
-        weaponViewmodel.update(playerController.getSpeed(), delta);
-        weaponViewmodel.render(sceneManager.renderer);
+      if (meleeSequencer.isIdle()) {
+        weaponViewmodel.setSequencerOffset(new THREE.Vector3());
+        handsViewmodel.setSequencerOffset(new THREE.Vector3());
+        if (weaponSystem.hasActiveWeapon()) {
+          weaponViewmodel.update(playerController.getSpeed(), delta);
+          weaponViewmodel.render(sceneManager.renderer);
+        } else {
+          handsViewmodel.update(delta);
+          handsViewmodel.render(sceneManager.renderer);
+        }
+      } else if (meleeSequencer.wasWeaponActive()) {
+        weaponViewmodel.setSequencerOffset(meleeSequencer.getCarrierOffset());
+        if (meleeSequencer.getActiveLayer() === "carrier") {
+          weaponViewmodel.update(playerController.getSpeed(), delta);
+          weaponViewmodel.render(sceneManager.renderer);
+        } else {
+          meleeViewmodel.render(sceneManager.renderer);
+        }
       } else {
-        handsViewmodel.update(delta);
-        handsViewmodel.render(sceneManager.renderer);
+        handsViewmodel.setSequencerOffset(meleeSequencer.getCarrierOffset());
+        if (meleeSequencer.getActiveLayer() === "carrier") {
+          handsViewmodel.update(delta);
+          handsViewmodel.render(sceneManager.renderer);
+        } else {
+          meleeViewmodel.render(sceneManager.renderer);
+        }
       }
     }
   }

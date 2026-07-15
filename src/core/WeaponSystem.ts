@@ -109,11 +109,14 @@ export class WeaponSystem {
   private readonly audioSystem: AudioSystem;
   private readonly gameState: GameState;
   // Notifies main.ts (the composition root) that a melee attack just
-  // happened, so it can trigger a small viewmodel impulse for feedback --
-  // WeaponSystem never imports WeaponViewmodel directly, the same
+  // happened, so it can trigger viewmodel feedback -- WeaponSystem never
+  // imports WeaponViewmodel/MeleeSequencer directly, the same
   // dependency-injection pattern PlayerState's onDeath callback already
-  // uses.
-  private readonly onMeleeAttack: () => void;
+  // uses. Checkpoint 22: gained a hitEnemy parameter -- meleeAttack()'s own
+  // hit-detection raycast already determines this, now passed through
+  // instead of discarded, so main.ts's MeleeSequencer can pick a stab vs
+  // swing performance without re-deriving the same hit test.
+  private readonly onMeleeAttack: (hitEnemy: boolean) => void;
   // Checkpoint 21: fired from fire() on every successful shot, scaled by
   // the active weapon's own kickStrength -- see content/weapons.ts and
   // CLAUDE.md's checkpoint-21 decisions log.
@@ -133,7 +136,7 @@ export class WeaponSystem {
     gameState: GameState,
     runManager: RunManager,
     raycastRegistry: RaycastRegistry,
-    onMeleeAttack: () => void,
+    onMeleeAttack: (hitEnemy: boolean) => void,
     onFire: (kickStrength: number) => void,
     onWeaponSwap: () => void,
   ) {
@@ -359,9 +362,13 @@ export class WeaponSystem {
   // RaycastRegistry hitscan guns already use, just with a much shorter
   // maxDistance (meleeWeapon.meleeRange). No ammo check -- melee never
   // consumes ammo, and never touches the gun slots at all. onMeleeAttack()
-  // notifies main.ts so it can trigger a small viewmodel impulse (a lunge)
-  // for feedback, without WeaponSystem needing to know WeaponViewmodel
-  // exists.
+  // notifies main.ts so it can trigger viewmodel feedback, without
+  // WeaponSystem needing to know WeaponViewmodel/MeleeSequencer exist.
+  // Checkpoint 22: hitEnemy (whether this raycast actually hit something
+  // with an onHit handler) is now passed through to onMeleeAttack() instead
+  // of being discarded, so main.ts's MeleeSequencer can pick a stab vs
+  // swing performance -- damage/hit-detection timing itself is completely
+  // unchanged, only what's read from an already-existing result.
   private meleeAttack(): void {
     this.timeSinceLastMeleeAttack = 0;
 
@@ -376,7 +383,7 @@ export class WeaponSystem {
     onHit?.(this.meleeWeapon.damage);
 
     this.audioSystem.play(this.meleeWeapon.fireSoundId);
-    this.onMeleeAttack();
+    this.onMeleeAttack(onHit !== undefined);
   }
 
   private startReload(): void {
