@@ -122,6 +122,12 @@ function startGame(selections: GameSelections): void {
 
   const audioSystem = new AudioSystem(sceneManager.camera);
   void audioSystem.load(findById(SOUNDS, "pistol_fire"));
+  // Checkpoint 23 fix: MAC-10/AK-47's own real fire-sound recordings --
+  // without these preloads, AudioSystem.play() would silently no-op for
+  // both, the same gap melee_hit's own preload comment below already
+  // describes.
+  void audioSystem.load(findById(SOUNDS, "mac10_fire"));
+  void audioSystem.load(findById(SOUNDS, "ak47_single"));
   // Checkpoint 16: the melee attack's own distinct sound -- without this
   // preload, AudioSystem.play("melee_hit") would silently no-op (see
   // AudioSystem.play()'s early return when a sound was never load()ed).

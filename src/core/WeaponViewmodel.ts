@@ -58,6 +58,19 @@ export const VIEWMODEL_CONFIG = {
   mirrored: false,
 };
 
+// Checkpoint 23 fix: the AK-47's own local offset relative to displayGroup,
+// separate from the generic box's VIEWMODEL_CONFIG offset above -- sharing
+// that exact offset ("at parity by construction," checkpoint 23) was fine
+// for a same-sized placeholder box, but left far too little of the AK-47's
+// longer, more detailed silhouette actually on screen. Shifts it up (less
+// negative Y) and left (less positive X) from the generic box's position;
+// z is unchanged, keeping the same scale/distance the mesh's own geometry
+// was already sized against. Tuned by eye in-browser, no exact target
+// value -- only ever added to ak47Mesh's own local position, never to
+// VIEWMODEL_CONFIG itself, so the generic box (M1911/MAC-10) is completely
+// unaffected.
+const AK47_OFFSET = { x: -0.15, y: 0.18, z: 0 };
+
 // Renders the player's held weapon as a placeholder shape, always drawn in
 // front of world geometry regardless of proximity to a wall. A naive
 // single-pass render (the weapon mesh parented directly into the main
@@ -172,6 +185,7 @@ export class WeaponViewmodel {
     // update() below decides which of the two is actually shown.
     this.ak47Mesh = createAK47Mesh();
     this.ak47Mesh.visible = false;
+    this.ak47Mesh.position.set(AK47_OFFSET.x, AK47_OFFSET.y, AK47_OFFSET.z);
     this.displayGroup.add(this.ak47Mesh);
 
     window.addEventListener("resize", this.handleResize);
