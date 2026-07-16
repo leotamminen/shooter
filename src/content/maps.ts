@@ -128,23 +128,55 @@ export const MAPS: MapDef[] = [
       { id: "corridors_wall_buy_2", type: "wall_buy", linkedTo: "ak47", position: [2, 0.3, 2] },
     ],
   },
-  // campaign_room1 (checkpoint 17, extended at 19): Room 1 is unchanged in
-  // shape/mechanics -- its whole grid section (and every one of its
-  // entities' positions) simply shifted down by 8 rows (z += 16) to make
-  // room for Room 2 above it. Reading the grid top to bottom: Room 3 (rows
-  // 0-4, empty, reached via campaign_door_2's gap at row4/col6 -- gated by
-  // campaign_lock_3, a secretField: "username" lock checked against
-  // room2_terminal's username); Room 2 (rows 5-9, cols 1-10 interior,
-  // bigger than Room 1) holding the required part/terminal puzzle
-  // (campaign_part_1 + campaign_terminal_2, requiresPart-gated) and an
-  // optional vault side-path (campaign_door_3 + campaign_lock_2, a
-  // secretField: "vaultPin" lock, gating a 1x2 alcove at cols 12-13
-  // holding campaign_wall_buy_1, a bonus MAC-10); row 10 (the wall
-  // separating Room 2 from Room 1, with campaign_door_1's gap at col3 --
-  // exactly the same relative position it held before this checkpoint);
-  // Room 1 itself (rows 11-13, unchanged interior). No enemy_spawn or
-  // target entities -- supportedModes below still excludes this map from
-  // the modes that would ever look for them.
+  // campaign_room1 (checkpoint 17, extended at 19; further extended by a
+  // manual, hand-edited grid change not yet assigned a checkpoint number --
+  // tested working in-browser). Room 1, Room 2, and Room 3 are all
+  // unchanged in shape/mechanics from the checkpoint-19/20 layout -- that
+  // whole existing block simply shifted down by a further 9 rows (z += 18)
+  // to make room for a new area added above the old Room 3. Reading the
+  // grid top to bottom:
+  //
+  // Rows 0-1 are the map's north border wall. Rows 2-9 hold a new,
+  // currently-unnamed room north of Room 3 (called "Room 4" below, matching
+  // how it's being talked about, though nothing in the data itself labels
+  // it). Its interior is rows 4-8 (narrower at its row-4 entrance, which
+  // only reaches col11; rows 5-8 reach col13) with a hand-placed pillar
+  // layout: a solid single-width wall at col2 forms the room's own west
+  // boundary; inside it, rows 5 and 7 each repeat individual pillars at
+  // cols 4/6/8 (a loose pillar-forest rather than open floor), and a
+  // further isolated pillar sits at col12 on both row5 and row8. This room
+  // has zero entities placed in it and no exit besides the way in -- its
+  // east wall (col14) is solid throughout, and row9 is fully sealed except
+  // for the one corridor gap described below, so as the data stands today
+  // it's a dead end: no door, no button, nothing wired up beyond it. There
+  // is no separately-identifiable "Room 5" in this grid/entity data.
+  //
+  // Room 4 is reached from Room 3 via a corridor loop, not a direct
+  // opening: a new breach in Room 3's own west wall (row11/col3) leads west
+  // to col1, then up a col1 corridor spine (rows 2-11, running just outside
+  // Room 4's west wall the whole way), then east along row2 (cols1-9), then
+  // down through a gap at row3/col9 into Room 4's row4. That breach is the
+  // only connection between Room 3 and Room 4 -- there's no separate
+  // shortcut back, only the same loop retraced.
+  //
+  // Room 3 itself (rows 10-12, cols 4-7 interior) is unchanged from its
+  // original design and still holds no entities -- reached from Room 2
+  // below via campaign_door_2's gap at row13/col6, gated by campaign_lock_3
+  // (a secretField: "username" lock checked against room2_terminal's
+  // username, positioned just south of the door on the Room 2 side).
+  //
+  // Room 2 (rows 14-18, cols 1-10 interior; row15 alone extends to col13
+  // for the vault alcove) is otherwise unchanged: the required part/
+  // terminal puzzle (campaign_part_1 + campaign_terminal_2, requiresPart-
+  // gated) and the optional vault side-path (campaign_door_3 +
+  // campaign_lock_2, a secretField: "vaultPin" lock, gating
+  // campaign_wall_buy_1, a bonus MAC-10) both still work exactly as before,
+  // just at their shifted row numbers. Row 19 is the wall separating Room 2
+  // from Room 1, with campaign_door_1's gap at col3 -- the same relative
+  // position it's always held. Room 1 itself (rows 20-21, cols 1-6
+  // interior) is unchanged. No enemy_spawn or target entities anywhere on
+  // this map -- supportedModes below still excludes it from the modes that
+  // would ever look for them.
   {
     id: "campaign_room1",
     name: "Campaign: Room 1",
