@@ -151,8 +151,17 @@ export const MAPS: MapDef[] = [
     supportedModes: ["campaign"],
     grid: [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
-      [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+      [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],
+      [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+      [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1],
+      [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1],
+      [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+      [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1],
+      [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1],
+      [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
+      [1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
       [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1],
       [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1],
       [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],
@@ -166,110 +175,25 @@ export const MAPS: MapDef[] = [
       [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     ],
     entities: [
-      { id: "campaign_spawn_1", type: "spawn", position: [2, 0, 24] },
-      {
-        id: "campaign_terminal_1",
-        type: "terminal",
-        linkedTo: "room1_terminal",
-        rotationY: 270,
-        position: [12.8, 1, 24],
-      },
-      { id: "campaign_door_1", type: "door", position: [6, 1.5, 20] },
-      {
-        id: "campaign_lock_1",
-        type: "password_lock",
-        linkedTo: "campaign_door_1",
-        terminalId: "room1_terminal",
-        position: [7.4, 1.2, 21],
-      },
-      // Checkpoint 20 correction: campaign_part_1 moved from the same
-      // column as the entry/terminal (col 3, directly on the obvious
-      // straight-line path) to Room 2's far southeast corner (col 10 /
-      // row 9) -- the corner diagonally farthest from campaign_terminal_2
-      // (col 3 / row 5), forcing the player to actually search rather than
-      // trivially find it on the way to the terminal. Confirmed clear of
-      // every wall, decoration, and the row-6 vault corridor.
-      { id: "campaign_part_1", type: "computer_part", position: [20.3, 0, 18] },
-      {
-        id: "campaign_terminal_2",
-        type: "terminal",
-        linkedTo: "room2_terminal",
-        requiresPart: "campaign_part_1",
-        rotationY: 90,
-        position: [1.4, 1.1, 13],
-        // Boot-sequence follow-up: matches campaign_outlet_1's own position
-        // below by hand -- the connecting cable that appears once this
-        // terminal finishes booting routes to this exact point.
-        outletPosition: [1.0, 0.6, 13],
-      },
-      // Boot-sequence follow-up: the wall outlet campaign_terminal_2's
-      // outletPosition above targets. Sits on the same wall the terminal's
-      // back faces (rotationY 90 means the screen faces east/+X, so the
-      // back -- and this outlet -- are on the west wall behind it), partly
-      // embedded into the wall like this project's other wall-mounted
-      // panels (password locks, wall-buys). Present from the start of the
-      // run regardless of power state.
-      { id: "campaign_outlet_1", type: "decoration", variant: "outlet", position: [1.0, 0.6, 13] },
-      // Checkpoint 20 addendum: a desk for campaign_terminal_2 to rest on.
-      // Same (x, z) and rotationY as the terminal above, y = 0 (floor
-      // level) -- the desk's own geometry is tuned so its tabletop's top
-      // face lands exactly at y = 1.1, matching the terminal's position
-      // with no gap or clipping. The chair sits east of the desk, facing
-      // west (rotationY 270) toward the screen, which itself faces east
-      // (see createComputerMesh()'s local +Z protrusion, rotated 90
-      // degrees) -- the side a person would actually sit to use it.
-      { id: "campaign_desk_1", type: "decoration", variant: "desk", rotationY: 90, position: [1.4, 0, 13] },
-      { id: "campaign_chair_1", type: "decoration", variant: "chair", rotationY: 270, position: [2.4, 0, 13] },
-      // Checkpoint 20: purely visual clutter, positioned clearly off every
-      // required path -- the column-3 entry/part/terminal path, the
-      // column-6 Room-3 connector, and the row-6 vault corridor. No
-      // collision (see MapEntitySystem.createDecoration()).
-      { id: "campaign_decoration_1", type: "decoration", variant: "crate", position: [18, 0.3, 10] },
-      { id: "campaign_decoration_2", type: "decoration", variant: "debris", position: [16, 0.3, 18] },
-      { id: "campaign_decoration_3", type: "decoration", variant: "crate", position: [17, 0.3, 18.5] },
-      // Checkpoint 20 correction: one more decoration near the relocated
-      // power cable above, so the cable isn't the one obviously-different
-      // object sitting alone in that corner.
-      { id: "campaign_decoration_4", type: "decoration", variant: "crate", position: [19.5, 0.3, 18] },
-      // Room 2's optional vault side-path: a password_lock checking
-      // Campaign's live vault pin (not a terminal's fixed password),
-      // sitting just outside the vault's own doorway so it's never trapped
-      // behind the door it controls -- same placement discipline as
-      // corridors_button_2 (checkpoint 12).
-      { id: "campaign_door_3", type: "door", position: [22, 1.5, 12] },
-      {
-        id: "campaign_lock_2",
-        type: "password_lock",
-        linkedTo: "campaign_door_3",
-        secretField: "vaultPin",
-        position: [21, 1.2, 13.4],
-      },
-      { id: "campaign_wall_buy_1", type: "wall_buy", linkedTo: "mac10", position: [27, 1.3, 12] },
-      // Room 3's connector door (checkpoint 19, corrected same checkpoint):
-      // originally opened programmatically when room2_terminal's "whoami"
-      // ran -- corrected to a real password_lock instead, the same
-      // mechanism every other locked door in this codebase uses.
-      // campaign_lock_3 checks room2_terminal's username (secretField:
-      // "username"), revealed by running whoami in that terminal (which no
-      // longer opens anything by itself). Positioned just south of the
-      // door's gap, in Room 2, so it's never trapped behind its own door --
-      // same placement discipline as every other lock in this file. Room 3
-      // itself (rows 0-3, cols 4-7) is deliberately empty this checkpoint.
-      { id: "campaign_door_2", type: "door", position: [12, 1.5, 8] },
-      {
-        id: "campaign_lock_3",
-        type: "password_lock",
-        linkedTo: "campaign_door_2",
-        terminalId: "room2_terminal",
-        secretField: "username",
-        promptLabel: "Identity, who you are:",
-        position: [13.4, 1.2, 9],
-      },
-      // AK-47 wall-buy (checkpoint 23): Room 1, row 11, col 4 — open floor
-      // clear of the spawn/terminal/door/lock entities already in this
-      // room. First guess, expect retuning like every other entity
-      // position in this project.
-      { id: "campaign_wall_buy_2", type: "wall_buy", linkedTo: "ak47", position: [8, 1.3, 22] },
+      { id: "campaign_spawn_1", type: "spawn", position: [2, 0, 42] },
+      { id: "campaign_terminal_1", type: "terminal", linkedTo: "room1_terminal", rotationY: 270, position: [12.8, 1, 42] },
+      { id: "campaign_door_1", type: "door", position: [6, 1.5, 38] },
+      { id: "campaign_lock_1", type: "password_lock", linkedTo: "campaign_door_1", terminalId: "room1_terminal", position: [7.4, 1.2, 39] },
+      { id: "campaign_part_1", type: "computer_part", position: [20.3, 0, 36] },
+      { id: "campaign_terminal_2", type: "terminal", linkedTo: "room2_terminal", requiresPart: "campaign_part_1", rotationY: 90, position: [1.4, 1.1, 31], outletPosition: [1.0, 0.6, 31] },
+      { id: "campaign_outlet_1", type: "decoration", variant: "outlet", position: [1.0, 0.6, 31] },
+      { id: "campaign_desk_1", type: "decoration", variant: "desk", rotationY: 90, position: [1.4, 0, 31] },
+      { id: "campaign_chair_1", type: "decoration", variant: "chair", rotationY: 270, position: [2.4, 0, 31] },
+      { id: "campaign_decoration_1", type: "decoration", variant: "crate", position: [18, 0.3, 28] },
+      { id: "campaign_decoration_2", type: "decoration", variant: "debris", position: [16, 0.3, 36] },
+      { id: "campaign_decoration_3", type: "decoration", variant: "crate", position: [17, 0.3, 36.5] },
+      { id: "campaign_decoration_4", type: "decoration", variant: "crate", position: [19.5, 0.3, 36] },
+      { id: "campaign_door_3", type: "door", position: [22, 1.5, 30] },
+      { id: "campaign_lock_2", type: "password_lock", linkedTo: "campaign_door_3", secretField: "vaultPin", position: [21, 1.2, 31.4] },
+      { id: "campaign_wall_buy_1", type: "wall_buy", linkedTo: "mac10", position: [27, 1.3, 30] },
+      { id: "campaign_door_2", type: "door", position: [12, 1.5, 26] },
+      { id: "campaign_lock_3", type: "password_lock", linkedTo: "campaign_door_2", terminalId: "room2_terminal", secretField: "username", promptLabel: "Identity, who you are:", position: [13.4, 1.2, 27] },
+      { id: "campaign_wall_buy_2", type: "wall_buy", linkedTo: "ak47", position: [8, 1.3, 40] },
     ],
   },
 ];
