@@ -53,4 +53,44 @@ vault pin: {{VAULT_PIN}}`,
       directories: [],
     },
   },
+  // room3_terminal: teaches hidden-file discovery ("ls -a") rather than a
+  // straight cat-the-obvious-file puzzle -- ls with no flags only ever
+  // shows the 8 non-hidden home-directory folders (see
+  // ui/Terminal.ts's runLs() hidden-file convention), so a player has to
+  // already know (or be told, via the paired "sign" decoration in
+  // content/maps.ts) that dotfiles exist and go looking with -a before
+  // .bash_history is even visible. password's copy-button still fires
+  // automatically once .bash_history's content is read, via the existing
+  // checkpoint-17 content.includes(password) mechanism -- no new
+  // accessibility code needed.
+  {
+    id: "room3_terminal",
+    password: "NIGHTFALL",
+    root: {
+      name: "/",
+      files: [
+        { name: ".bash_history", content: "doorctl unlock --code NIGHTFALL" },
+        {
+          name: ".bashrc",
+          content: "# ~/.bashrc\n# User-specific aliases and functions\nalias ll='ls -la'",
+        },
+        {
+          name: ".bash_logout",
+          content: "# ~/.bash_logout\n# executed by bash when login shell exits",
+        },
+      ],
+      directories: [
+        { name: "Desktop", files: [], directories: [] },
+        { name: "Documents", files: [], directories: [] },
+        { name: "Downloads", files: [], directories: [] },
+        { name: "Music", files: [], directories: [] },
+        { name: "Pictures", files: [], directories: [] },
+        { name: "Public", files: [], directories: [] },
+        { name: "Templates", files: [], directories: [] },
+        { name: "Videos", files: [], directories: [] },
+        { name: ".cache", files: [], directories: [] },
+        { name: ".config", files: [], directories: [] },
+      ],
+    },
+  },
 ];

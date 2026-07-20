@@ -78,6 +78,24 @@ export class PlayerController {
     this.camera.position.set(x, EYE_HEIGHT, z);
   }
 
+  // Paired-terminal teleport: identical positional-reset logic to setSpawn()
+  // (x/z only, same EYE_HEIGHT), reused rather than duplicated -- the two
+  // methods only differ in when/why they're called. Deliberately takes no
+  // yaw/rotation parameter and never touches camera rotation in either
+  // direction: the player's facing must survive a teleport untouched, since
+  // the whole point is a silent reposition, not a re-orientation.
+  teleportTo(x: number, z: number): void {
+    this.setSpawn(x, z);
+  }
+
+  // Live x/z read of the player's current position, for anything that needs
+  // to compute a position relative to where the player actually is right
+  // now (e.g. the paired-terminal teleport's relative-offset math) rather
+  // than a fixed/assumed stance.
+  getPosition(): { x: number; z: number } {
+    return { x: this.camera.position.x, z: this.camera.position.z };
+  }
+
   update(): void {
     const delta = this.clock.getDelta();
     if (this.gameState.paused || this.gameState.playerState !== "alive") {

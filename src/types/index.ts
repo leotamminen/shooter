@@ -78,15 +78,18 @@ export interface MapEntity {
   // same checkpoint): the overlay's prompt text. Defaults to
   // ui/PasswordLock.ts's own generic label when absent -- Room 1's and the
   // vault's locks don't set this.
-  variant?: "crate" | "debris" | "desk" | "chair" | "outlet"; // "decoration"
+  variant?: "crate" | "debris" | "desk" | "chair" | "outlet" | "sign"; // "decoration"
   // only (checkpoint 20, "desk"/"chair" added in the same checkpoint's
-  // addendum, "outlet" added by the boot-sequence follow-up): a cosmetic
-  // hint controlling which prop shape gets built -- "crate"/"debris"/
-  // "outlet" are a single sized/colored cube (outlet reuses
-  // PASSWORD_LOCK_SIZE for its dimensions rather than either decoration
-  // size), "desk"/"chair" are a small THREE.Group of several boxes (see
-  // MapEntitySystem.ts's createDeskDecoration()/createChairDecoration()).
-  // No gameplay meaning either way. Absent defaults to "crate".
+  // addendum, "outlet" added by the boot-sequence follow-up, "sign" added
+  // by the Room 3 hidden-files puzzle): a cosmetic hint controlling which
+  // prop shape gets built -- "crate"/"debris"/"outlet" are a single
+  // sized/colored cube (outlet reuses PASSWORD_LOCK_SIZE for its dimensions
+  // rather than either decoration size), "desk"/"chair" are a small
+  // THREE.Group of several boxes (see MapEntitySystem.ts's
+  // createDeskDecoration()/createChairDecoration()), "sign" is a flat board
+  // textured with a generated CanvasTexture (see createSignDecoration() and
+  // MapEntity.text below). No gameplay meaning either way. Absent defaults
+  // to "crate".
   rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
   // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
   // hand-edited content file), defaulting to 0 (unchanged facing) when
@@ -103,6 +106,20 @@ export interface MapEntity {
   // hand with the matching "outlet" decoration entity's own position --
   // both are manually positioned in content/maps.ts, the same as
   // everything else in this room right now.
+  text?: string; // "decoration" only, and only meaningful when variant is
+  // "sign": the exact string createSignDecoration() renders onto the
+  // board's generated CanvasTexture face. Undefined/absent renders a blank
+  // board -- no default text, since a sign with no text set is very likely
+  // a forgotten field, not an intentional blank sign.
+  teleportPairId?: string; // "terminal" only: another "terminal" entity's
+  // id, elsewhere on the same map. Opening this terminal silently
+  // repositions the player near the paired terminal, preserving their
+  // exact relative offset from THIS terminal (not a fixed landing point --
+  // interact is range/angle-based, so the player can be standing anywhere
+  // nearby at any angle when they open it). No coordinate is stored here;
+  // MapEntitySystem.createTerminal() resolves the paired entity's own
+  // position live and computes the offset at interact time. See
+  // CLAUDE.md's decisions log for why a fixed target was rejected.
 }
 
 export interface MapDef {

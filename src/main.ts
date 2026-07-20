@@ -280,6 +280,13 @@ function startGame(selections: GameSelections): void {
       );
     },
     campaign.getVaultPin,
+    // Paired-terminal teleport: PlayerController already owns the camera's
+    // live position and the exact positional-reset logic (setSpawn) this
+    // reuses -- MapEntitySystem gets both as injected callbacks rather than
+    // a PlayerController reference, the same "core system stays ignorant of
+    // what calls it" shape openTerminal/openPasswordLock above already use.
+    () => playerController.getPosition(),
+    (x, z) => playerController.teleportTo(x, z),
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);

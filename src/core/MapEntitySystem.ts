@@ -99,6 +99,22 @@ const CHAIR_LEG_OFFSETS: [number, number][] = [
   [-0.16, 0.16],
   [-0.16, -0.16],
 ];
+// Sign decoration (Room 3 hidden-files puzzle): a small flat board, one
+// BoxGeometry with a 6-material array rather than a plane, so it reads as
+// a solid board from any angle instead of vanishing edge-on -- only the
+// front (+Z local) face gets the generated text texture, the other five
+// reuse the same plain board color. Same generated-CanvasTexture technique
+// as ComputerMesh.ts's screen (an offscreen <canvas>, drawn once, not
+// per-frame).
+const SIGN_WIDTH = 0.6;
+const SIGN_HEIGHT = 0.35;
+const SIGN_DEPTH = 0.04;
+const SIGN_BOARD_COLOR = 0x4a3a2a;
+const SIGN_TEXTURE_WIDTH = 256;
+const SIGN_TEXTURE_HEIGHT = 128;
+const SIGN_BACKGROUND_COLOR = "#1a1a1a";
+const SIGN_TEXT_COLOR = "#e8e4da";
+const SIGN_FONT = "16px monospace";
 const TERMINAL_INTERACT_PROMPT = "Press E to use terminal";
 const TERMINAL_GATED_MESSAGE = "The screen is dark. It needs power.";
 const TERMINAL_BOOTING_MESSAGE = "Booting...";
@@ -149,6 +165,14 @@ export class MapEntitySystem {
       promptLabel?: string,
     ) => void,
     getVaultPin: () => string,
+    // Paired-terminal teleport: a live read of the player's current x/z (not
+    // a fixed/assumed stance -- interact is range/angle-based, so the
+    // player can be anywhere nearby at any angle) and the actual reposition
+    // trigger, both sourced from PlayerController via main.ts the same way
+    // every other cross-system effect in this constructor (openTerminal,
+    // openPasswordLock) is injected rather than reached for directly.
+    getPlayerPosition: () => { x: number; z: number },
+    teleportPlayer: (x: number, z: number) => void,
   ) {
     // Checkpoint 19 correction: reverted to local constructor variables --
     // Room 3's door is now opened by its own password_lock (the same
@@ -159,6 +183,17 @@ export class MapEntitySystem {
     // removed along with the mechanism that needed them).
     const doorMeshById = new Map<string, THREE.Mesh>();
     const computerPartMeshById = new Map<string, THREE.Group>();
+    // Paired-terminal teleport: static data (every terminal's own position,
+    // known from mapDef.entities alone), so this doesn't need to follow the
+    // door/computer_part meshes' construction-order-dependent first pass
+    // above -- it's just a lookup table, built once, the same
+    // cross-entity-reference pattern doorMeshById already establishes.
+    const terminalPositionById = new Map<string, [number, number, number]>();
+    for (const entity of mapDef.entities) {
+      if (entity.type === "terminal") {
+        terminalPositionById.set(entity.id, entity.position);
+      }
+    }
 
     for (const entity of mapDef.entities) {
       if (entity.type === "door") {
@@ -190,6 +225,9 @@ export class MapEntitySystem {
           computerPartMeshById,
           gameState,
           runManager,
+          terminalPositionById,
+          getPlayerPosition,
+          teleportPlayer,
         );
       } else if (entity.type === "password_lock") {
         this.createPasswordLock(
@@ -500,11 +538,28 @@ export class MapEntitySystem {
     computerPartMeshById: Map<string, THREE.Group>,
     gameState: GameState,
     runManager: RunManager,
+    terminalPositionById: Map<string, [number, number, number]>,
+    getPlayerPosition: () => { x: number; z: number },
+    teleportPlayer: (x: number, z: number) => void,
   ): void {
     if (!entity.linkedTo) {
       throw new Error(`Terminal "${entity.id}" has no linkedTo terminal id`);
     }
     const terminalDef = findById(terminals, entity.linkedTo);
+
+    // Paired-terminal teleport: resolved once, at construction, since it's
+    // just a lookup against static position data -- same defensive
+    // "throw by name on a dangling reference" pattern as every other
+    // linkedTo/terminalId lookup in this file (createWallBuy, createButton,
+    // createPasswordLock).
+    const pairedPosition = entity.teleportPairId
+      ? terminalPositionById.get(entity.teleportPairId)
+      : undefined;
+    if (entity.teleportPairId && !pairedPosition) {
+      throw new Error(
+        `Terminal "${entity.id}" has no matching terminal for teleportPairId "${entity.teleportPairId}"`,
+      );
+    }
 
     let poweredOn = entity.requiresPart === undefined;
     // Boot-sequence follow-up: `booting` gates repeated E presses during the
@@ -581,6 +636,26 @@ export class MapEntitySystem {
 
         return; // does NOT open the terminal on this press
       }
+
+      // Paired-terminal teleport: fires only on an actual open (never on a
+      // gated-rejection or a booting no-op above), and computes the target
+      // live from the player's current position -- not a fixed landing
+      // point -- so the player's exact stance relative to THIS terminal
+      // (whatever range/angle they approached from) is preserved relative
+      // to the paired terminal instead. Position only, no rotation/yaw:
+      // PlayerController.teleportTo() never touches camera rotation. The
+      // terminal's own full-screen backdrop is already covering the scene
+      // for the whole time the overlay is open, so this happens instantly
+      // with no visible transition.
+      if (pairedPosition) {
+        const playerPosition = getPlayerPosition();
+        const delta = {
+          x: playerPosition.x - entity.position[0],
+          z: playerPosition.z - entity.position[2],
+        };
+        teleportPlayer(pairedPosition[0] + delta.x, pairedPosition[2] + delta.z);
+      }
+
       openTerminal(terminalDef);
     };
 
@@ -750,6 +825,10 @@ export class MapEntitySystem {
       this.createChairDecoration(entity);
       return;
     }
+    if (entity.variant === "sign") {
+      this.createSignDecoration(entity);
+      return;
+    }
     if (entity.variant === "outlet") {
       // Present from the start of the run regardless of terminal/power
       // state -- a single box like crate/debris, just reusing
@@ -823,5 +902,57 @@ export class MapEntitySystem {
     group.position.set(...entity.position);
     group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
     this.group.add(group);
+  }
+
+  // Room 3 hidden-files puzzle: a small flat board, entity.text rendered
+  // onto only the front (+Z local) face via a 6-material array -- reads
+  // rotationY the same way createTerminal()/the desk/chair decorations
+  // already do, no collision/interactable/raycast registration, same as
+  // every other decoration.
+  private createSignDecoration(entity: MapEntity): void {
+    const sideMaterial = new THREE.MeshStandardMaterial({ color: SIGN_BOARD_COLOR });
+    const materials = [
+      sideMaterial, // +x
+      sideMaterial, // -x
+      sideMaterial, // +y
+      sideMaterial, // -y
+      new THREE.MeshStandardMaterial({ map: this.createSignTexture(entity.text ?? "") }), // +z (front)
+      sideMaterial, // -z
+    ];
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(SIGN_WIDTH, SIGN_HEIGHT, SIGN_DEPTH),
+      materials,
+    );
+    mesh.position.set(...entity.position);
+    mesh.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(mesh);
+  }
+
+  // Drawn once onto an offscreen <canvas>, not redrawn per frame -- same
+  // "no animation loop, kept cheap" approach as ComputerMesh.ts's
+  // createScreenTexture(). Text is centered both axes via
+  // CanvasRenderingContext2D's own textAlign/textBaseline rather than
+  // hand-computed offsets.
+  private createSignTexture(text: string): THREE.CanvasTexture {
+    const canvas = document.createElement("canvas");
+    canvas.width = SIGN_TEXTURE_WIDTH;
+    canvas.height = SIGN_TEXTURE_HEIGHT;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      throw new Error("createSignTexture: 2D canvas context unavailable");
+    }
+
+    ctx.fillStyle = SIGN_BACKGROUND_COLOR;
+    ctx.fillRect(0, 0, SIGN_TEXTURE_WIDTH, SIGN_TEXTURE_HEIGHT);
+
+    ctx.fillStyle = SIGN_TEXT_COLOR;
+    ctx.font = SIGN_FONT;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, SIGN_TEXTURE_WIDTH / 2, SIGN_TEXTURE_HEIGHT / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
   }
 }

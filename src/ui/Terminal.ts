@@ -220,10 +220,16 @@ export class Terminal {
     if (input.length === 0) return;
     this.appendLine(`> ${input}`);
 
-    const [command, ...args] = input.split(/\s+/);
+    // Room-3 puzzle follow-up: command dispatch is now case-insensitive
+    // ("LS", "Ls", "CAT .bash_history" all work) -- only the command token
+    // itself is normalized, never filenames/arguments, matching real Unix
+    // (a case-sensitive filesystem) and this global change applies to
+    // every terminal in the game, not just room3_terminal.
+    const [rawCommand, ...args] = input.split(/\s+/);
+    const command = rawCommand.toLowerCase();
     switch (command) {
       case "ls":
-        this.runLs();
+        this.runLs(args);
         break;
       case "cd":
         this.runCd(args[0]);
@@ -266,11 +272,27 @@ export class Terminal {
     }
   }
 
-  private runLs(): void {
+  // Room-3 puzzle follow-up: hidden files/directories, Unix-convention
+  // style -- no schema field for this, any TerminalFile/TerminalDirectory
+  // whose name starts with "." is hidden by convention, purely a runLs()
+  // filtering concern. `args.some(arg => arg.toLowerCase().includes("a"))`
+  // covers every flag spelling that should reveal them ("-a", "-la",
+  // "-al", "-l -a", "-A", etc.) -- cat/cd need no equivalent change, since
+  // they already match by exact name regardless of a leading dot. Grouping
+  // (directories before files) and the trailing "/" on directories are
+  // unchanged from before this checkpoint -- global formatting every other
+  // terminal already relies on, not something this one puzzle should
+  // silently redefine.
+  private runLs(args: string[]): void {
     const dir = this.currentDir;
+    const showHidden = args.some((arg) => arg.toLowerCase().includes("a"));
+    const directories = showHidden
+      ? dir.directories
+      : dir.directories.filter((d) => !d.name.startsWith("."));
+    const files = showHidden ? dir.files : dir.files.filter((f) => !f.name.startsWith("."));
     const entries = [
-      ...dir.directories.map((d) => `${d.name}/`),
-      ...dir.files.map((f) => f.name),
+      ...directories.map((d) => `${d.name}/`),
+      ...files.map((f) => f.name),
     ];
     this.appendLine(entries.length > 0 ? entries.join("  ") : "(empty)");
   }

@@ -159,11 +159,18 @@ export const MAPS: MapDef[] = [
   // only connection between Room 3 and Room 4 -- there's no separate
   // shortcut back, only the same loop retraced.
   //
-  // Room 3 itself (rows 10-12, cols 4-7 interior) is unchanged from its
-  // original design and still holds no entities -- reached from Room 2
-  // below via campaign_door_2's gap at row13/col6, gated by campaign_lock_3
-  // (a secretField: "username" lock checked against room2_terminal's
-  // username, positioned just south of the door on the Room 2 side).
+  // Room 3 (still reached from Room 2 below via campaign_door_2, gated by
+  // campaign_lock_3 -- both unchanged) now holds the hidden-files terminal
+  // puzzle: campaign_terminal_5 (linkedTo room3_terminal) and
+  // campaign_sign_1 (a "sign" decoration hinting at ls -a) sit against
+  // Room 3's own north wall; campaign_door_4 converts what used to be an
+  // open, undoored breach in Room 3's west wall (the sole gap in an
+  // otherwise-solid two-cell-thick wall segment, leading out toward the
+  // corridor loop and the pillar room north of it) into a real locked
+  // door, gated by campaign_lock_4 (secretField defaults to "password",
+  // checked against room3_terminal, whose .bash_history reveals it) --
+  // positioned on the Room 3 side, same discipline as every other lock in
+  // this file.
   //
   // Room 2 (rows 14-18, cols 1-10 interior; row15 alone extends to col13
   // for the vault alcove) is otherwise unchanged: the required part/
@@ -202,9 +209,9 @@ export const MAPS: MapDef[] = [
     [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1],
     [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
     [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+    [1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
@@ -336,6 +343,47 @@ export const MAPS: MapDef[] = [
       type: "wall_buy",
       linkedTo: "ak47",
       position: [8, 1.3, 60],
+    },
+    // Room 3 hidden-files terminal puzzle. campaign_terminal_5 and
+    // campaign_sign_1 sit against Room 3's own north wall (row 19), open
+    // floor confirmed against the current grid -- rotationY 0 (the
+    // default, set explicitly here for the same reason every other
+    // terminal in this file sets it) leaves both facing local +Z/south,
+    // i.e. into the room, away from the wall behind them.
+    {
+      id: "campaign_terminal_5",
+      type: "terminal",
+      linkedTo: "room3_terminal",
+      rotationY: 0,
+      position: [14, 1, 40],
+    },
+    {
+      id: "campaign_sign_1",
+      type: "decoration",
+      variant: "sign",
+      text: "Not everything is visible.",
+      rotationY: 0,
+      position: [12, 1.3, 40],
+    },
+    // Converts the open, undoored breach in Room 3's west wall (col 3,
+    // row 21 -- the sole gap in an otherwise-solid two-cell-thick wall
+    // segment at cols 2-3 across rows 19-23, confirmed against the current
+    // grid data directly rather than assumed) into a real locked door.
+    // campaign_lock_4 sits just inside Room 3 (col 4, same row), on the
+    // Room 3 side per this file's placement discipline -- the player must
+    // already be in Room 3 (and have read room3_terminal's password) to
+    // reach it, never trapped behind the door it opens.
+    {
+      id: "campaign_door_4",
+      type: "door",
+      position: [6, 1.5, 42],
+    },
+    {
+      id: "campaign_lock_4",
+      type: "password_lock",
+      linkedTo: "campaign_door_4",
+      terminalId: "room3_terminal",
+      position: [8, 1.2, 42],
     },
   ],
   },
