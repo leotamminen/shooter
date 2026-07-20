@@ -66,7 +66,7 @@ export const WEAPONS: Weapon[] = [
     fireRate: 0.1,
     magSize: 30,
     reloadTime: 2.5,
-    startingReserveAmmo: 90,
+    startingReserveAmmo: 180,
     cost: 500,
     fireSoundId: "ak47_single",
     // Between the M1911's 0.3 and the MAC-10's 0.8 -- a heavier per-shot
