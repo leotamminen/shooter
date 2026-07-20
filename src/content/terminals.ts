@@ -120,8 +120,13 @@ vault pin: {{VAULT_PIN}}`,
   // something has already changed here before the player typed anything --
   // read literally, "connection re-routed" is a small foreshadowing of the
   // teleport itself. note.txt is gated by requiresRoot -- "sudo cat note.txt"
-  // both reveals the narrative payoff and (via ui/Terminal.ts's onFileRead,
-  // wired in main.ts) opens campaign_door_5 as a direct consequence.
+  // reveals the narrative payoff. It no longer opens anything by itself
+  // (superseded, Data Center entrance follow-up): campaign_door_5 was
+  // relocated to the Data Center's own real entrance and made
+  // MapEntity.startsOpen -- purely visual set dressing, passable from the
+  // very first frame regardless of whether this file is ever read -- so
+  // the note's own in-fiction claim ("I managed to remotely unlock the
+  // door behind you") is now flavor text, not a mechanical trigger.
   {
     id: "workstation_terminal",
     connectMessage: "guest@workstation:~$\n[!] Connection re-routed. Origin host unreachable.",

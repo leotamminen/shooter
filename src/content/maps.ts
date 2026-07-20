@@ -212,9 +212,9 @@ export const MAPS: MapDef[] = [
     [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
     [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -427,23 +427,31 @@ export const MAPS: MapDef[] = [
       rotationY: 90,
       position: [21.4, 1, 42],
     },
-    // Privilege-escalation reveal: the door workstation_terminal's note.txt
-    // opens (via ui/Terminal.ts's onFileRead -> MapEntitySystem.openNoteDoor(),
-    // wired in main.ts) -- no button/lock, since the story itself is the
-    // unlock mechanism ("I managed to remotely unlock the door behind
-    // you"). Carved into what was, before this follow-up, solid wall: row
-    // 23/col 15 (the door) and a 2x2 stub room at rows 24-25/cols 14-15,
-    // confirmed clear of the existing MAC-10 vault (campaign_door_3/
-    // campaign_lock_2/campaign_wall_buy_1, which occupy cols ~10-13 nearby)
-    // and of the large, currently-empty area east of col 17 by reading the
-    // live grid directly, the same discipline every prior task touching
-    // this file has needed. Deliberately left empty inside -- no
-    // server_rack/coffee_cup placed here, see those decorations' own
-    // comments for why.
+    // Data Center entrance follow-up (corrected placement): confirmed,
+    // not assumed -- the large open area at rows ~22-27/cols 18-25 IS the
+    // reserved Data Center; the isolated 2x2 pocket a first pass carved at
+    // rows 24-25/cols 14-15 (south of the pillar area's east span) was the
+    // wrong spot and has been reverted back to plain wall, matching what
+    // was there before. campaign_door_5 now sits at the Data Center's own
+    // real entrance -- row 22/col 18 (world [36, 1.5, 44]), the exact
+    // point where the solid wall column at col 18 (blocking rows 18-21)
+    // ends and the room's own open floor begins, found by parsing the
+    // live grid with a script, not by eye. It's a "decoration" (variant
+    // door_prop), not a "door" entity -- purely visual set dressing,
+    // reusing the real door mesh's own box/color so it reads as an actual
+    // doorway, but permanently passable and visible from the very first
+    // frame, with no button/password_lock/other trigger. The earlier
+    // onFileRead -> MapEntitySystem.openNoteDoor() mechanism this door
+    // used to be wired to (workstation_terminal's note.txt reveal opening
+    // it as a narrative consequence) has been removed entirely, not just
+    // disconnected -- it has no purpose left now that this door is always
+    // open regardless of whether note.txt is ever read. See CLAUDE.md's
+    // decisions log.
     {
       id: "campaign_door_5",
-      type: "door",
-      position: [30, 1.5, 46],
+      type: "decoration",
+      variant: "door_prop",
+      position: [36, 1.5, 44],
     },
   ],
   },

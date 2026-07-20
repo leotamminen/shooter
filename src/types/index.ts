@@ -82,10 +82,8 @@ export interface MapEntity {
   // same checkpoint's addendum, "outlet" added by the boot-sequence
   // follow-up, "sign" added by the Room 3 hidden-files puzzle,
   // "server_rack"/"coffee_cup" added alongside the workstation_terminal
-  // reveal -- content-block primitives only, not a furnished room; neither
-  // is placed anywhere in content/maps.ts yet, both deferred until the
-  // Data Center room they belong in is designed, see CLAUDE.md's future
-  // mechanics): a cosmetic hint controlling which prop shape gets built --
+  // reveal, "door_prop" added by the Data Center entrance follow-up):
+  // a cosmetic hint controlling which prop shape gets built --
   // "crate"/"debris"/"outlet" are a single sized/colored cube (outlet
   // reuses PASSWORD_LOCK_SIZE for its dimensions rather than either
   // decoration size), "desk"/"chair" are a small THREE.Group of several
@@ -95,8 +93,16 @@ export interface MapEntity {
   // MapEntity.text below), "server_rack" is a tall narrow box with a few
   // small emissive "status light" squares, "coffee_cup" is a small
   // cylinder/box, purely decorative and NOT interactable (see
-  // createCoffeeCupDecoration()'s own comment for why). No gameplay meaning
-  // either way. Absent defaults to "crate".
+  // createCoffeeCupDecoration()'s own comment for why; neither is placed
+  // anywhere in content/maps.ts yet, deferred until the Data Center room's
+  // real layout is designed, see CLAUDE.md's future mechanics), "door_prop"
+  // reuses the real "door" MapEntity type's own box geometry/color (see
+  // createDoorPropDecoration()) so it reads as an actual door, but as a
+  // decoration it's guaranteed passable and visible from the very first
+  // frame, unlike a real "door" entity (whose visible state gates
+  // collision) -- meant for a doorway that's always open and never gated
+  // by anything. No gameplay meaning either way. Absent defaults to
+  // "crate".
     | "crate"
     | "debris"
     | "desk"
@@ -104,7 +110,8 @@ export interface MapEntity {
     | "outlet"
     | "sign"
     | "server_rack"
-    | "coffee_cup";
+    | "coffee_cup"
+    | "door_prop";
   rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
   // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
   // hand-edited content file), defaulting to 0 (unchanged facing) when

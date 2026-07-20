@@ -125,15 +125,6 @@ const TERMINAL_BOOT_DELAY_MS = 1000;
 const TERMINAL_CABLE_TUBE_RADIUS = 0.025;
 const TERMINAL_CABLE_TUBULAR_SEGMENTS = 32;
 const TERMINAL_CABLE_RADIAL_SEGMENTS = 8;
-// The one door workstation_terminal's note.txt reveal opens -- not via a
-// button/lock like every other door in this file, but purely as a
-// narrative consequence of a successful "sudo cat note.txt" (see
-// ui/Terminal.ts's onFileRead and openNoteDoor() below). Identified by id,
-// the same string-matching precedent main.ts's password-lock success
-// callback already uses to distinguish room1_terminal/room2_terminal --
-// a plain constant rather than a new MapEntity schema field, since there's
-// exactly one such door in the whole game and it needs no other data.
-const NOTE_DOOR_ID = "campaign_door_5";
 // Server rack decoration: a tall narrow box, dark, with 2-3 small emissive
 // squares near the top for a restrained "status light" detail -- the same
 // level of restraint ComputerMesh.ts's screen already established (a
@@ -179,15 +170,6 @@ export class MapEntitySystem {
   readonly group = new THREE.Group();
   readonly doors: DoorEntry[] = [];
   readonly interactables: THREE.Mesh[] = [];
-  // Assigned once, at the end of construction, from a closure over the
-  // note-door's own mesh (found by id, NOTE_DOOR_ID) and onDoorStateChanged
-  // -- the same "hand back a ready-made closure, don't expose the raw mesh"
-  // shape createPasswordLock()'s onCorrectPassword closure already
-  // established, just handed out as a public method here instead of
-  // through an injected callback, since this one has exactly one caller
-  // (main.ts's Terminal onFileRead wiring) and no password/UI step of its
-  // own to coordinate with first.
-  readonly openNoteDoor: () => void;
 
   constructor(
     mapDef: MapDef,
@@ -240,14 +222,12 @@ export class MapEntitySystem {
       }
     }
 
-    let noteDoorMesh: THREE.Mesh | undefined;
     for (const entity of mapDef.entities) {
       if (entity.type === "door") {
-        const doorMesh = this.createDoor(entity, runManager, raycastRegistry, onDoorStateChanged);
-        doorMeshById.set(entity.id, doorMesh);
-        if (entity.id === NOTE_DOOR_ID) {
-          noteDoorMesh = doorMesh;
-        }
+        doorMeshById.set(
+          entity.id,
+          this.createDoor(entity, runManager, raycastRegistry, onDoorStateChanged),
+        );
       } else if (entity.type === "computer_part") {
         computerPartMeshById.set(
           entity.id,
@@ -255,11 +235,6 @@ export class MapEntitySystem {
         );
       }
     }
-    this.openNoteDoor = (): void => {
-      if (!noteDoorMesh) return; // defensive: only reachable if NOTE_DOOR_ID's door is ever removed from content/maps.ts
-      noteDoorMesh.visible = false;
-      onDoorStateChanged();
-    };
 
     for (const entity of mapDef.entities) {
       if (entity.type === "button") {
@@ -904,6 +879,10 @@ export class MapEntitySystem {
       this.createCoffeeCupDecoration(entity);
       return;
     }
+    if (entity.variant === "door_prop") {
+      this.createDoorPropDecoration(entity);
+      return;
+    }
     if (entity.variant === "outlet") {
       // Present from the start of the run regardless of terminal/power
       // state -- a single box like crate/debris, just reusing
@@ -1080,6 +1059,27 @@ export class MapEntitySystem {
         COFFEE_CUP_RADIAL_SEGMENTS,
       ),
       new THREE.MeshStandardMaterial({ color: COFFEE_CUP_COLOR }),
+    );
+    mesh.position.set(...entity.position);
+    this.group.add(mesh);
+  }
+
+  // Data Center entrance follow-up: reuses the real "door" MapEntity
+  // type's own box geometry/color (CELL_SIZE x WALL_HEIGHT x CELL_SIZE,
+  // DOOR_COLOR) so it visually reads as an actual door, exactly like
+  // campaign_door_1-4 -- but as a decoration, not a "door" entity, it's
+  // never added to this.doors (no collision box, so PlayerController never
+  // gates movement through it) and stays permanently visible (a real
+  // "door" only ever looks like this while closed; there's no "open/ajar"
+  // visual state to reuse for "always open"). This is the correct fit for
+  // a doorway meant to read as open and passable from the very first
+  // frame, with no button/password_lock/other trigger ever changing it --
+  // rather than a real "door" entity that would need a new always-open
+  // flag layered onto a mechanic whose whole purpose is gating movement.
+  private createDoorPropDecoration(entity: MapEntity): void {
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE),
+      new THREE.MeshStandardMaterial({ color: DOOR_COLOR }),
     );
     mesh.position.set(...entity.position);
     this.group.add(mesh);

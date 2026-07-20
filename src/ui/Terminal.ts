@@ -39,18 +39,6 @@ export class Terminal {
   private readonly blockedCommands: string[];
   private readonly restrictedCommands: string[];
   private readonly coreCommands: { name: string; description: string }[];
-  // Deliberately narrow: fires only after a successful (permission-granted)
-  // "cat" read, with just the filename -- not a general "watch every
-  // command" hook. That broader shape (checkpoint 19's onCommand,
-  // room2_terminal's "whoami" opening Room 3's door directly) was tried and
-  // removed during the Room 3 identity-lock correction specifically
-  // because it let a command auto-produce a real gameplay effect with no
-  // proof the player actually read/understood anything -- see CLAUDE.md's
-  // decisions log. This hook is narrower in exactly the way that removed
-  // one wasn't: it only ever fires on a file whose own content the player
-  // just demonstrably saw, and only one filename in the entire game
-  // ("note.txt") has anything wired to it at all.
-  private readonly onFileRead?: (filename: string) => void;
 
   private terminalDef: TerminalDef | null = null;
   private pathStack: TerminalDirectory[] = [];
@@ -62,7 +50,6 @@ export class Terminal {
     blockedCommands: string[],
     restrictedCommands: string[],
     coreCommands: { name: string; description: string }[],
-    onFileRead?: (filename: string) => void,
   ) {
     this.onOpen = onOpen;
     this.onClose = onClose;
@@ -70,7 +57,6 @@ export class Terminal {
     this.blockedCommands = blockedCommands;
     this.restrictedCommands = restrictedCommands;
     this.coreCommands = coreCommands;
-    this.onFileRead = onFileRead;
 
     // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
     // ui/MainMenu.ts's own root), not just the small visible panel --
@@ -381,9 +367,6 @@ export class Terminal {
     const copyValue =
       password !== undefined && content.includes(password) ? password : undefined;
     this.appendLine(content, copyValue);
-    // Fires only on this successful, permission-granted read -- never on
-    // the requiresRoot denial above.
-    this.onFileRead?.(name);
   }
 
   // Checkpoint 19 correction: whoami no longer opens anything by itself
