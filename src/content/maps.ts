@@ -425,7 +425,7 @@ export const MAPS: MapDef[] = [
       type: "terminal",
       linkedTo: "workstation_terminal",
       rotationY: 90,
-      position: [21.4, 1, 42],
+      position: [19.4, 1, 42],
     },
     // Data Center entrance follow-up (corrected placement): confirmed,
     // not assumed -- the large open area at rows ~22-27/cols 18-25 IS the
