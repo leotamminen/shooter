@@ -117,7 +117,10 @@ function startGame(selections: GameSelections): void {
   const mapDef = findById(MAPS, selections.mapId);
   const map = loadMap(mapDef.grid, raycastRegistry);
   sceneManager.scene.add(map.group);
-  playerController.setWallBoxes(map.wallBoxes);
+  // setWallBoxes() itself moved below, after mapEntitySystem is constructed
+  // (Data Center polish) -- it now also needs mapEntitySystem's
+  // collidableDecorationBoxes concatenated in, which doesn't exist yet at
+  // this point in startGame().
   const spawnPosition = getSpawnPosition(mapDef);
   playerController.setSpawn(spawnPosition.x, spawnPosition.z);
 
@@ -290,6 +293,12 @@ function startGame(selections: GameSelections): void {
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);
+  // Data Center polish: concatenated with the static wall boxes (walls and
+  // collidable decorations are both immutable-for-the-session lists), not a
+  // new PlayerController method -- this is the whole reason setWallBoxes()
+  // was moved down here from right after loadMap(), since
+  // collidableDecorationBoxes doesn't exist until mapEntitySystem does.
+  playerController.setWallBoxes(map.wallBoxes.concat(mapEntitySystem.collidableDecorationBoxes));
 
   const interactSystem = new InteractSystem(
     sceneManager.camera,

@@ -43,7 +43,17 @@ export interface MapEntity {
     | "terminal"
     | "password_lock"
     | "computer_part"
-    | "decoration";
+    | "decoration"
+    | "coffee_cup" // Data Center polish: promoted out of plain "decoration"
+    // (see the now-removed "coffee_cup" variant) once it needed real
+    // state-dependent behavior (requiresItem below) -- every other
+    // "decoration" variant has a zero-interactivity contract this no
+    // longer fits, mirroring why "door_prop" stayed a decoration (still
+    // zero interactivity) while this didn't.
+    | "tape_roll"; // Data Center polish: mirrors "computer_part"'s exact
+    // shape (interactable, idempotent pickup that hides the mesh, resettable,
+    // registered in a lookup map by id) -- gates a "coffee_cup" the same way
+    // computer_part already gates a "terminal", see MapEntity.requiresItem.
   position: [number, number, number];
   linkedTo?: string; // a related entity's id (e.g. button -> door), or for
   // "wall_buy", a Weapon id in content/weapons.ts, or for "terminal", a
@@ -63,6 +73,23 @@ export interface MapEntity {
   // entity's id. When set, interacting with this terminal before that part
   // has been collected (its mesh is still visible) shows a short flavor
   // message instead of opening the Terminal overlay.
+  requiresItem?: string; // "coffee_cup" only (Data Center polish): a
+  // "tape_roll" entity's id. Read live, every interaction (the same
+  // "look up the other entity's mesh, check .visible" pattern requiresPart
+  // above already established), not cached -- before that tape roll is
+  // collected, interacting only shows a hint message; once collected
+  // (mesh.visible false), interacting performs the real action instead.
+  // Optional, unlike requiresPart's terminal usage being effectively
+  // always-set-when-relevant -- an unset requiresItem means this specific
+  // cup has nothing gating it and always behaves as if already unlocked
+  // (mirrors requiresPart's own "undefined means ungated" convention).
+  interactPrompt?: string; // "tape_roll" only, for now (Data Center
+  // polish) -- unlike every other entity type, which hardcodes its own
+  // interactPrompt string in MapEntitySystem.ts's relevant create*()
+  // method, tape_roll reads this directly from content data. Not
+  // retrofitted onto other entity types; scoped narrowly to the one type
+  // that currently needs authorable prompt text. Falls back to a generic
+  // "Press E to pick up" when absent.
   secretField?: "password" | "vaultPin" | "username"; // "password_lock"
   // only (checkpoint 19, corrected same checkpoint): which value this lock
   // checks the player's input against. "password" (the default when this
@@ -81,28 +108,37 @@ export interface MapEntity {
   variant?: // "decoration" only (checkpoint 20, "desk"/"chair" added in the
   // same checkpoint's addendum, "outlet" added by the boot-sequence
   // follow-up, "sign" added by the Room 3 hidden-files puzzle,
-  // "server_rack"/"coffee_cup" added alongside the workstation_terminal
-  // reveal, "door_prop" added by the Data Center entrance follow-up):
-  // a cosmetic hint controlling which prop shape gets built --
-  // "crate"/"debris"/"outlet" are a single sized/colored cube (outlet
-  // reuses PASSWORD_LOCK_SIZE for its dimensions rather than either
-  // decoration size), "desk"/"chair" are a small THREE.Group of several
-  // boxes (see MapEntitySystem.ts's
+  // "server_rack" added alongside the workstation_terminal reveal,
+  // "door_prop" added by the Data Center entrance follow-up,
+  // "black_desk"/"computer_off"/"phone"/"computer_mouse" added by the
+  // Data Center polish follow-up -- "coffee_cup" REMOVED same follow-up,
+  // promoted to its own top-level MapEntity type once it needed real
+  // state-dependent behavior, see MapEntity.requiresItem): a cosmetic hint
+  // controlling which prop shape gets built -- "crate"/"debris"/"outlet"
+  // are a single sized/colored cube (outlet reuses PASSWORD_LOCK_SIZE for
+  // its dimensions rather than either decoration size), "desk"/"chair" are
+  // a small THREE.Group of several boxes (see MapEntitySystem.ts's
   // createDeskDecoration()/createChairDecoration()), "sign" is a flat board
   // textured with a generated CanvasTexture (see createSignDecoration() and
-  // MapEntity.text below), "server_rack" is a tall narrow box with a few
-  // small emissive "status light" squares, "coffee_cup" is a small
-  // cylinder/box, purely decorative and NOT interactable (see
-  // createCoffeeCupDecoration()'s own comment for why; neither is placed
-  // anywhere in content/maps.ts yet, deferred until the Data Center room's
-  // real layout is designed, see CLAUDE.md's future mechanics), "door_prop"
-  // reuses the real "door" MapEntity type's own box geometry/color (see
-  // createDoorPropDecoration()) so it reads as an actual door, but as a
-  // decoration it's guaranteed passable and visible from the very first
-  // frame, unlike a real "door" entity (whose visible state gates
-  // collision) -- meant for a doorway that's always open and never gated
-  // by anything. No gameplay meaning either way. Absent defaults to
-  // "crate".
+  // MapEntity.text below), "server_rack" is a tall box with a handful of
+  // small emissive "status light" squares that blink independently (own
+  // setInterval per light, no cleanup needed -- see the decisions log) and
+  // real collision (see MapEntitySystem.collidableDecorationBoxes below --
+  // the first decoration variants ever given collision), "door_prop"
+  // reuses the real "door" MapEntity type's own color (see
+  // createDoorPropDecoration()) at full CELL_SIZE x WALL_HEIGHT doorway
+  // proportions (just a thin slab depth, not the real door's full box) so
+  // it reads as an actual doorway, but as a decoration it's guaranteed
+  // passable and visible from the very first frame, unlike a real "door"
+  // entity (whose visible state gates collision) -- meant for a doorway
+  // that's always open and never gated by anything, "black_desk" is a
+  // second, wider desk variant (collidable, like server_rack) -- the
+  // original "desk" is completely untouched, Room 2 still uses it,
+  // "computer_off" reuses utils/ComputerMesh.ts's createComputerMesh(false)
+  // purely as static decoration (no interaction of any kind, unlike the
+  // gated terminals that can power on), "phone"/"computer_mouse" are
+  // trivial small boxes, no interactivity. No gameplay meaning either way.
+  // Absent defaults to "crate".
     | "crate"
     | "debris"
     | "desk"
@@ -110,8 +146,11 @@ export interface MapEntity {
     | "outlet"
     | "sign"
     | "server_rack"
-    | "coffee_cup"
-    | "door_prop";
+    | "door_prop"
+    | "black_desk"
+    | "computer_off"
+    | "phone"
+    | "computer_mouse";
   rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
   // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
   // hand-edited content file), defaulting to 0 (unchanged facing) when
@@ -205,6 +244,17 @@ export interface TerminalDef {
   // lines -- appendLine() already renders with white-space: pre-wrap, so
   // this needs no new rendering logic. Every terminal that doesn't set
   // this keeps the default banner unchanged.
+  logMode?: boolean; // Data Center polish: when true, ui/Terminal.ts's
+  // open() also starts appending simulated access-log lines at a
+  // randomized interval (own setInterval, cleared on close() -- unlike
+  // the server_rack lights' or, this one genuinely needs cleanup, since
+  // it's tied to a transient overlay's lifecycle, not a permanent scene
+  // object). connectMessage (if set) still prints once first, unaffected.
+  // Any command the player types while a logMode terminal is open is not
+  // parsed at all -- runCommand() short-circuits to a flat "Access
+  // denied." regardless of what was typed, before ever reaching sudo/
+  // dispatch(). Every terminal that doesn't set this behaves exactly as
+  // before -- opt-in, same shape as connectMessage's own default-off field.
   root: TerminalDirectory;
 }
 

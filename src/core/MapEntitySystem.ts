@@ -125,36 +125,93 @@ const TERMINAL_BOOT_DELAY_MS = 1000;
 const TERMINAL_CABLE_TUBE_RADIUS = 0.025;
 const TERMINAL_CABLE_TUBULAR_SEGMENTS = 32;
 const TERMINAL_CABLE_RADIAL_SEGMENTS = 8;
-// Server rack decoration: a tall narrow box, dark, with 2-3 small emissive
-// squares near the top for a restrained "status light" detail -- the same
-// level of restraint ComputerMesh.ts's screen already established (a
-// generated texture/detail, not a fully modeled rack). Content-block
-// primitive only; not placed anywhere yet, see CLAUDE.md's future
-// mechanics for why.
+// Server rack decoration: a substantial box, dark, with a column of small
+// emissive squares near the top for a restrained "status light" detail --
+// the same level of restraint ComputerMesh.ts's screen already established
+// (a generated texture/detail, not a fully modeled rack). Data Center
+// polish: scaled up overall (was a thin 0.5x1.8x0.6 sliver -- width kept
+// modest, depth more than doubled since that's the axis that governs
+// row-packing, height increased too so it doesn't look longer without also
+// looking bigger) and given real collision -- the first decoration variant
+// ever given one, see collidableDecorationBoxes below and the decisions
+// log for why this is a narrow exception, not a reversal of checkpoint
+// 20's no-collision default.
 const SERVER_RACK_COLOR = 0x1c1e22;
-const SERVER_RACK_SIZE: [number, number, number] = [0.5, 1.8, 0.6];
+const SERVER_RACK_SIZE: [number, number, number] = [0.8, 2.4, 1.2];
 const SERVER_RACK_LIGHT_COLOR = 0x33ff55;
 const SERVER_RACK_LIGHT_EMISSIVE = 0x114411;
 const SERVER_RACK_LIGHT_SIZE = 0.05;
-const SERVER_RACK_LIGHT_Y_OFFSETS = [0.7, 0.62, 0.54];
-// Coffee cup decoration: a small simple prop, purely decorative for now --
-// deliberately NOT interactable. Turning this into a real pickup (the
-// supervisor's fingerprint) is deferred until the Data Center room exists
-// and its target lock is designed -- adding interactability now would mean
-// guessing at a gate mechanism with no lock to check it against yet.
+const SERVER_RACK_LIGHT_Y_OFFSETS = [0.95, 0.85, 0.75, 0.65, 0.55];
+// Blink: each light gets its own randomized-interval setInterval, chosen
+// once per light (not re-randomized every tick), so racks read as chaotic
+// rather than synchronized -- see createServerRackDecoration(). No cleanup
+// needed: these intervals are meant to run for as long as the page does,
+// the same "permanent for the session" reasoning every other decoration in
+// this file already relies on (nothing ever tears a decoration down mid-run).
+const SERVER_RACK_LIGHT_BLINK_MIN_MS = 400;
+const SERVER_RACK_LIGHT_BLINK_MAX_MS = 900;
+// Coffee cup: promoted from a "decoration" variant to its own top-level
+// MapEntity type (Data Center polish) once it needed real state-dependent
+// behavior (gated by a "tape_roll" pickup, MapEntity.requiresItem) --
+// every other "decoration" variant has a zero-interactivity contract this
+// no longer fits. Geometry/color unchanged from the original decoration.
 const COFFEE_CUP_COLOR = 0xe8e4da;
 const COFFEE_CUP_RADIUS_TOP = 0.06;
 const COFFEE_CUP_RADIUS_BOTTOM = 0.05;
 const COFFEE_CUP_HEIGHT = 0.09;
 const COFFEE_CUP_RADIAL_SEGMENTS = 12;
-// Door prop shape fix: real door-slab proportions (roughly door-width x
-// door-height x a thin panel depth) instead of the real "door" MapEntity
-// type's own full CELL_SIZE x WALL_HEIGHT x CELL_SIZE box, which read as a
-// solid square block, not a door. Reuses DOOR_COLOR unchanged -- only the
-// shape was wrong, not the material.
-const DOOR_PROP_WIDTH = 1;
-const DOOR_PROP_HEIGHT = 2.2;
+// Named once, shared between createCoffeeCup() (which sets the initial/live
+// prompt and picks the message) and createTapeRoll() (which both flips the
+// prompt over on pickup and restores it on a run reset) -- so the two can
+// never drift out of sync by one of them hand-typing a slightly different
+// string.
+const COFFEE_CUP_PROMPT_BEFORE = "Press E to inspect";
+const COFFEE_CUP_PROMPT_AFTER = "Press E to copy fingerprints";
+const COFFEE_CUP_HINT_MESSAGE = "There seems to be fingerprints, you need tape to copy them.";
+const COFFEE_CUP_COPIED_MESSAGE = "Fingerprint copied.";
+// Tape roll: mirrors computer_part's exact pickup shape (interactable,
+// idempotent, hides on pickup, resettable) -- a small flat cylinder, like a
+// roll of tape lying on its side.
+const TAPE_ROLL_COLOR = 0xd8d4c8;
+const TAPE_ROLL_RADIUS = 0.06;
+const TAPE_ROLL_HEIGHT = 0.04;
+const TAPE_ROLL_RADIAL_SEGMENTS = 16;
+const TAPE_ROLL_DEFAULT_PROMPT = "Press E to pick up";
+// Door prop shape fix (Data Center entrance follow-up) then full-doorway
+// re-fix (Data Center polish): now CELL_SIZE x WALL_HEIGHT, the real
+// "door" MapEntity type's own width/height constants reused directly
+// rather than a separate DOOR_PROP_WIDTH/HEIGHT pair -- a real doorway
+// opening's proportions, not a small door-shaped sliver. Depth stays its
+// own thin-slab constant (no equivalent already exists for it) and
+// DOOR_COLOR is still shared with the real "door" type -- only the shape
+// was ever wrong, not the material.
 const DOOR_PROP_DEPTH = 0.12;
+// Black desk (Data Center polish): a second, wider desk variant --
+// deliberately NOT sharing DESK_TABLETOP_SIZE/DESK_LEG_OFFSETS/
+// DECORATION_DESK_COLOR with the original "desk" above, which Room 2 still
+// uses and must keep rendering identically. Wide enough for three
+// ComputerMesh.ts terminals (each BODY_WIDTH 0.5) side by side plus a
+// phone/mouse. Same DESK_TABLETOP_Y-style tuning as the original desk --
+// tabletop top face lands at 1.07 + 0.06/2 = 1.10, so a terminal placed at
+// y=1.1 on top of it still sits flush, no gap or clipping. Also collidable
+// (see server_rack above for why).
+const BLACK_DESK_COLOR = 0x141414;
+const BLACK_DESK_TABLETOP_SIZE: [number, number, number] = [2.4, 0.06, 0.6];
+const BLACK_DESK_TABLETOP_Y = 1.07;
+const BLACK_DESK_LEG_SIZE: [number, number, number] = [0.05, 1.04, 0.05];
+const BLACK_DESK_LEG_OFFSETS: [number, number][] = [
+  [1.1, 0.25],
+  [1.1, -0.25],
+  [-1.1, 0.25],
+  [-1.1, -0.25],
+];
+// Phone/computer_mouse (Data Center polish): trivial small boxes, no
+// interactivity, matching every other plain decoration's "single sized/
+// colored primitive" shape (crate/debris/outlet).
+const PHONE_COLOR = 0x1a1a1a;
+const PHONE_SIZE: [number, number, number] = [0.16, 0.05, 0.08];
+const COMPUTER_MOUSE_COLOR = 0x2a2a2a;
+const COMPUTER_MOUSE_SIZE: [number, number, number] = [0.06, 0.03, 0.1];
 
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
@@ -178,6 +235,13 @@ export class MapEntitySystem {
   readonly group = new THREE.Group();
   readonly doors: DoorEntry[] = [];
   readonly interactables: THREE.Mesh[] = [];
+  // Data Center polish: the first (and still only) decorations ever given
+  // real collision -- static boxes computed once at construction, never
+  // recomputed, fed by main.ts into the same concatenated list
+  // PlayerController already receives for walls (see the decisions log for
+  // why this is a narrow per-variant exception, not a reversal of
+  // checkpoint 20's "decorations have no collision" default).
+  readonly collidableDecorationBoxes: THREE.Box3[] = [];
 
   constructor(
     mapDef: MapDef,
@@ -213,6 +277,21 @@ export class MapEntitySystem {
     // removed along with the mechanism that needed them).
     const doorMeshById = new Map<string, THREE.Mesh>();
     const computerPartMeshById = new Map<string, THREE.Group>();
+    // Data Center polish: mirrors computerPartMeshById's exact role, just
+    // for tape_roll -> coffee_cup instead of computer_part -> terminal.
+    // Built in the same first pass as doorMeshById/computerPartMeshById;
+    // createCoffeeCup() (second pass, below) reads it live on every
+    // interaction, the same "look up the other entity's mesh, check
+    // .visible" pattern createTerminal()'s requiresPart gate already uses.
+    const tapeRollMeshById = new Map<string, THREE.Mesh>();
+    // The reverse direction: which coffee_cup mesh(es) a given tape_roll id
+    // gates, populated by createCoffeeCup() in the SECOND pass. A tape
+    // roll's onInteract closure (built in the FIRST pass, before this map
+    // has any entries) captures this map by reference and only ever reads
+    // it once actually invoked at runtime, after both passes have long
+    // finished -- the same forward-reference-safe-closure reasoning this
+    // codebase already relies on for `let gameMode` in main.ts.
+    const coffeeCupMeshesByTapeRollId = new Map<string, THREE.Mesh[]>();
     // Paired-terminal teleport: static data (every terminal's own entity,
     // known from mapDef.entities alone), so this doesn't need to follow the
     // door/computer_part meshes' construction-order-dependent first pass
@@ -240,6 +319,11 @@ export class MapEntitySystem {
         computerPartMeshById.set(
           entity.id,
           this.createComputerPart(entity, runManager, raycastRegistry),
+        );
+      } else if (entity.type === "tape_roll") {
+        tapeRollMeshById.set(
+          entity.id,
+          this.createTapeRoll(entity, runManager, raycastRegistry, coffeeCupMeshesByTapeRollId),
         );
       }
     }
@@ -276,6 +360,8 @@ export class MapEntitySystem {
         );
       } else if (entity.type === "decoration") {
         this.createDecoration(entity);
+      } else if (entity.type === "coffee_cup") {
+        this.createCoffeeCup(entity, tapeRollMeshById, coffeeCupMeshesByTapeRollId, raycastRegistry, gameState);
       }
     }
   }
@@ -501,6 +587,118 @@ export class MapEntitySystem {
     });
 
     return group;
+  }
+
+  // Data Center polish: mirrors createComputerPart() above exactly --
+  // interactable, idempotent pickup that hides the mesh, resettable. The
+  // one addition is the coffee-cup prompt hand-off: on pickup, this also
+  // looks up whichever coffee_cup mesh(es) declared requiresItem pointing
+  // at this tape roll's own id (via coffeeCupMeshesByTapeRollId, populated
+  // by createCoffeeCup() in the second construction pass) and flips their
+  // interactPrompt over live -- a narrow, one-off wire-up between this
+  // specific pair, not a generic "any entity can retarget any other
+  // entity's prompt" system (see the decisions log).
+  private createTapeRoll(
+    entity: MapEntity,
+    runManager: RunManager,
+    raycastRegistry: RaycastRegistry,
+    coffeeCupMeshesByTapeRollId: Map<string, THREE.Mesh[]>,
+  ): THREE.Mesh {
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(TAPE_ROLL_RADIUS, TAPE_ROLL_RADIUS, TAPE_ROLL_HEIGHT, TAPE_ROLL_RADIAL_SEGMENTS),
+      new THREE.MeshStandardMaterial({ color: TAPE_ROLL_COLOR }),
+    );
+    mesh.position.set(...entity.position);
+    mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = entity.interactPrompt ?? TAPE_ROLL_DEFAULT_PROMPT;
+    mesh.userData.onInteract = (): void => {
+      if (!mesh.visible) return; // idempotent: already collected
+      mesh.visible = false;
+      const gatedCups = coffeeCupMeshesByTapeRollId.get(entity.id);
+      if (gatedCups) {
+        for (const cupMesh of gatedCups) {
+          cupMesh.userData.interactPrompt = COFFEE_CUP_PROMPT_AFTER;
+        }
+      }
+    };
+
+    this.group.add(mesh);
+    this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
+
+    runManager.registerResettable(() => {
+      mesh.visible = true;
+      mesh.userData.interactPrompt = entity.interactPrompt ?? TAPE_ROLL_DEFAULT_PROMPT;
+      // A new run also un-collects the tape roll (above), so any coffee cup
+      // this one gates needs its prompt reverted back in step -- otherwise
+      // it would keep showing "Press E to copy fingerprints" after a reset
+      // even though the gate (tapeMesh.visible, checked live on interact)
+      // is no longer satisfied, contradicting what interacting would
+      // actually do.
+      const gatedCups = coffeeCupMeshesByTapeRollId.get(entity.id);
+      if (gatedCups) {
+        for (const cupMesh of gatedCups) {
+          cupMesh.userData.interactPrompt = COFFEE_CUP_PROMPT_BEFORE;
+        }
+      }
+    });
+
+    return mesh;
+  }
+
+  // Data Center polish: promoted from a "decoration" variant to a top-level
+  // MapEntity type (createCoffeeCup(), mirroring createTerminal()'s shape)
+  // once it needed real state-dependent behavior. requiresItem is read
+  // live on every interaction, the same "look up the other entity's mesh,
+  // check .visible" pattern createTerminal()'s requiresPart gate already
+  // established -- not cached, so a mid-run tape-roll pickup is reflected
+  // on the very next coffee-cup interaction with no extra wiring. This
+  // method also registers itself into coffeeCupMeshesByTapeRollId (keyed
+  // by the tape roll's id, since one tape roll could in principle gate more
+  // than one coffee cup) so the matching tape_roll's own onInteract can
+  // flip this mesh's interactPrompt the instant it's collected, rather than
+  // this mesh only ever noticing on its own next interaction.
+  private createCoffeeCup(
+    entity: MapEntity,
+    tapeRollMeshById: Map<string, THREE.Mesh>,
+    coffeeCupMeshesByTapeRollId: Map<string, THREE.Mesh[]>,
+    raycastRegistry: RaycastRegistry,
+    gameState: GameState,
+  ): void {
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        COFFEE_CUP_RADIUS_TOP,
+        COFFEE_CUP_RADIUS_BOTTOM,
+        COFFEE_CUP_HEIGHT,
+        COFFEE_CUP_RADIAL_SEGMENTS,
+      ),
+      new THREE.MeshStandardMaterial({ color: COFFEE_CUP_COLOR }),
+    );
+    mesh.position.set(...entity.position);
+    mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = COFFEE_CUP_PROMPT_BEFORE;
+    mesh.userData.onInteract = (): void => {
+      const tapeMesh = entity.requiresItem ? tapeRollMeshById.get(entity.requiresItem) : undefined;
+      const tapeCollected = tapeMesh !== undefined && !tapeMesh.visible;
+      if (tapeCollected) {
+        gameState.showFeedback(COFFEE_CUP_COPIED_MESSAGE);
+      } else {
+        gameState.showFeedback(COFFEE_CUP_HINT_MESSAGE);
+      }
+    };
+
+    this.group.add(mesh);
+    this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
+
+    if (entity.requiresItem) {
+      const existing = coffeeCupMeshesByTapeRollId.get(entity.requiresItem);
+      if (existing) {
+        existing.push(mesh);
+      } else {
+        coffeeCupMeshesByTapeRollId.set(entity.requiresItem, [mesh]);
+      }
+    }
   }
 
   private createWallBuy(
@@ -883,12 +1081,36 @@ export class MapEntitySystem {
       this.createServerRackDecoration(entity);
       return;
     }
-    if (entity.variant === "coffee_cup") {
-      this.createCoffeeCupDecoration(entity);
-      return;
-    }
     if (entity.variant === "door_prop") {
       this.createDoorPropDecoration(entity);
+      return;
+    }
+    if (entity.variant === "black_desk") {
+      this.createBlackDeskDecoration(entity);
+      return;
+    }
+    if (entity.variant === "computer_off") {
+      this.createComputerOffDecoration(entity);
+      return;
+    }
+    if (entity.variant === "phone") {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(...PHONE_SIZE),
+        new THREE.MeshStandardMaterial({ color: PHONE_COLOR }),
+      );
+      mesh.position.set(...entity.position);
+      mesh.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+      this.group.add(mesh);
+      return;
+    }
+    if (entity.variant === "computer_mouse") {
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(...COMPUTER_MOUSE_SIZE),
+        new THREE.MeshStandardMaterial({ color: COMPUTER_MOUSE_COLOR }),
+      );
+      mesh.position.set(...entity.position);
+      mesh.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+      this.group.add(mesh);
       return;
     }
     if (entity.variant === "outlet") {
@@ -946,6 +1168,41 @@ export class MapEntitySystem {
     for (const [x, z] of DESK_LEG_OFFSETS) {
       this.addDecorationBox(group, DESK_LEG_SIZE, [x, DESK_LEG_Y, z], DECORATION_DESK_COLOR);
     }
+    group.position.set(...entity.position);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
+  }
+
+  // Data Center polish: a second, wider desk -- deliberately a fully
+  // separate method/constants from createDeskDecoration() above rather than
+  // a parameterized shared one, so Room 2's original desk (still built by
+  // that method, untouched) can never be affected by anything this method
+  // does. Tabletop-height math is the same convention as the original desk
+  // (see BLACK_DESK_TABLETOP_Y's comment), and it's collidable (the same
+  // computeCollisionBox() treatment as server_rack above) since it's large
+  // enough to be a real obstacle, unlike the small decorative props resting
+  // on it.
+  private createBlackDeskDecoration(entity: MapEntity): void {
+    const group = new THREE.Group();
+    this.addDecorationBox(group, BLACK_DESK_TABLETOP_SIZE, [0, BLACK_DESK_TABLETOP_Y, 0], BLACK_DESK_COLOR);
+    for (const [x, z] of BLACK_DESK_LEG_OFFSETS) {
+      this.addDecorationBox(group, BLACK_DESK_LEG_SIZE, [x, DESK_LEG_Y, z], BLACK_DESK_COLOR);
+    }
+    group.position.set(...entity.position);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
+
+    this.collidableDecorationBoxes.push(computeCollisionBox(group));
+  }
+
+  // Data Center polish: reuses ComputerMesh.ts's createComputerMesh(false)
+  // purely as static decoration -- unlike every gated terminal, this one
+  // never gets userData.interactable/interactPrompt/onInteract, never
+  // registers with raycastRegistry, and never swaps to the powered-on
+  // variant. It's set dressing meant to always read as off, not a second
+  // kind of terminal.
+  private createComputerOffDecoration(entity: MapEntity): void {
+    const group = createComputerMesh(false);
     group.position.set(...entity.position);
     group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
     this.group.add(group);
@@ -1018,15 +1275,17 @@ export class MapEntitySystem {
     return texture;
   }
 
-  // Content-block primitive: a tall narrow box plus 2-3 small emissive
-  // squares near the top, the same restrained "a couple of generated
-  // details, not a fully modeled object" level ComputerMesh.ts's screen
-  // texture already established for this project's other tech-prop meshes
-  // -- deliberately not a real named-child/texture factory of its own
-  // (unlike ComputerMesh.ts) since this is a single flat-color box, not
-  // something any other system needs to look up by name. No
-  // collision/interactable/raycast registration, matching every other
-  // decoration in this file.
+  // Content-block primitive: a substantial box plus a column of 4-6 small
+  // emissive squares, the same restrained "a couple of generated details,
+  // not a fully modeled object" level ComputerMesh.ts's screen texture
+  // already established -- deliberately not a real named-child/texture
+  // factory of its own since nothing needs to look these up by name. Data
+  // Center polish: now collidable (see SERVER_RACK_SIZE's comment for why
+  // this is a narrow exception) and each light blinks on its own
+  // randomized-interval setInterval (chosen once per light, not
+  // re-randomized per tick) so a row of racks reads as chaotic rather than
+  // synchronized -- no cleanup, these are meant to run for the life of the
+  // page, same as every other permanent decoration effect in this file.
   private createServerRackDecoration(entity: MapEntity): void {
     const group = new THREE.Group();
     this.addDecorationBox(group, SERVER_RACK_SIZE, [0, SERVER_RACK_SIZE[1] / 2, 0], SERVER_RACK_COLOR);
@@ -1046,30 +1305,20 @@ export class MapEntitySystem {
         SERVER_RACK_SIZE[2] / 2 + 0.005, // flush against the front (+Z) face
       );
       group.add(light);
+
+      const blinkIntervalMs =
+        SERVER_RACK_LIGHT_BLINK_MIN_MS +
+        Math.random() * (SERVER_RACK_LIGHT_BLINK_MAX_MS - SERVER_RACK_LIGHT_BLINK_MIN_MS);
+      setInterval(() => {
+        light.visible = !light.visible;
+      }, blinkIntervalMs);
     }
 
     group.position.set(...entity.position);
     group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
     this.group.add(group);
-  }
 
-  // Content-block primitive: a small cylinder, purely decorative -- see
-  // this file's own COFFEE_CUP_* constants' comment for why it's
-  // deliberately NOT wired up as a pickup/interactable yet (no
-  // userData.interactable, no raycastRegistry.register(), matching every
-  // other decoration).
-  private createCoffeeCupDecoration(entity: MapEntity): void {
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        COFFEE_CUP_RADIUS_TOP,
-        COFFEE_CUP_RADIUS_BOTTOM,
-        COFFEE_CUP_HEIGHT,
-        COFFEE_CUP_RADIAL_SEGMENTS,
-      ),
-      new THREE.MeshStandardMaterial({ color: COFFEE_CUP_COLOR }),
-    );
-    mesh.position.set(...entity.position);
-    this.group.add(mesh);
+    this.collidableDecorationBoxes.push(computeCollisionBox(group));
   }
 
   // Data Center entrance follow-up: reuses the real "door" MapEntity
@@ -1084,20 +1333,21 @@ export class MapEntitySystem {
   // than a real "door" entity that would need a new always-open flag
   // layered onto a mechanic whose whole purpose is gating movement.
   //
-  // Shape fix: DOOR_PROP_WIDTH/HEIGHT/DEPTH are real door-slab
-  // proportions, not the real "door" type's full CELL_SIZE x WALL_HEIGHT
-  // block (which read as a solid cube, not a door). Floor-anchored like
-  // every other floor-standing decoration (server_rack, coffee_cup) --
-  // the mesh's own Y is computed from DOOR_PROP_HEIGHT/2, not read from
-  // entity.position[1], so it always sits on the ground regardless of
-  // what Y a content author happens to put in the data (a leftover
-  // WALL_HEIGHT/2-era value would otherwise float it).
+  // Data Center polish: width/height are now CELL_SIZE/WALL_HEIGHT (the
+  // real "door" type's own constants, reused directly rather than a
+  // separate DOOR_PROP_WIDTH/HEIGHT pair) -- full actual-doorway
+  // proportions, not a small door-shaped sliver. Depth stays its own thin
+  // DOOR_PROP_DEPTH constant, still a flat slab. Floor-anchored like every
+  // other floor-standing decoration -- the mesh's own Y is computed from
+  // WALL_HEIGHT/2, not read from entity.position[1], so it always sits on
+  // the ground regardless of what Y a content author happens to put in the
+  // data.
   private createDoorPropDecoration(entity: MapEntity): void {
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(DOOR_PROP_WIDTH, DOOR_PROP_HEIGHT, DOOR_PROP_DEPTH),
+      new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, DOOR_PROP_DEPTH),
       new THREE.MeshStandardMaterial({ color: DOOR_COLOR }),
     );
-    mesh.position.set(entity.position[0], DOOR_PROP_HEIGHT / 2, entity.position[2]);
+    mesh.position.set(entity.position[0], WALL_HEIGHT / 2, entity.position[2]);
     // Same rotationY convention as createTerminal()/the desk/chair/sign
     // decorations -- unset (0) is correct for campaign_door_5's own
     // placement (its width already spans east-west, matching the

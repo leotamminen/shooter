@@ -212,12 +212,12 @@ export const MAPS: MapDef[] = [
     [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
     [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -225,9 +225,8 @@ export const MAPS: MapDef[] = [
   ],
       entities: [
     {
-      id: "campaign_spawn_1",
-      type: "spawn",
-      position: [2, 0, 62],
+      // id: "campaign_spawn_1", type: "spawn", position: [2, 0, 62],
+      id: "campaign_spawn_1", type: "spawn", position: [39, 0, 44],
     },
     {
       id: "campaign_terminal_1",
@@ -457,7 +456,8 @@ export const MAPS: MapDef[] = [
       id: "campaign_door_5",
       type: "decoration",
       variant: "door_prop",
-      position: [36, 0, 44],
+      rotationY: 30,
+      position: [35.5, 2, 44.7],
     },
     // Data Center placeholder furnishing: rough placements only, the
     // player will rearrange all of this by hand afterward -- exact
@@ -467,22 +467,37 @@ export const MAPS: MapDef[] = [
     // touching this file has needed. Sequential, predictable ids
     // (campaign_server_rack_1..9, campaign_decoration_5..7) so this batch
     // is easy to find and re-edit once the room's real layout is designed.
-    { id: "campaign_server_rack_1", type: "decoration", variant: "server_rack", position: [49, 0, 45] },
-    { id: "campaign_server_rack_2", type: "decoration", variant: "server_rack", position: [49, 0, 46] },
-    { id: "campaign_server_rack_3", type: "decoration", variant: "server_rack", position: [49, 0, 47] },
-    { id: "campaign_server_rack_4", type: "decoration", variant: "server_rack", position: [49, 0, 48] },
-    { id: "campaign_server_rack_5", type: "decoration", variant: "server_rack", position: [49, 0, 49] },
-    { id: "campaign_server_rack_6", type: "decoration", variant: "server_rack", position: [49, 0, 50] },
-    { id: "campaign_server_rack_7", type: "decoration", variant: "server_rack", position: [49, 0, 51] },
-    { id: "campaign_server_rack_8", type: "decoration", variant: "server_rack", position: [49, 0, 52] },
-    { id: "campaign_server_rack_9", type: "decoration", variant: "server_rack", position: [49, 0, 53] },
+    // Data Center polish: respaced along Z for the new, more than doubled
+    // SERVER_RACK_SIZE depth (was 0.6, now 1.2) -- the original 1-unit
+    // step would have overlapped every adjacent pair. New 1.25 step (a
+    // small gap, not touching) re-verified against a fresh script parse of
+    // the live grid, confirmed open floor for all 9, not assumed from the
+    // old comment's rough row/col estimate.
+    { id: "campaign_server_rack_1", type: "decoration", variant: "server_rack", position: [49, 0, 45.9] },
+    { id: "campaign_server_rack_2", type: "decoration", variant: "server_rack", position: [49, 0, 47.15] },
+    { id: "campaign_server_rack_3", type: "decoration", variant: "server_rack", position: [49, 0, 48.4] },
+    { id: "campaign_server_rack_4", type: "decoration", variant: "server_rack", position: [49, 0, 49.65] },
+    { id: "campaign_server_rack_5", type: "decoration", variant: "server_rack", position: [49, 0, 50.9] },
+    { id: "campaign_server_rack_6", type: "decoration", variant: "server_rack", position: [49, 0, 52.15] },
+    { id: "campaign_server_rack_7", type: "decoration", variant: "server_rack", position: [49, 0, 53.4] },
+    { id: "campaign_server_rack_8", type: "decoration", variant: "server_rack", position: [49, 0, 54.65] },
+    { id: "campaign_server_rack_9", type: "decoration", variant: "server_rack", position: [49, 0, 55.9] },
     // Desk/coffee-cup/terminal grouping, mirroring the existing Room 2
     // desk+terminal pairing (checkpoint 20): terminal and cup both rest
     // at the desk's own y=1.1 surface height. campaign_terminal_6 links
     // to a placeholder TerminalDef (data_center_terminal, content/
-    // terminals.ts) -- the room's real puzzle isn't designed yet.
-    { id: "campaign_desk_2", type: "decoration", variant: "desk", position: [45, 0, 45] },
-    { id: "campaign_coffee_cup_1", type: "decoration", variant: "coffee_cup", position: [45.3, 1.1, 45] },
+    // terminals.ts) -- the room's real puzzle isn't designed yet. Data
+    // Center polish: variant is now "black_desk" (wider, collidable, its
+    // own dark material -- see MapEntitySystem.ts's decisions log; Room
+    // 2's own "desk" entity is untouched and still renders identically).
+    { id: "campaign_desk_2", type: "decoration", variant: "black_desk", position: [45, 0, 45] },
+    // Data Center polish: promoted from a "decoration" to its own
+    // "coffee_cup" MapEntity type, gated by the new campaign_tape_roll_1
+    // pickup below (requiresItem) -- see MapEntitySystem.ts's
+    // createCoffeeCup()/createTapeRoll() and the decisions log for the
+    // narrowly-scoped live-prompt-update wiring between this specific
+    // pair. Position/y unchanged from the prior decoration.
+    { id: "campaign_coffee_cup_1", type: "coffee_cup", requiresItem: "campaign_tape_roll_1", position: [45.3, 1.2, 45] },
     {
       id: "campaign_terminal_6",
       type: "terminal",
@@ -490,6 +505,14 @@ export const MAPS: MapDef[] = [
       rotationY: 0,
       position: [45, 1.1, 45],
     },
+    // Data Center polish: two always-off decorative computers flanking
+    // campaign_terminal_6, plus a phone and a mouse -- all pure flavor,
+    // zero interactivity, resting on the new wider black_desk (spans
+    // x 43.8-46.2 at this desk's position/rotation).
+    { id: "campaign_computer_off_1", type: "decoration", variant: "computer_off", position: [44.25, 1.1, 45] },
+    { id: "campaign_computer_off_2", type: "decoration", variant: "computer_off", position: [45.75, 1.1, 45] },
+    { id: "campaign_phone_1", type: "decoration", variant: "phone", position: [44.6, 1.1, 44.85] },
+    { id: "campaign_computer_mouse_1", type: "decoration", variant: "computer_mouse", position: [45.35, 1.1, 44.85] },
     // Scattered junk. campaign_decoration_6's original rough spot ([52,
     // 0.3, 43]) landed on col 26 -- the map's own east border wall, not
     // open floor -- confirmed via a script-parsed grid check rather than
@@ -497,6 +520,17 @@ export const MAPS: MapDef[] = [
     { id: "campaign_decoration_5", type: "decoration", variant: "crate", position: [43, 0.3, 52] },
     { id: "campaign_decoration_6", type: "decoration", variant: "debris", position: [50, 0.3, 44] },
     { id: "campaign_decoration_7", type: "decoration", variant: "crate", position: [41, 0.3, 48] },
+    // Data Center polish: gates campaign_coffee_cup_1 above (requiresItem).
+    // Placed loosely near the existing junk (campaign_decoration_7, a
+    // crate) rather than in the open -- a placeholder position, confirmed
+    // open floor via the same script-parsed grid check as everything else
+    // in this room, expected to be moved by hand later.
+    {
+      id: "campaign_tape_roll_1",
+      type: "tape_roll",
+      interactPrompt: "Press E to pick up clear tape roll",
+      position: [41.5, 0.03, 47.5],
+    },
   ],
   },
 ];

@@ -6,6 +6,50 @@ function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
   return el;
 }
 
+// Data Center polish: logMode's fake access-log line generator. Flavor
+// only, not a real log-format parser -- a small pool of plausible paths and
+// mostly-200 status codes is enough to read as a real server's noise.
+const LOG_MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+const LOG_PATHS = [
+  "/net/status",
+  "/auth/session",
+  "/cache/purge",
+  "/logs/system",
+  "/api/heartbeat",
+  "/metrics/export",
+  "/db/replica-sync",
+  "/queue/drain",
+];
+const LOG_METHODS = ["GET", "GET", "GET", "POST"];
+// Weighted toward 200 -- mostly-healthy noise with occasional errors, not a
+// uniform distribution.
+const LOG_STATUS_CODES = [200, 200, 200, 200, 200, 200, 404, 502];
+const LOG_USER_AGENTS = ["monitor-agent/1.2", "healthcheck/0.9", "internal-cron/3.1"];
+const LOG_INTERVAL_MIN_MS = 400;
+const LOG_INTERVAL_MAX_MS = 900;
+
+function pad2(n: number): string {
+  return n.toString().padStart(2, "0");
+}
+
+// Access-log style timestamp, e.g. "20/Jul/2026:14:32:07 +0000" -- uses the
+// real current time, not a fixed/fake one, so it reads as a live-updating
+// log rather than a static prop.
+function formatAccessLogTimestamp(date: Date): string {
+  const day = pad2(date.getDate());
+  const month = LOG_MONTH_NAMES[date.getMonth()];
+  const year = date.getFullYear();
+  const time = `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+  return `${day}/${month}/${year}:${time} +0000`;
+}
+
+function randomFrom<T>(items: T[]): T {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
 // A DOM overlay for the checkpoint-17 hacking-terminal minigame: a tiny
 // fake filesystem (TerminalDef.root) navigable with ls/cd/cat, the same
 // plain-HTML/inline-style technique as ui/HUD.ts/ui/MainMenu.ts. Kept
@@ -42,6 +86,12 @@ export class Terminal {
 
   private terminalDef: TerminalDef | null = null;
   private pathStack: TerminalDirectory[] = [];
+  // Data Center polish: unlike every other timer in this file (the
+  // requestAnimationFrame deferrals above, which are one-shot and need no
+  // cleanup), this is a genuinely repeating interval -- it must be cleared
+  // on close(), or it would keep firing (and appending lines to a
+  // detached/reused terminal) after the overlay is no longer open.
+  private logIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     onOpen: () => void,
@@ -167,6 +217,17 @@ export class Terminal {
     this.root.style.display = "flex";
     this.root.style.pointerEvents = "auto";
     this.inputEl.value = "";
+
+    // Data Center polish: logMode replaces the normal filesystem browser
+    // with a continuous stream of fake access-log lines -- randomized
+    // interval chosen once per open() (the same "randomized per instance,
+    // not re-randomized every tick" approach the server rack lights use),
+    // not re-derived on every tick.
+    if (terminalDef.logMode) {
+      const intervalMs =
+        LOG_INTERVAL_MIN_MS + Math.random() * (LOG_INTERVAL_MAX_MS - LOG_INTERVAL_MIN_MS);
+      this.logIntervalId = setInterval(() => this.appendRandomLogLine(), intervalMs);
+    }
     // Checkpoint 18 bugfix: deferred to the next frame, not called
     // synchronously here. This overlay is opened from inside the same "E"
     // keydown event InteractSystem processes to trigger onInteract() --
@@ -189,6 +250,12 @@ export class Terminal {
     this.root.style.display = "none";
     this.root.style.pointerEvents = "none";
     this.terminalDef = null;
+    // Data Center polish: the one interval in this file that genuinely
+    // needs clearing -- see logIntervalId's own comment above.
+    if (this.logIntervalId !== null) {
+      clearInterval(this.logIntervalId);
+      this.logIntervalId = null;
+    }
     // Checkpoint 18 bugfix: deferred to the next frame. Closing via the x
     // button already worked correctly (a mouse click blurs the input and
     // shifts focus to the button natively, before our own click handler
@@ -216,6 +283,15 @@ export class Terminal {
   }
 
   private runCommand(rawInput: string): void {
+    // Data Center polish: logMode never parses input at all -- typing
+    // anything (including nothing) while it's active always just prints
+    // this, regardless of content. Checked before the empty-input guard
+    // below since even Enter-on-empty should show it in this mode.
+    if (this.terminalDef?.logMode) {
+      this.appendLine("Access denied.");
+      return;
+    }
+
     const input = rawInput.trim();
     if (input.length === 0) return;
     this.appendLine(`> ${input}`);
@@ -413,6 +489,22 @@ export class Terminal {
     for (const command of this.coreCommands) {
       this.appendLine(`${command.name} - ${command.description}`);
     }
+  }
+
+  // Data Center polish: one simulated access-log line, using the real
+  // current time (not a fixed/fake one) so it reads as continuously live.
+  // Flavor only -- reuses appendLine()'s existing auto-scroll behavior for
+  // free, no copy button (nothing here is ever a secret to reveal).
+  private appendRandomLogLine(): void {
+    const timestamp = formatAccessLogTimestamp(new Date());
+    const method = randomFrom(LOG_METHODS);
+    const path = randomFrom(LOG_PATHS);
+    const status = randomFrom(LOG_STATUS_CODES);
+    const bytes = 100 + Math.floor(Math.random() * 4000);
+    const userAgent = randomFrom(LOG_USER_AGENTS);
+    this.appendLine(
+      `[${timestamp}] "${method} ${path} HTTP/1.1" ${status} ${bytes} "-" "${userAgent}"`,
+    );
   }
 
   // Copy button (checkpoint 17's one deliberate accessibility feature):

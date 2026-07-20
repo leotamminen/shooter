@@ -155,9 +155,14 @@ Be careful.
   // linkedTo reference; a short connectMessage plus an empty filesystem
   // is enough to prove it's not dead functionality. Expect this entire
   // TerminalDef to be replaced once the room's actual content is designed.
+  // Data Center polish: logMode: true replaces the normal ls/cd/cat
+  // filesystem browser with live-updating fake access logs (see
+  // ui/Terminal.ts) -- root is still present but never actually reached in
+  // logMode, kept only because TerminalDef.root isn't optional.
   {
     id: "data_center_terminal",
     connectMessage: "SERVER-04 :: idle",
+    logMode: true,
     root: {
       name: "/",
       files: [],
