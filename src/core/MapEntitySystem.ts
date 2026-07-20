@@ -125,6 +125,37 @@ const TERMINAL_BOOT_DELAY_MS = 1000;
 const TERMINAL_CABLE_TUBE_RADIUS = 0.025;
 const TERMINAL_CABLE_TUBULAR_SEGMENTS = 32;
 const TERMINAL_CABLE_RADIAL_SEGMENTS = 8;
+// The one door workstation_terminal's note.txt reveal opens -- not via a
+// button/lock like every other door in this file, but purely as a
+// narrative consequence of a successful "sudo cat note.txt" (see
+// ui/Terminal.ts's onFileRead and openNoteDoor() below). Identified by id,
+// the same string-matching precedent main.ts's password-lock success
+// callback already uses to distinguish room1_terminal/room2_terminal --
+// a plain constant rather than a new MapEntity schema field, since there's
+// exactly one such door in the whole game and it needs no other data.
+const NOTE_DOOR_ID = "campaign_door_5";
+// Server rack decoration: a tall narrow box, dark, with 2-3 small emissive
+// squares near the top for a restrained "status light" detail -- the same
+// level of restraint ComputerMesh.ts's screen already established (a
+// generated texture/detail, not a fully modeled rack). Content-block
+// primitive only; not placed anywhere yet, see CLAUDE.md's future
+// mechanics for why.
+const SERVER_RACK_COLOR = 0x1c1e22;
+const SERVER_RACK_SIZE: [number, number, number] = [0.5, 1.8, 0.6];
+const SERVER_RACK_LIGHT_COLOR = 0x33ff55;
+const SERVER_RACK_LIGHT_EMISSIVE = 0x114411;
+const SERVER_RACK_LIGHT_SIZE = 0.05;
+const SERVER_RACK_LIGHT_Y_OFFSETS = [0.7, 0.62, 0.54];
+// Coffee cup decoration: a small simple prop, purely decorative for now --
+// deliberately NOT interactable. Turning this into a real pickup (the
+// supervisor's fingerprint) is deferred until the Data Center room exists
+// and its target lock is designed -- adding interactability now would mean
+// guessing at a gate mechanism with no lock to check it against yet.
+const COFFEE_CUP_COLOR = 0xe8e4da;
+const COFFEE_CUP_RADIUS_TOP = 0.06;
+const COFFEE_CUP_RADIUS_BOTTOM = 0.05;
+const COFFEE_CUP_HEIGHT = 0.09;
+const COFFEE_CUP_RADIAL_SEGMENTS = 12;
 
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
@@ -148,6 +179,15 @@ export class MapEntitySystem {
   readonly group = new THREE.Group();
   readonly doors: DoorEntry[] = [];
   readonly interactables: THREE.Mesh[] = [];
+  // Assigned once, at the end of construction, from a closure over the
+  // note-door's own mesh (found by id, NOTE_DOOR_ID) and onDoorStateChanged
+  // -- the same "hand back a ready-made closure, don't expose the raw mesh"
+  // shape createPasswordLock()'s onCorrectPassword closure already
+  // established, just handed out as a public method here instead of
+  // through an injected callback, since this one has exactly one caller
+  // (main.ts's Terminal onFileRead wiring) and no password/UI step of its
+  // own to coordinate with first.
+  readonly openNoteDoor: () => void;
 
   constructor(
     mapDef: MapDef,
@@ -183,24 +223,31 @@ export class MapEntitySystem {
     // removed along with the mechanism that needed them).
     const doorMeshById = new Map<string, THREE.Mesh>();
     const computerPartMeshById = new Map<string, THREE.Group>();
-    // Paired-terminal teleport: static data (every terminal's own position,
+    // Paired-terminal teleport: static data (every terminal's own entity,
     // known from mapDef.entities alone), so this doesn't need to follow the
     // door/computer_part meshes' construction-order-dependent first pass
-    // above -- it's just a lookup table, built once, the same
+    // below -- it's just a lookup table, built once, the same
     // cross-entity-reference pattern doorMeshById already establishes.
-    const terminalPositionById = new Map<string, [number, number, number]>();
+    // Stores the whole MapEntity, not just its position (as it briefly
+    // did, position-only, before the terminal-content-swap follow-up) --
+    // resolving a paired terminal's displayed content needs its linkedTo
+    // too, and this is still the one lookup, not a second one built
+    // alongside it.
+    const terminalEntityById = new Map<string, MapEntity>();
     for (const entity of mapDef.entities) {
       if (entity.type === "terminal") {
-        terminalPositionById.set(entity.id, entity.position);
+        terminalEntityById.set(entity.id, entity);
       }
     }
 
+    let noteDoorMesh: THREE.Mesh | undefined;
     for (const entity of mapDef.entities) {
       if (entity.type === "door") {
-        doorMeshById.set(
-          entity.id,
-          this.createDoor(entity, runManager, raycastRegistry, onDoorStateChanged),
-        );
+        const doorMesh = this.createDoor(entity, runManager, raycastRegistry, onDoorStateChanged);
+        doorMeshById.set(entity.id, doorMesh);
+        if (entity.id === NOTE_DOOR_ID) {
+          noteDoorMesh = doorMesh;
+        }
       } else if (entity.type === "computer_part") {
         computerPartMeshById.set(
           entity.id,
@@ -208,6 +255,11 @@ export class MapEntitySystem {
         );
       }
     }
+    this.openNoteDoor = (): void => {
+      if (!noteDoorMesh) return; // defensive: only reachable if NOTE_DOOR_ID's door is ever removed from content/maps.ts
+      noteDoorMesh.visible = false;
+      onDoorStateChanged();
+    };
 
     for (const entity of mapDef.entities) {
       if (entity.type === "button") {
@@ -225,7 +277,7 @@ export class MapEntitySystem {
           computerPartMeshById,
           gameState,
           runManager,
-          terminalPositionById,
+          terminalEntityById,
           getPlayerPosition,
           teleportPlayer,
         );
@@ -538,28 +590,43 @@ export class MapEntitySystem {
     computerPartMeshById: Map<string, THREE.Group>,
     gameState: GameState,
     runManager: RunManager,
-    terminalPositionById: Map<string, [number, number, number]>,
+    terminalEntityById: Map<string, MapEntity>,
     getPlayerPosition: () => { x: number; z: number },
     teleportPlayer: (x: number, z: number) => void,
   ): void {
     if (!entity.linkedTo) {
       throw new Error(`Terminal "${entity.id}" has no linkedTo terminal id`);
     }
-    const terminalDef = findById(terminals, entity.linkedTo);
 
     // Paired-terminal teleport: resolved once, at construction, since it's
-    // just a lookup against static position data -- same defensive
-    // "throw by name on a dangling reference" pattern as every other
+    // just a lookup against static entity data -- same defensive "throw by
+    // name on a dangling reference" pattern as every other
     // linkedTo/terminalId lookup in this file (createWallBuy, createButton,
     // createPasswordLock).
-    const pairedPosition = entity.teleportPairId
-      ? terminalPositionById.get(entity.teleportPairId)
+    const pairedEntity = entity.teleportPairId
+      ? terminalEntityById.get(entity.teleportPairId)
       : undefined;
-    if (entity.teleportPairId && !pairedPosition) {
+    if (entity.teleportPairId && !pairedEntity) {
       throw new Error(
         `Terminal "${entity.id}" has no matching terminal for teleportPairId "${entity.teleportPairId}"`,
       );
     }
+
+    // Content swap: since the teleport already happens the instant the
+    // overlay opens, the player is narratively already "at" the paired
+    // terminal by the time they see anything -- showing THIS entity's own
+    // linkedTo content first would be a screen for a machine they're no
+    // longer standing in front of. entity.linkedTo itself is left
+    // unchanged/still required above (it stays in the data as an unused
+    // fallback if teleportPairId is ever removed), it's just not what
+    // ultimately gets shown when a pair exists.
+    if (entity.teleportPairId && pairedEntity && !pairedEntity.linkedTo) {
+      throw new Error(
+        `Terminal "${entity.id}"'s teleport pair "${pairedEntity.id}" has no linkedTo terminal id`,
+      );
+    }
+    const displayedTerminalId = pairedEntity ? pairedEntity.linkedTo! : entity.linkedTo;
+    const terminalDefToShow = findById(terminals, displayedTerminalId);
 
     let poweredOn = entity.requiresPart === undefined;
     // Boot-sequence follow-up: `booting` gates repeated E presses during the
@@ -647,16 +714,16 @@ export class MapEntitySystem {
       // terminal's own full-screen backdrop is already covering the scene
       // for the whole time the overlay is open, so this happens instantly
       // with no visible transition.
-      if (pairedPosition) {
+      if (pairedEntity) {
         const playerPosition = getPlayerPosition();
         const delta = {
           x: playerPosition.x - entity.position[0],
           z: playerPosition.z - entity.position[2],
         };
-        teleportPlayer(pairedPosition[0] + delta.x, pairedPosition[2] + delta.z);
+        teleportPlayer(pairedEntity.position[0] + delta.x, pairedEntity.position[2] + delta.z);
       }
 
-      openTerminal(terminalDef);
+      openTerminal(terminalDefToShow);
     };
 
     computerGroup = createComputerMesh(poweredOn);
@@ -829,6 +896,14 @@ export class MapEntitySystem {
       this.createSignDecoration(entity);
       return;
     }
+    if (entity.variant === "server_rack") {
+      this.createServerRackDecoration(entity);
+      return;
+    }
+    if (entity.variant === "coffee_cup") {
+      this.createCoffeeCupDecoration(entity);
+      return;
+    }
     if (entity.variant === "outlet") {
       // Present from the start of the run regardless of terminal/power
       // state -- a single box like crate/debris, just reusing
@@ -954,5 +1029,59 @@ export class MapEntitySystem {
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
     return texture;
+  }
+
+  // Content-block primitive: a tall narrow box plus 2-3 small emissive
+  // squares near the top, the same restrained "a couple of generated
+  // details, not a fully modeled object" level ComputerMesh.ts's screen
+  // texture already established for this project's other tech-prop meshes
+  // -- deliberately not a real named-child/texture factory of its own
+  // (unlike ComputerMesh.ts) since this is a single flat-color box, not
+  // something any other system needs to look up by name. No
+  // collision/interactable/raycast registration, matching every other
+  // decoration in this file.
+  private createServerRackDecoration(entity: MapEntity): void {
+    const group = new THREE.Group();
+    this.addDecorationBox(group, SERVER_RACK_SIZE, [0, SERVER_RACK_SIZE[1] / 2, 0], SERVER_RACK_COLOR);
+
+    const lightMaterial = new THREE.MeshStandardMaterial({
+      color: SERVER_RACK_LIGHT_COLOR,
+      emissive: SERVER_RACK_LIGHT_EMISSIVE,
+    });
+    for (const y of SERVER_RACK_LIGHT_Y_OFFSETS) {
+      const light = new THREE.Mesh(
+        new THREE.BoxGeometry(SERVER_RACK_LIGHT_SIZE, SERVER_RACK_LIGHT_SIZE, 0.01),
+        lightMaterial,
+      );
+      light.position.set(
+        SERVER_RACK_SIZE[0] / 2 - SERVER_RACK_LIGHT_SIZE, // near the rack's own +X edge, not centered
+        y,
+        SERVER_RACK_SIZE[2] / 2 + 0.005, // flush against the front (+Z) face
+      );
+      group.add(light);
+    }
+
+    group.position.set(...entity.position);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
+  }
+
+  // Content-block primitive: a small cylinder, purely decorative -- see
+  // this file's own COFFEE_CUP_* constants' comment for why it's
+  // deliberately NOT wired up as a pickup/interactable yet (no
+  // userData.interactable, no raycastRegistry.register(), matching every
+  // other decoration).
+  private createCoffeeCupDecoration(entity: MapEntity): void {
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        COFFEE_CUP_RADIUS_TOP,
+        COFFEE_CUP_RADIUS_BOTTOM,
+        COFFEE_CUP_HEIGHT,
+        COFFEE_CUP_RADIAL_SEGMENTS,
+      ),
+      new THREE.MeshStandardMaterial({ color: COFFEE_CUP_COLOR }),
+    );
+    mesh.position.set(...entity.position);
+    this.group.add(mesh);
   }
 }

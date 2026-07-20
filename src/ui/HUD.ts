@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Raycast } from "../core/utils/Raycast";
 import { Countdown } from "../core/utils/Countdown";
+import { SHOW_DEV_COORDINATES } from "../core/devConfig";
 import type { GameState } from "../state/GameState";
 import type { GameMode } from "../modes/GameMode";
 import type { RaycastRegistry } from "../core/RaycastRegistry";
@@ -63,6 +64,11 @@ export class HUD {
   private readonly deathPanelEl: HTMLDivElement;
   private readonly deathScoreEl: HTMLDivElement;
   private readonly deathSummaryEl: HTMLDivElement;
+  // Dev tool (see core/devConfig.ts's SHOW_DEV_COORDINATES): null, not just
+  // hidden via CSS, whenever the flag is off -- no element is ever created,
+  // so there's nothing left over to accidentally show, style, or query.
+  private readonly devCoordinatesEl: HTMLDivElement | null;
+  private readonly getPlayerPosition: () => { x: number; z: number };
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
   private readonly raycast = new Raycast();
@@ -78,11 +84,19 @@ export class HUD {
     onRespawn: () => void,
     onMainMenu: () => void,
     raycastRegistry: RaycastRegistry,
+    // Dev tool: a narrow injected callback, not a whole PlayerController
+    // reference -- the same "inject exactly the function needed" shape
+    // MapEntitySystem's getPlayerPosition/teleportPlayer callbacks already
+    // established for the paired-teleport mechanism, reusing
+    // PlayerController.getPosition() itself rather than adding a second way
+    // to read the player's live x/z.
+    getPlayerPosition: () => { x: number; z: number },
   ) {
     this.gameState = gameState;
     this.gameMode = gameMode;
     this.camera = camera;
     this.raycastRegistry = raycastRegistry;
+    this.getPlayerPosition = getPlayerPosition;
 
     const root = createDiv({
       position: "fixed",
@@ -226,6 +240,31 @@ export class HUD {
     this.deathPanelEl.appendChild(buttonRow);
     root.appendChild(this.deathPanelEl);
 
+    // Dev tool (core/devConfig.ts's SHOW_DEV_COORDINATES): deliberately
+    // styled to be unmistakable as a development overlay, never confusable
+    // with a real HUD element (even in a screenshot) -- an explicit "[DEV]"
+    // prefix, a color no other HUD element uses, a small dedicated
+    // background panel (every other HUD text element renders directly over
+    // the game with no backing box), and bottom-left, a corner nothing else
+    // in this file occupies.
+    if (SHOW_DEV_COORDINATES) {
+      this.devCoordinatesEl = createDiv({
+        position: "absolute",
+        left: "12px",
+        bottom: "12px",
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "#ff33cc",
+        background: "rgba(0, 0, 0, 0.55)",
+        padding: "4px 8px",
+        borderRadius: "4px",
+        whiteSpace: "pre-line",
+      });
+      root.appendChild(this.devCoordinatesEl);
+    } else {
+      this.devCoordinatesEl = null;
+    }
+
     document.body.appendChild(root);
   }
 
@@ -279,6 +318,7 @@ export class HUD {
     this.updateModeStatus();
     this.updateEnemyLabels();
     this.updateDeathPanel();
+    this.updateDevCoordinates();
   }
 
   private clearAliveOnlyText(): void {
@@ -380,6 +420,43 @@ export class HUD {
 
   private updateModeStatus(): void {
     this.modeStatusEl.textContent = this.gameMode.getStatusLine();
+  }
+
+  // Dev tool (core/devConfig.ts's SHOW_DEV_COORDINATES): a no-op every
+  // frame when the element was never created (flag off) -- checked once
+  // here rather than at every call site, since this is the only call site.
+  // x/z come from PlayerController.getPosition() (already built for the
+  // paired-teleport mechanism); y is read directly off the camera this
+  // class already holds a reference to for its own occlusion/projection
+  // math, since getPosition() only exposes x/z (the teleport mechanism has
+  // no use for y, this project has no verticality) -- not a second way to
+  // read x/z, just the one axis getPosition() doesn't cover.
+  private updateDevCoordinates(): void {
+    if (!this.devCoordinatesEl) return;
+
+    const { x, z } = this.getPlayerPosition();
+    const y = this.camera.position.y;
+    const yawDegrees = this.computeYawDegrees();
+
+    this.devCoordinatesEl.textContent =
+      `[DEV] x: ${x.toFixed(2)}  y: ${y.toFixed(2)}  z: ${z.toFixed(2)}\n` +
+      `yaw: ${yawDegrees.toFixed(0)}°`;
+  }
+
+  // Decomposes the camera's quaternion with an explicit YXZ Euler order --
+  // the same order PointerLockControls itself uses internally to compose
+  // rotation from mouse movement -- rather than reading camera.rotation.y
+  // directly, whose own Euler order defaults to XYZ and would give a
+  // different (and generally wrong, once pitch is non-zero) decomposition
+  // of the same quaternion. Normalized to [0, 360) rather than THREE's
+  // native (-180, 180] so the printed value matches what a MapEntity's
+  // rotationY field actually expects (always a non-negative degree value in
+  // this project's existing content).
+  private computeYawDegrees(): number {
+    const euler = new THREE.Euler(0, 0, 0, "YXZ");
+    euler.setFromQuaternion(this.camera.quaternion, "YXZ");
+    const degrees = THREE.MathUtils.radToDeg(euler.y);
+    return ((degrees % 360) + 360) % 360;
   }
 
   private updateDeathPanel(): void {

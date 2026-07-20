@@ -208,15 +208,15 @@ export const MAPS: MapDef[] = [
     [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1],
     [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
-    [1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-    [1, 1, 1, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -355,7 +355,7 @@ export const MAPS: MapDef[] = [
       type: "terminal",
       linkedTo: "room3_terminal",
       rotationY: 0,
-      position: [14, 1, 40],
+      position: [14, 1, 39.2],
     },
     {
       id: "campaign_sign_1",
@@ -363,7 +363,7 @@ export const MAPS: MapDef[] = [
       variant: "sign",
       text: "Not everything is visible.",
       rotationY: 0,
-      position: [12, 1.3, 40],
+      position: [12, 1.3, 39],
     },
     // Converts the open, undoored breach in Room 3's west wall (col 3,
     // row 21 -- the sole gap in an otherwise-solid two-cell-thick wall
@@ -383,7 +383,7 @@ export const MAPS: MapDef[] = [
       type: "password_lock",
       linkedTo: "campaign_door_4",
       terminalId: "room3_terminal",
-      position: [8, 1.2, 42],
+      position: [6.9, 1.2, 40.6],
     },
     // Paired-teleport terminals, in the pillar room north of Room 3 (reached
     // via the corridor loop off Room 3's west wall). Located by reading the
@@ -404,18 +404,46 @@ export const MAPS: MapDef[] = [
     {
       id: "campaign_terminal_3",
       type: "terminal",
+      // Unused fallback (createTerminal() only reads this when
+      // teleportPairId doesn't resolve to a pair) -- what's actually shown
+      // is campaign_terminal_4's own linkedTo (workstation_terminal), per
+      // the one-directional teleport + content-swap follow-up below.
       linkedTo: "empty_room_terminal",
-      rotationY: 0,
-      position: [28, 1, 6],
+      rotationY: 90,
+      position: [1.4, 1, 42],
       teleportPairId: "campaign_terminal_4",
     },
+    // One-directional teleport + content-swap follow-up: campaign_terminal_4
+    // no longer has its own teleportPairId back to campaign_terminal_3 --
+    // opening it directly is now just a normal, non-teleporting terminal.
+    // Its linkedTo changed from empty_room_terminal to workstation_terminal:
+    // this is the content shown both when interacting with terminal_4
+    // directly and when arriving via terminal_3's teleport (createTerminal()
+    // resolves the SAME TerminalDef either way, by construction).
     {
       id: "campaign_terminal_4",
       type: "terminal",
-      linkedTo: "empty_room_terminal",
-      rotationY: 0,
-      position: [36, 1, 6],
-      teleportPairId: "campaign_terminal_3",
+      linkedTo: "workstation_terminal",
+      rotationY: 90,
+      position: [21.4, 1, 42],
+    },
+    // Privilege-escalation reveal: the door workstation_terminal's note.txt
+    // opens (via ui/Terminal.ts's onFileRead -> MapEntitySystem.openNoteDoor(),
+    // wired in main.ts) -- no button/lock, since the story itself is the
+    // unlock mechanism ("I managed to remotely unlock the door behind
+    // you"). Carved into what was, before this follow-up, solid wall: row
+    // 23/col 15 (the door) and a 2x2 stub room at rows 24-25/cols 14-15,
+    // confirmed clear of the existing MAC-10 vault (campaign_door_3/
+    // campaign_lock_2/campaign_wall_buy_1, which occupy cols ~10-13 nearby)
+    // and of the large, currently-empty area east of col 17 by reading the
+    // live grid directly, the same discipline every prior task touching
+    // this file has needed. Deliberately left empty inside -- no
+    // server_rack/coffee_cup placed here, see those decorations' own
+    // comments for why.
+    {
+      id: "campaign_door_5",
+      type: "door",
+      position: [30, 1.5, 46],
     },
   ],
   },

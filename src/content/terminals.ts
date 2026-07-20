@@ -112,4 +112,35 @@ vault pin: {{VAULT_PIN}}`,
       ],
     },
   },
+  // workstation_terminal: the content campaign_terminal_4 actually shows --
+  // both when interacted with directly, and (per createTerminal()'s
+  // content-swap) when arrived at via campaign_terminal_3's teleport, since
+  // both paths resolve to the same TerminalDef by construction. connectMessage
+  // replaces the generic "Connected..." banner with an in-fiction cue that
+  // something has already changed here before the player typed anything --
+  // read literally, "connection re-routed" is a small foreshadowing of the
+  // teleport itself. note.txt is gated by requiresRoot -- "sudo cat note.txt"
+  // both reveals the narrative payoff and (via ui/Terminal.ts's onFileRead,
+  // wired in main.ts) opens campaign_door_5 as a direct consequence.
+  {
+    id: "workstation_terminal",
+    connectMessage: "guest@workstation:~$\n[!] Connection re-routed. Origin host unreachable.",
+    root: {
+      name: "/",
+      files: [
+        {
+          name: "note.txt",
+          requiresRoot: true,
+          content: `I managed to remotely unlock the door behind you — it's open now.
+Your memory has been wiped. You're part of a classified experiment; I can't say more than that.
+If you make it out alive, find me — look for a book called 'Revolution Q' in the library once you're out.
+Right now, go through the door straight into the data center. Get the supervisor's fingerprint from the coffee cup on his desk — it'll get you further.
+Be careful.
+
+— K.`,
+        },
+      ],
+      directories: [],
+    },
+  },
 ];

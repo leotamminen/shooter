@@ -78,18 +78,33 @@ export interface MapEntity {
   // same checkpoint): the overlay's prompt text. Defaults to
   // ui/PasswordLock.ts's own generic label when absent -- Room 1's and the
   // vault's locks don't set this.
-  variant?: "crate" | "debris" | "desk" | "chair" | "outlet" | "sign"; // "decoration"
-  // only (checkpoint 20, "desk"/"chair" added in the same checkpoint's
-  // addendum, "outlet" added by the boot-sequence follow-up, "sign" added
-  // by the Room 3 hidden-files puzzle): a cosmetic hint controlling which
-  // prop shape gets built -- "crate"/"debris"/"outlet" are a single
-  // sized/colored cube (outlet reuses PASSWORD_LOCK_SIZE for its dimensions
-  // rather than either decoration size), "desk"/"chair" are a small
-  // THREE.Group of several boxes (see MapEntitySystem.ts's
+  variant?: // "decoration" only (checkpoint 20, "desk"/"chair" added in the
+  // same checkpoint's addendum, "outlet" added by the boot-sequence
+  // follow-up, "sign" added by the Room 3 hidden-files puzzle,
+  // "server_rack"/"coffee_cup" added alongside the workstation_terminal
+  // reveal -- content-block primitives only, not a furnished room; neither
+  // is placed anywhere in content/maps.ts yet, both deferred until the
+  // Data Center room they belong in is designed, see CLAUDE.md's future
+  // mechanics): a cosmetic hint controlling which prop shape gets built --
+  // "crate"/"debris"/"outlet" are a single sized/colored cube (outlet
+  // reuses PASSWORD_LOCK_SIZE for its dimensions rather than either
+  // decoration size), "desk"/"chair" are a small THREE.Group of several
+  // boxes (see MapEntitySystem.ts's
   // createDeskDecoration()/createChairDecoration()), "sign" is a flat board
   // textured with a generated CanvasTexture (see createSignDecoration() and
-  // MapEntity.text below). No gameplay meaning either way. Absent defaults
-  // to "crate".
+  // MapEntity.text below), "server_rack" is a tall narrow box with a few
+  // small emissive "status light" squares, "coffee_cup" is a small
+  // cylinder/box, purely decorative and NOT interactable (see
+  // createCoffeeCupDecoration()'s own comment for why). No gameplay meaning
+  // either way. Absent defaults to "crate".
+    | "crate"
+    | "debris"
+    | "desk"
+    | "chair"
+    | "outlet"
+    | "sign"
+    | "server_rack"
+    | "coffee_cup";
   rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
   // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
   // hand-edited content file), defaulting to 0 (unchanged facing) when
@@ -142,6 +157,13 @@ export interface MapDef {
 export interface TerminalFile {
   name: string;
   content: string;
+  requiresRoot?: boolean; // when true, ui/Terminal.ts's runCat() denies a
+  // plain "cat <name>" ("cat: <name>: Permission denied") and only prints
+  // content when the invocation was elevated via the "sudo" prefix
+  // command. Mirrors BLOCKED_COMMANDS/RESTRICTED_COMMANDS' Unix-permission
+  // framing, but at the individual-file level rather than the command
+  // level -- the file itself is the gated resource, not any particular
+  // command used to read it.
 }
 
 export interface TerminalDirectory {
@@ -170,6 +192,12 @@ export interface TerminalDef {
   // without touching ui/Terminal.ts or content/terminalCommands.ts's
   // BLOCKED_COMMANDS at all. No current TerminalDef sets this; no
   // restricted command has real behavior yet even when unlocked.
+  connectMessage?: string; // the line(s) ui/Terminal.ts's open() prints the
+  // instant this terminal opens, replacing the default
+  // "Connected. Type 'ls' to begin." when present. Use "\n" for multiple
+  // lines -- appendLine() already renders with white-space: pre-wrap, so
+  // this needs no new rendering logic. Every terminal that doesn't set
+  // this keeps the default banner unchanged.
   root: TerminalDirectory;
 }
 

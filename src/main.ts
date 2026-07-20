@@ -82,6 +82,16 @@ function startGame(selections: GameSelections): void {
   // decisions log for that precedent).
   const campaign = new Campaign(runManager);
 
+  // Privilege-escalation reveal: mapEntitySystem is constructed after
+  // terminal (it needs terminal.open, via the openTerminal callback below),
+  // but terminal's own onFileRead callback needs to call
+  // mapEntitySystem.openNoteDoor() -- a genuine mutual dependency between
+  // the two. The same forward-declaration pattern already used for
+  // gameMode above: the callback closure only ever runs later (when the
+  // player actually reads note.txt), by which point construction has long
+  // finished.
+  let mapEntitySystem: MapEntitySystem;
+
   // Checkpoint 17: constructed before mapEntitySystem so its open() methods
   // can be referenced by the openTerminal/openPasswordLock callbacks passed
   // into MapEntitySystem's constructor below. Both release pointer lock on
@@ -101,6 +111,14 @@ function startGame(selections: GameSelections): void {
     BLOCKED_COMMANDS,
     RESTRICTED_COMMANDS,
     CORE_COMMANDS,
+    // Privilege-escalation reveal: narrow by construction, not by a
+    // terminalDef.id check here -- "note.txt" is the only file in the
+    // entire game wired to anything, so checking the filename alone is
+    // already scoped to exactly the one terminal (workstation_terminal)
+    // that has a file by that name.
+    (filename) => {
+      if (filename === "note.txt") mapEntitySystem.openNoteDoor();
+    },
   );
   const passwordLock = new PasswordLock(
     () => playerController.controls.unlock(),
@@ -241,7 +259,7 @@ function startGame(selections: GameSelections): void {
   // function has a chance to trigger a melee attack.
   meleeSequencer = new MeleeSequencer(weaponSystem, meleeViewmodel);
 
-  const mapEntitySystem = new MapEntitySystem(
+  mapEntitySystem = new MapEntitySystem(
     mapDef,
     weaponSystem,
     runManager,
@@ -364,6 +382,10 @@ function startGame(selections: GameSelections): void {
     startNewRun,
     startNewRun,
     raycastRegistry,
+    // Dev tool (core/devConfig.ts's SHOW_DEV_COORDINATES): reuses
+    // PlayerController's own getPosition(), the exact accessor built for
+    // the paired-teleport mechanism, rather than a second way to read it.
+    () => playerController.getPosition(),
   );
 
   canvas.addEventListener("click", () => {

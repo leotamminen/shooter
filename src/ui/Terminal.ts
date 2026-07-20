@@ -39,6 +39,18 @@ export class Terminal {
   private readonly blockedCommands: string[];
   private readonly restrictedCommands: string[];
   private readonly coreCommands: { name: string; description: string }[];
+  // Deliberately narrow: fires only after a successful (permission-granted)
+  // "cat" read, with just the filename -- not a general "watch every
+  // command" hook. That broader shape (checkpoint 19's onCommand,
+  // room2_terminal's "whoami" opening Room 3's door directly) was tried and
+  // removed during the Room 3 identity-lock correction specifically
+  // because it let a command auto-produce a real gameplay effect with no
+  // proof the player actually read/understood anything -- see CLAUDE.md's
+  // decisions log. This hook is narrower in exactly the way that removed
+  // one wasn't: it only ever fires on a file whose own content the player
+  // just demonstrably saw, and only one filename in the entire game
+  // ("note.txt") has anything wired to it at all.
+  private readonly onFileRead?: (filename: string) => void;
 
   private terminalDef: TerminalDef | null = null;
   private pathStack: TerminalDirectory[] = [];
@@ -50,6 +62,7 @@ export class Terminal {
     blockedCommands: string[],
     restrictedCommands: string[],
     coreCommands: { name: string; description: string }[],
+    onFileRead?: (filename: string) => void,
   ) {
     this.onOpen = onOpen;
     this.onClose = onClose;
@@ -57,6 +70,7 @@ export class Terminal {
     this.blockedCommands = blockedCommands;
     this.restrictedCommands = restrictedCommands;
     this.coreCommands = coreCommands;
+    this.onFileRead = onFileRead;
 
     // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
     // ui/MainMenu.ts's own root), not just the small visible panel --
@@ -163,7 +177,7 @@ export class Terminal {
     this.terminalDef = terminalDef;
     this.pathStack = [terminalDef.root];
     this.outputEl.textContent = "";
-    this.appendLine("Connected. Type 'ls' to begin.");
+    this.appendLine(terminalDef.connectMessage ?? "Connected. Type 'ls' to begin.");
     this.root.style.display = "flex";
     this.root.style.pointerEvents = "auto";
     this.inputEl.value = "";
@@ -220,13 +234,38 @@ export class Terminal {
     if (input.length === 0) return;
     this.appendLine(`> ${input}`);
 
-    // Room-3 puzzle follow-up: command dispatch is now case-insensitive
-    // ("LS", "Ls", "CAT .bash_history" all work) -- only the command token
-    // itself is normalized, never filenames/arguments, matching real Unix
-    // (a case-sensitive filesystem) and this global change applies to
-    // every terminal in the game, not just room3_terminal.
-    const [rawCommand, ...args] = input.split(/\s+/);
+    // Room-3 puzzle follow-up: command dispatch is case-insensitive ("LS",
+    // "Ls", "CAT .bash_history" all work) -- only the command token itself
+    // is normalized, never filenames/arguments, matching real Unix (a
+    // case-sensitive filesystem) and this global change applies to every
+    // terminal in the game, not just room3_terminal.
+    const [rawCommand, ...rest] = input.split(/\s+/);
     const command = rawCommand.toLowerCase();
+
+    // Privilege escalation: "sudo" is a prefix, not a command of its own --
+    // it elevates exactly the one command attached to it, for this single
+    // invocation only. No persistent "you are now root" session state
+    // (matching real sudo without -s/su): the next runCommand() call, even
+    // with no new "sudo", starts unelevated again. A bare "sudo" (nothing
+    // following) or an unrecognized command after it both fall through to
+    // dispatch()'s own existing unknown-command handling -- reusing that
+    // message-formatting rather than duplicating it, and correctly naming
+    // whichever token is actually unrecognized (the inner command, not
+    // "sudo" itself, once there is one).
+    if (command === "sudo") {
+      const [innerRaw, ...innerArgs] = rest;
+      if (!innerRaw) {
+        this.dispatch("sudo", [], false);
+        return;
+      }
+      this.dispatch(innerRaw.toLowerCase(), innerArgs, true);
+      return;
+    }
+
+    this.dispatch(command, rest, false);
+  }
+
+  private dispatch(command: string, args: string[], elevated: boolean): void {
     switch (command) {
       case "ls":
         this.runLs(args);
@@ -235,7 +274,7 @@ export class Terminal {
         this.runCd(args[0]);
         break;
       case "cat":
-        this.runCat(args[0]);
+        this.runCat(args[0], elevated);
         break;
       case "whoami":
         this.runWhoami();
@@ -315,7 +354,7 @@ export class Terminal {
     this.pathStack.push(target);
   }
 
-  private runCat(name: string | undefined): void {
+  private runCat(name: string | undefined, elevated: boolean): void {
     if (!name) {
       this.appendLine("cat: missing file name");
       return;
@@ -323,6 +362,14 @@ export class Terminal {
     const file = this.currentDir.files.find((f) => f.name === name);
     if (!file) {
       this.appendLine(`cat: no such file: ${name}`);
+      return;
+    }
+    // Privilege escalation: a requiresRoot file denies a plain "cat"
+    // exactly like a blocked/restricted command denies -- the bash-style
+    // "Permission denied" phrasing, just prefixed with the filename (as
+    // real cat does) instead of a command name.
+    if (file.requiresRoot && !elevated) {
+      this.appendLine(`cat: ${name}: Permission denied`);
       return;
     }
     // Checkpoint 19: substituted against the LIVE current pin, never a
@@ -334,6 +381,9 @@ export class Terminal {
     const copyValue =
       password !== undefined && content.includes(password) ? password : undefined;
     this.appendLine(content, copyValue);
+    // Fires only on this successful, permission-granted read -- never on
+    // the requiresRoot denial above.
+    this.onFileRead?.(name);
   }
 
   // Checkpoint 19 correction: whoami no longer opens anything by itself
