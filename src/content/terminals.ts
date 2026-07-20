@@ -93,4 +93,23 @@ vault pin: {{VAULT_PIN}}`,
       ],
     },
   },
+  // empty_room_terminal: the pair of terminals in the pillar room (linkedTo
+  // this) exist purely to carry the silent paired-teleport effect
+  // (MapEntity.teleportPairId) -- deliberately unremarkable, no password,
+  // no secret, just enough of a filesystem that "ls"/"cd" aren't dead
+  // commands here. Not room1_terminal's real puzzle content and not a
+  // second copy of it -- reusing puzzle content in a room where nothing is
+  // actually being solved would be confusing, implying a password matters
+  // here when it doesn't.
+  {
+    id: "empty_room_terminal",
+    root: {
+      name: "/",
+      files: [],
+      directories: [
+        { name: "misc", files: [], directories: [] },
+        { name: "temp", files: [], directories: [] },
+      ],
+    },
+  },
 ];

@@ -385,6 +385,38 @@ export const MAPS: MapDef[] = [
       terminalId: "room3_terminal",
       position: [8, 1.2, 42],
     },
+    // Paired-teleport terminals, in the pillar room north of Room 3 (reached
+    // via the corridor loop off Room 3's west wall). Located by reading the
+    // current grid directly, not from any stale prior coordinate reference:
+    // rows 3-7 / cols 14-18 is a clean, fully enclosed 5x5 sub-room within
+    // the wider pillar area (solid walls at row 2 north, row 8 south, col 13
+    // west, col 19 east -- each side wall has exactly one gap, at row 5,
+    // connecting it to the rest of the pillar forest) holding 3 isolated
+    // pillars at (row4,col16)/(row6,col15)/(row6,col18). campaign_terminal_3
+    // (col 14) and campaign_terminal_4 (col 18) sit at that sub-room's two
+    // open north corners (row 3), symmetric around its center column
+    // (col 16), each with row 2's solid wall immediately north of it -- the
+    // same wall direction for both, so both share rotationY: 0 (screen
+    // faces +Z/south, away from the wall, matching campaign_terminal_5's
+    // convention). linkedTo empty_room_terminal (deliberately unremarkable
+    // content -- the point of these two is the silent teleport itself, not
+    // their filesystem).
+    {
+      id: "campaign_terminal_3",
+      type: "terminal",
+      linkedTo: "empty_room_terminal",
+      rotationY: 0,
+      position: [28, 1, 6],
+      teleportPairId: "campaign_terminal_4",
+    },
+    {
+      id: "campaign_terminal_4",
+      type: "terminal",
+      linkedTo: "empty_room_terminal",
+      rotationY: 0,
+      position: [36, 1, 6],
+      teleportPairId: "campaign_terminal_3",
+    },
   ],
   },
 ];
