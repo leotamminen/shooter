@@ -122,10 +122,10 @@ vault pin: {{VAULT_PIN}}`,
   // teleport itself. note.txt is gated by requiresRoot -- "sudo cat note.txt"
   // reveals the narrative payoff. It no longer opens anything by itself
   // (superseded, Data Center entrance follow-up): campaign_door_5 was
-  // relocated to the Data Center's own real entrance and made
-  // MapEntity.startsOpen -- purely visual set dressing, passable from the
-  // very first frame regardless of whether this file is ever read -- so
-  // the note's own in-fiction claim ("I managed to remotely unlock the
+  // relocated to the Data Center's own real entrance and rebuilt as a
+  // "door_prop" decoration -- purely visual set dressing, passable from
+  // the very first frame regardless of whether this file is ever read --
+  // so the note's own in-fiction claim ("I managed to remotely unlock the
   // door behind you") is now flavor text, not a mechanical trigger.
   {
     id: "workstation_terminal",
@@ -145,6 +145,22 @@ Be careful.
 — K.`,
         },
       ],
+      directories: [],
+    },
+  },
+  // data_center_terminal: PLACEHOLDER content only -- the Data Center's
+  // real puzzle hasn't been designed yet (that room is still being built
+  // separately by hand, see CLAUDE.md's future mechanics). Exists purely
+  // so campaign_terminal_6 opens to something real instead of a dangling
+  // linkedTo reference; a short connectMessage plus an empty filesystem
+  // is enough to prove it's not dead functionality. Expect this entire
+  // TerminalDef to be replaced once the room's actual content is designed.
+  {
+    id: "data_center_terminal",
+    connectMessage: "SERVER-04 :: idle",
+    root: {
+      name: "/",
+      files: [],
       directories: [],
     },
   },

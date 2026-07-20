@@ -147,6 +147,14 @@ const COFFEE_CUP_RADIUS_TOP = 0.06;
 const COFFEE_CUP_RADIUS_BOTTOM = 0.05;
 const COFFEE_CUP_HEIGHT = 0.09;
 const COFFEE_CUP_RADIAL_SEGMENTS = 12;
+// Door prop shape fix: real door-slab proportions (roughly door-width x
+// door-height x a thin panel depth) instead of the real "door" MapEntity
+// type's own full CELL_SIZE x WALL_HEIGHT x CELL_SIZE box, which read as a
+// solid square block, not a door. Reuses DOOR_COLOR unchanged -- only the
+// shape was wrong, not the material.
+const DOOR_PROP_WIDTH = 1;
+const DOOR_PROP_HEIGHT = 2.2;
+const DOOR_PROP_DEPTH = 0.12;
 
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
@@ -1065,23 +1073,38 @@ export class MapEntitySystem {
   }
 
   // Data Center entrance follow-up: reuses the real "door" MapEntity
-  // type's own box geometry/color (CELL_SIZE x WALL_HEIGHT x CELL_SIZE,
-  // DOOR_COLOR) so it visually reads as an actual door, exactly like
-  // campaign_door_1-4 -- but as a decoration, not a "door" entity, it's
-  // never added to this.doors (no collision box, so PlayerController never
-  // gates movement through it) and stays permanently visible (a real
-  // "door" only ever looks like this while closed; there's no "open/ajar"
-  // visual state to reuse for "always open"). This is the correct fit for
-  // a doorway meant to read as open and passable from the very first
-  // frame, with no button/password_lock/other trigger ever changing it --
-  // rather than a real "door" entity that would need a new always-open
-  // flag layered onto a mechanic whose whole purpose is gating movement.
+  // type's own color (DOOR_COLOR) so it visually reads as an actual door,
+  // but as a decoration, not a "door" entity, it's never added to
+  // this.doors (no collision box, so PlayerController never gates
+  // movement through it) and stays permanently visible (a real "door"
+  // only ever looks like this while closed; there's no "open/ajar" visual
+  // state to reuse for "always open"). This is the correct fit for a
+  // doorway meant to read as open and passable from the very first frame,
+  // with no button/password_lock/other trigger ever changing it -- rather
+  // than a real "door" entity that would need a new always-open flag
+  // layered onto a mechanic whose whole purpose is gating movement.
+  //
+  // Shape fix: DOOR_PROP_WIDTH/HEIGHT/DEPTH are real door-slab
+  // proportions, not the real "door" type's full CELL_SIZE x WALL_HEIGHT
+  // block (which read as a solid cube, not a door). Floor-anchored like
+  // every other floor-standing decoration (server_rack, coffee_cup) --
+  // the mesh's own Y is computed from DOOR_PROP_HEIGHT/2, not read from
+  // entity.position[1], so it always sits on the ground regardless of
+  // what Y a content author happens to put in the data (a leftover
+  // WALL_HEIGHT/2-era value would otherwise float it).
   private createDoorPropDecoration(entity: MapEntity): void {
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE),
+      new THREE.BoxGeometry(DOOR_PROP_WIDTH, DOOR_PROP_HEIGHT, DOOR_PROP_DEPTH),
       new THREE.MeshStandardMaterial({ color: DOOR_COLOR }),
     );
-    mesh.position.set(...entity.position);
+    mesh.position.set(entity.position[0], DOOR_PROP_HEIGHT / 2, entity.position[2]);
+    // Same rotationY convention as createTerminal()/the desk/chair/sign
+    // decorations -- unset (0) is correct for campaign_door_5's own
+    // placement (its width already spans east-west, matching the
+    // north-south passage it marks at the col-18 wall column), but a
+    // future door_prop set into a wall running the other way would need
+    // this.
+    mesh.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
     this.group.add(mesh);
   }
 }
