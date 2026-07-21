@@ -175,24 +175,43 @@ const SERVER_RACK_LIGHT_Z_OFFSET = SERVER_RACK_SIZE[2] / 2 - SERVER_RACK_LIGHT_S
 // this file already relies on (nothing ever tears a decoration down mid-run).
 const SERVER_RACK_LIGHT_BLINK_MIN_MS = 400;
 const SERVER_RACK_LIGHT_BLINK_MAX_MS = 900;
-// Shelf variants: same exterior shell (SERVER_RACK_SIZE/SERVER_RACK_COLOR,
-// reused directly, not copied) as server_rack, but no lights -- instead,
-// thin horizontal slabs that protrude slightly past the shell's own faces
-// on every side (SHELF_PARTITION_OVERHANG), the same "flush + a little
-// proud of the surface" idea SERVER_RACK_LIGHT's 0.005 protrusion already
-// established, so the partitions read as visible shelf edges/notches from
-// any angle rather than being invisibly flush with (or swallowed inside)
-// the outer box. "shelf" (3 partitions) and "shelf_alt" (2 partitions, a
-// lighter tone) share one createShelfDecoration(entity, variant) method --
-// the difference between them is purely data (count/color), not enough of
-// a divergence to justify two fully separate methods the way black_desk's
-// hard "never touch Room 2's desk" requirement did.
-const SHELF_PARTITION_THICKNESS = 0.05;
-const SHELF_PARTITION_OVERHANG = 0.1;
-const SHELF_PARTITION_SIZE: [number, number, number] = [
-  SERVER_RACK_SIZE[0] + SHELF_PARTITION_OVERHANG,
-  SHELF_PARTITION_THICKNESS,
-  SERVER_RACK_SIZE[2] + SHELF_PARTITION_OVERHANG,
+// Shelf variants -- redesigned (shelf-geometry-fix follow-up) as a real
+// hollow, open-fronted unit, not the prior attempt's solid box with
+// external fins protruding from its surface (which read as blades, not
+// something you could set an object inside -- see the decisions log).
+// Same overall exterior footprint/color as server_rack (SERVER_RACK_SIZE/
+// SERVER_RACK_COLOR, reused directly, not copied), but built entirely from
+// thin panels rather than one solid box: a back panel, two side panels,
+// and top/bottom caps enclose the footprint on every side except the
+// front -- deliberately no front panel at all, so the interior is
+// genuinely open and visible, not just visually implied. The open front
+// is -X, the same face server_rack's own lights were moved onto (the
+// light-placement-fix follow-up) -- both read as "facing the room" when
+// placed in the same row at the same default rotationY. 2-3 thin
+// horizontal boards inside that open cavity (SHELF_Y_OFFSETS/
+// SHELF_ALT_Y_OFFSETS, unchanged from the prior attempt -- only their
+// shape/role changed, from protruding fins to interior dividers) create
+// the visible compartments. "shelf" (3 boards) and "shelf_alt" (2 boards,
+// a lighter tone) still share one createShelfDecoration(entity, alt)
+// method -- the difference remains purely data (board count/color), not
+// enough of a divergence to justify two separate methods.
+const SHELF_PANEL_THICKNESS = 0.05;
+const SHELF_BACK_PANEL_SIZE: [number, number, number] = [
+  SHELF_PANEL_THICKNESS,
+  SERVER_RACK_SIZE[1],
+  SERVER_RACK_SIZE[2],
+];
+const SHELF_SIDE_PANEL_SIZE: [number, number, number] = [
+  SERVER_RACK_SIZE[0],
+  SERVER_RACK_SIZE[1],
+  SHELF_PANEL_THICKNESS,
+];
+// Also reused for each horizontal shelf board -- both are "thin, span the
+// full width and depth" boxes, just at different heights.
+const SHELF_CAP_PANEL_SIZE: [number, number, number] = [
+  SERVER_RACK_SIZE[0],
+  SHELF_PANEL_THICKNESS,
+  SERVER_RACK_SIZE[2],
 ];
 const SHELF_Y_OFFSETS = [0.6, 1.2, 1.8];
 const SHELF_ALT_COLOR = 0x2a2d33;
@@ -1386,28 +1405,61 @@ export class MapEntitySystem {
     this.collidableDecorationBoxes.push(computeCollisionBox(group));
   }
 
-  // Shelf variants (B/C): same shell as createServerRackDecoration() above
-  // (reused constants, not copied), no lights, no collision (unlike
-  // server_rack/black_desk -- these weren't asked to be collidable, and
-  // the task's own "same as every previous furnishing task" verification
-  // note only calls out wall-clipping, not a new collision requirement).
-  // `alt` picks SHELF_ALT_Y_OFFSETS/SHELF_ALT_COLOR (2 partitions, a
-  // lighter tone) in place of SHELF_Y_OFFSETS/SERVER_RACK_COLOR (3
-  // partitions) -- purely a data difference, which is why this is one
-  // parameterized method rather than two near-duplicates.
+  // Shelf variants (shelf-geometry-fix follow-up): a genuinely hollow,
+  // open-fronted unit, same exterior footprint/color as server_rack
+  // (reused constants, not copied), no lights. Built from five panels, not
+  // one solid box -- back, two sides, top, bottom -- plus 2-3 horizontal
+  // boards inside the cavity, with deliberately no sixth panel on the
+  // front (-X, matching server_rack's own light-facing side): omitting it
+  // entirely (not just making it invisible) is what makes the interior
+  // genuinely open rather than only apparently so. `alt` picks
+  // SHELF_ALT_Y_OFFSETS/SHELF_ALT_COLOR (2 boards, a lighter tone) in
+  // place of SHELF_Y_OFFSETS/SERVER_RACK_COLOR (3 boards) -- purely a data
+  // difference, which is why this is one parameterized method rather than
+  // two near-duplicates. Collidable like server_rack -- a single bounding
+  // box over the whole exterior footprint is enough to stop the player
+  // walking through it; no per-compartment collision, since nothing here
+  // needs it.
   private createShelfDecoration(entity: MapEntity, alt: boolean): void {
     const group = new THREE.Group();
-    this.addDecorationBox(group, SERVER_RACK_SIZE, [0, SERVER_RACK_SIZE[1] / 2, 0], SERVER_RACK_COLOR);
+    const color = alt ? SHELF_ALT_COLOR : SERVER_RACK_COLOR;
 
-    const partitionColor = alt ? SHELF_ALT_COLOR : SERVER_RACK_COLOR;
-    const partitionYOffsets = alt ? SHELF_ALT_Y_OFFSETS : SHELF_Y_OFFSETS;
-    for (const y of partitionYOffsets) {
-      this.addDecorationBox(group, SHELF_PARTITION_SIZE, [0, y, 0], partitionColor);
+    // Back panel (+X, opposite the open front).
+    this.addDecorationBox(
+      group,
+      SHELF_BACK_PANEL_SIZE,
+      [SERVER_RACK_SIZE[0] / 2 - SHELF_PANEL_THICKNESS / 2, SERVER_RACK_SIZE[1] / 2, 0],
+      color,
+    );
+    // Side panels (±Z).
+    for (const z of [-1, 1]) {
+      this.addDecorationBox(
+        group,
+        SHELF_SIDE_PANEL_SIZE,
+        [0, SERVER_RACK_SIZE[1] / 2, z * (SERVER_RACK_SIZE[2] / 2 - SHELF_PANEL_THICKNESS / 2)],
+        color,
+      );
+    }
+    // Top and bottom caps.
+    this.addDecorationBox(group, SHELF_CAP_PANEL_SIZE, [0, SHELF_PANEL_THICKNESS / 2, 0], color);
+    this.addDecorationBox(
+      group,
+      SHELF_CAP_PANEL_SIZE,
+      [0, SERVER_RACK_SIZE[1] - SHELF_PANEL_THICKNESS / 2, 0],
+      color,
+    );
+    // No front (-X) panel -- the open face.
+
+    const boardYOffsets = alt ? SHELF_ALT_Y_OFFSETS : SHELF_Y_OFFSETS;
+    for (const y of boardYOffsets) {
+      this.addDecorationBox(group, SHELF_CAP_PANEL_SIZE, [0, y, 0], color);
     }
 
     group.position.set(...entity.position);
     group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
     this.group.add(group);
+
+    this.collidableDecorationBoxes.push(computeCollisionBox(group));
   }
 
   // Data Center entrance follow-up: reuses the real "door" MapEntity
