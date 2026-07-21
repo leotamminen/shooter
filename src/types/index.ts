@@ -113,32 +113,40 @@ export interface MapEntity {
   // "black_desk"/"computer_off"/"phone"/"computer_mouse" added by the
   // Data Center polish follow-up -- "coffee_cup" REMOVED same follow-up,
   // promoted to its own top-level MapEntity type once it needed real
-  // state-dependent behavior, see MapEntity.requiresItem): a cosmetic hint
-  // controlling which prop shape gets built -- "crate"/"debris"/"outlet"
-  // are a single sized/colored cube (outlet reuses PASSWORD_LOCK_SIZE for
-  // its dimensions rather than either decoration size), "desk"/"chair" are
-  // a small THREE.Group of several boxes (see MapEntitySystem.ts's
+  // state-dependent behavior, see MapEntity.requiresItem;
+  // "server_rack_red"/"shelf"/"shelf_alt" added by the server-rack
+  // light-placement-fix follow-up): a cosmetic hint controlling which prop
+  // shape gets built -- "crate"/"debris"/"outlet" are a single
+  // sized/colored cube (outlet reuses PASSWORD_LOCK_SIZE for its
+  // dimensions rather than either decoration size), "desk"/"chair" are a
+  // small THREE.Group of several boxes (see MapEntitySystem.ts's
   // createDeskDecoration()/createChairDecoration()), "sign" is a flat board
   // textured with a generated CanvasTexture (see createSignDecoration() and
   // MapEntity.text below), "server_rack" is a tall box with a handful of
   // small emissive "status light" squares that blink independently (own
   // setInterval per light, no cleanup needed -- see the decisions log) and
   // real collision (see MapEntitySystem.collidableDecorationBoxes below --
-  // the first decoration variants ever given collision), "door_prop"
-  // reuses the real "door" MapEntity type's own color (see
-  // createDoorPropDecoration()) at full CELL_SIZE x WALL_HEIGHT doorway
-  // proportions (just a thin slab depth, not the real door's full box) so
-  // it reads as an actual doorway, but as a decoration it's guaranteed
-  // passable and visible from the very first frame, unlike a real "door"
-  // entity (whose visible state gates collision) -- meant for a doorway
-  // that's always open and never gated by anything, "black_desk" is a
-  // second, wider desk variant (collidable, like server_rack) -- the
-  // original "desk" is completely untouched, Room 2 still uses it,
-  // "computer_off" reuses utils/ComputerMesh.ts's createComputerMesh(false)
-  // purely as static decoration (no interaction of any kind, unlike the
-  // gated terminals that can power on), "phone"/"computer_mouse" are
-  // trivial small boxes, no interactivity. No gameplay meaning either way.
-  // Absent defaults to "crate".
+  // the first decoration variants ever given collision) -- the lights sit
+  // on the rack's -X side face (see the light-placement-fix decisions log
+  // entry for why, not the +Z end cap this variant originally shipped
+  // with), "server_rack_red" is the exact same shape/collision/blink logic
+  // with red lights instead of green, "shelf"/"shelf_alt" share
+  // server_rack's own exterior shell/color but no lights, instead 3 (resp.
+  // 2, slightly lighter-toned) protruding horizontal partition slabs read
+  // as shelf notches -- neither is collidable, "door_prop" reuses the real
+  // "door" MapEntity type's own color (see createDoorPropDecoration()) at
+  // full CELL_SIZE x WALL_HEIGHT doorway proportions (just a thin slab
+  // depth, not the real door's full box) so it reads as an actual doorway,
+  // but as a decoration it's guaranteed passable and visible from the very
+  // first frame, unlike a real "door" entity (whose visible state gates
+  // collision) -- meant for a doorway that's always open and never gated
+  // by anything, "black_desk" is a second, wider desk variant (collidable,
+  // like server_rack) -- the original "desk" is completely untouched,
+  // Room 2 still uses it, "computer_off" reuses utils/ComputerMesh.ts's
+  // createComputerMesh(false) purely as static decoration (no interaction
+  // of any kind, unlike the gated terminals that can power on),
+  // "phone"/"computer_mouse" are trivial small boxes, no interactivity. No
+  // gameplay meaning either way. Absent defaults to "crate".
     | "crate"
     | "debris"
     | "desk"
@@ -146,6 +154,9 @@ export interface MapEntity {
     | "outlet"
     | "sign"
     | "server_rack"
+    | "server_rack_red"
+    | "shelf"
+    | "shelf_alt"
     | "door_prop"
     | "black_desk"
     | "computer_off"

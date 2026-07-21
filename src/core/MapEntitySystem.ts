@@ -140,8 +140,33 @@ const SERVER_RACK_COLOR = 0x1c1e22;
 const SERVER_RACK_SIZE: [number, number, number] = [0.8, 2.4, 1.2];
 const SERVER_RACK_LIGHT_COLOR = 0x33ff55;
 const SERVER_RACK_LIGHT_EMISSIVE = 0x114411;
+// Light-placement fix: red variant reuses every other server_rack constant
+// unchanged (size, blink timing, light count/spacing) -- only the color
+// pair differs, read by createServerRackDecoration()'s new `red` param.
+// "Reuse the geometry/blink logic" (the task's own words) is exactly why
+// this is two color constants added to the existing method, not a second
+// copy-pasted method.
+const SERVER_RACK_LIGHT_COLOR_RED = 0xff3333;
+const SERVER_RACK_LIGHT_EMISSIVE_RED = 0x551111;
 const SERVER_RACK_LIGHT_SIZE = 0.05;
 const SERVER_RACK_LIGHT_Y_OFFSETS = [0.95, 0.85, 0.75, 0.65, 0.55];
+// Light-placement fix: SERVER_RACK_SIZE is [width(X)=0.8, height(Y)=2.4,
+// depth(Z)=1.2] -- every rack in the current placeholder row is arranged
+// along Z (the now-doubled depth axis IS the row axis, see
+// content/maps.ts), so the face a player walking alongside the row
+// actually sees is a side face (spans height x depth), not either end cap
+// (spans width x depth, or width x height). The lights originally sat on
+// the +Z face (width x height, 0.8 x 2.4) -- one of the row-facing end
+// caps, only visible looking straight down the row lengthwise, not from a
+// passerby's side view. Moved to the -X face (spans height x depth, 2.4 x
+// 1.2, the "long side face" the task asked for) -- confirmed via a
+// headless screenshot from a player's-eye camera standing in the open room
+// (lower x) looking east at the row, matching how a real passerby would
+// see it, not just a straight-on debug view. A future placement needing
+// the opposite-facing side can use the already-supported entity.rotationY
+// (180 flips local -X to face +X) rather than a second light-position
+// constant set.
+const SERVER_RACK_LIGHT_Z_OFFSET = SERVER_RACK_SIZE[2] / 2 - SERVER_RACK_LIGHT_SIZE;
 // Blink: each light gets its own randomized-interval setInterval, chosen
 // once per light (not re-randomized every tick), so racks read as chaotic
 // rather than synchronized -- see createServerRackDecoration(). No cleanup
@@ -150,6 +175,28 @@ const SERVER_RACK_LIGHT_Y_OFFSETS = [0.95, 0.85, 0.75, 0.65, 0.55];
 // this file already relies on (nothing ever tears a decoration down mid-run).
 const SERVER_RACK_LIGHT_BLINK_MIN_MS = 400;
 const SERVER_RACK_LIGHT_BLINK_MAX_MS = 900;
+// Shelf variants: same exterior shell (SERVER_RACK_SIZE/SERVER_RACK_COLOR,
+// reused directly, not copied) as server_rack, but no lights -- instead,
+// thin horizontal slabs that protrude slightly past the shell's own faces
+// on every side (SHELF_PARTITION_OVERHANG), the same "flush + a little
+// proud of the surface" idea SERVER_RACK_LIGHT's 0.005 protrusion already
+// established, so the partitions read as visible shelf edges/notches from
+// any angle rather than being invisibly flush with (or swallowed inside)
+// the outer box. "shelf" (3 partitions) and "shelf_alt" (2 partitions, a
+// lighter tone) share one createShelfDecoration(entity, variant) method --
+// the difference between them is purely data (count/color), not enough of
+// a divergence to justify two fully separate methods the way black_desk's
+// hard "never touch Room 2's desk" requirement did.
+const SHELF_PARTITION_THICKNESS = 0.05;
+const SHELF_PARTITION_OVERHANG = 0.1;
+const SHELF_PARTITION_SIZE: [number, number, number] = [
+  SERVER_RACK_SIZE[0] + SHELF_PARTITION_OVERHANG,
+  SHELF_PARTITION_THICKNESS,
+  SERVER_RACK_SIZE[2] + SHELF_PARTITION_OVERHANG,
+];
+const SHELF_Y_OFFSETS = [0.6, 1.2, 1.8];
+const SHELF_ALT_COLOR = 0x2a2d33;
+const SHELF_ALT_Y_OFFSETS = [0.8, 1.6];
 // Coffee cup: promoted from a "decoration" variant to its own top-level
 // MapEntity type (Data Center polish) once it needed real state-dependent
 // behavior (gated by a "tape_roll" pickup, MapEntity.requiresItem) --
@@ -1081,6 +1128,18 @@ export class MapEntitySystem {
       this.createServerRackDecoration(entity);
       return;
     }
+    if (entity.variant === "server_rack_red") {
+      this.createServerRackDecoration(entity, true);
+      return;
+    }
+    if (entity.variant === "shelf") {
+      this.createShelfDecoration(entity, false);
+      return;
+    }
+    if (entity.variant === "shelf_alt") {
+      this.createShelfDecoration(entity, true);
+      return;
+    }
     if (entity.variant === "door_prop") {
       this.createDoorPropDecoration(entity);
       return;
@@ -1275,7 +1334,7 @@ export class MapEntitySystem {
     return texture;
   }
 
-  // Content-block primitive: a substantial box plus a column of 4-6 small
+  // Content-block primitive: a substantial box plus a column of 5 small
   // emissive squares, the same restrained "a couple of generated details,
   // not a fully modeled object" level ComputerMesh.ts's screen texture
   // already established -- deliberately not a real named-child/texture
@@ -1286,23 +1345,29 @@ export class MapEntitySystem {
   // re-randomized per tick) so a row of racks reads as chaotic rather than
   // synchronized -- no cleanup, these are meant to run for the life of the
   // page, same as every other permanent decoration effect in this file.
-  private createServerRackDecoration(entity: MapEntity): void {
+  // Light-placement fix: the lights sit on the -X face now, not +Z -- see
+  // SERVER_RACK_LIGHT_Z_OFFSET's comment above for why. `red` selects
+  // SERVER_RACK_LIGHT_COLOR_RED/EMISSIVE_RED in place of the default green
+  // pair -- everything else (geometry, spacing, blink timing/logic,
+  // collision) is shared, unchanged code, per the task's own "reuse, don't
+  // rewrite" instruction for the red variant.
+  private createServerRackDecoration(entity: MapEntity, red = false): void {
     const group = new THREE.Group();
     this.addDecorationBox(group, SERVER_RACK_SIZE, [0, SERVER_RACK_SIZE[1] / 2, 0], SERVER_RACK_COLOR);
 
     const lightMaterial = new THREE.MeshStandardMaterial({
-      color: SERVER_RACK_LIGHT_COLOR,
-      emissive: SERVER_RACK_LIGHT_EMISSIVE,
+      color: red ? SERVER_RACK_LIGHT_COLOR_RED : SERVER_RACK_LIGHT_COLOR,
+      emissive: red ? SERVER_RACK_LIGHT_EMISSIVE_RED : SERVER_RACK_LIGHT_EMISSIVE,
     });
     for (const y of SERVER_RACK_LIGHT_Y_OFFSETS) {
       const light = new THREE.Mesh(
-        new THREE.BoxGeometry(SERVER_RACK_LIGHT_SIZE, SERVER_RACK_LIGHT_SIZE, 0.01),
+        new THREE.BoxGeometry(0.01, SERVER_RACK_LIGHT_SIZE, SERVER_RACK_LIGHT_SIZE),
         lightMaterial,
       );
       light.position.set(
-        SERVER_RACK_SIZE[0] / 2 - SERVER_RACK_LIGHT_SIZE, // near the rack's own +X edge, not centered
+        -(SERVER_RACK_SIZE[0] / 2 + 0.005), // flush against, and slightly proud of, the -X face
         y,
-        SERVER_RACK_SIZE[2] / 2 + 0.005, // flush against the front (+Z) face
+        SERVER_RACK_LIGHT_Z_OFFSET, // near the rack's own +Z edge, not centered
       );
       group.add(light);
 
@@ -1319,6 +1384,30 @@ export class MapEntitySystem {
     this.group.add(group);
 
     this.collidableDecorationBoxes.push(computeCollisionBox(group));
+  }
+
+  // Shelf variants (B/C): same shell as createServerRackDecoration() above
+  // (reused constants, not copied), no lights, no collision (unlike
+  // server_rack/black_desk -- these weren't asked to be collidable, and
+  // the task's own "same as every previous furnishing task" verification
+  // note only calls out wall-clipping, not a new collision requirement).
+  // `alt` picks SHELF_ALT_Y_OFFSETS/SHELF_ALT_COLOR (2 partitions, a
+  // lighter tone) in place of SHELF_Y_OFFSETS/SERVER_RACK_COLOR (3
+  // partitions) -- purely a data difference, which is why this is one
+  // parameterized method rather than two near-duplicates.
+  private createShelfDecoration(entity: MapEntity, alt: boolean): void {
+    const group = new THREE.Group();
+    this.addDecorationBox(group, SERVER_RACK_SIZE, [0, SERVER_RACK_SIZE[1] / 2, 0], SERVER_RACK_COLOR);
+
+    const partitionColor = alt ? SHELF_ALT_COLOR : SERVER_RACK_COLOR;
+    const partitionYOffsets = alt ? SHELF_ALT_Y_OFFSETS : SHELF_Y_OFFSETS;
+    for (const y of partitionYOffsets) {
+      this.addDecorationBox(group, SHELF_PARTITION_SIZE, [0, y, 0], partitionColor);
+    }
+
+    group.position.set(...entity.position);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
   }
 
   // Data Center entrance follow-up: reuses the real "door" MapEntity

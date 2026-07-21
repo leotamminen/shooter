@@ -490,29 +490,29 @@ export const MAPS: MapDef[] = [
     // Center polish: variant is now "black_desk" (wider, collidable, its
     // own dark material -- see MapEntitySystem.ts's decisions log; Room
     // 2's own "desk" entity is untouched and still renders identically).
-    { id: "campaign_desk_2", type: "decoration", variant: "black_desk", position: [45, 0, 45] },
+    { id: "campaign_desk_2", type: "decoration", variant: "black_desk", position: [45, 0, 44] },
     // Data Center polish: promoted from a "decoration" to its own
     // "coffee_cup" MapEntity type, gated by the new campaign_tape_roll_1
     // pickup below (requiresItem) -- see MapEntitySystem.ts's
     // createCoffeeCup()/createTapeRoll() and the decisions log for the
     // narrowly-scoped live-prompt-update wiring between this specific
     // pair. Position/y unchanged from the prior decoration.
-    { id: "campaign_coffee_cup_1", type: "coffee_cup", requiresItem: "campaign_tape_roll_1", position: [45.3, 1.2, 45] },
+    { id: "campaign_coffee_cup_1", type: "coffee_cup", requiresItem: "campaign_tape_roll_1", position: [45.3, 1.2, 44] },
     {
       id: "campaign_terminal_6",
       type: "terminal",
       linkedTo: "data_center_terminal",
       rotationY: 0,
-      position: [45, 1.1, 45],
+      position: [45, 1.1, 44],
     },
     // Data Center polish: two always-off decorative computers flanking
     // campaign_terminal_6, plus a phone and a mouse -- all pure flavor,
     // zero interactivity, resting on the new wider black_desk (spans
     // x 43.8-46.2 at this desk's position/rotation).
-    { id: "campaign_computer_off_1", type: "decoration", variant: "computer_off", position: [44.25, 1.1, 45] },
-    { id: "campaign_computer_off_2", type: "decoration", variant: "computer_off", position: [45.75, 1.1, 45] },
-    { id: "campaign_phone_1", type: "decoration", variant: "phone", position: [44.6, 1.1, 44.85] },
-    { id: "campaign_computer_mouse_1", type: "decoration", variant: "computer_mouse", position: [45.35, 1.1, 44.85] },
+    { id: "campaign_computer_off_1", type: "decoration", variant: "computer_off", position: [44.25, 1.1, 44] },
+    { id: "campaign_computer_off_2", type: "decoration", variant: "computer_off", position: [45.75, 1.1, 44] },
+    { id: "campaign_phone_1", type: "decoration", variant: "phone", position: [44.6, 1.1, 43.85] },
+    { id: "campaign_computer_mouse_1", type: "decoration", variant: "computer_mouse", position: [45.35, 1.1, 43.85] },
     // Scattered junk. campaign_decoration_6's original rough spot ([52,
     // 0.3, 43]) landed on col 26 -- the map's own east border wall, not
     // open floor -- confirmed via a script-parsed grid check rather than
@@ -531,6 +531,32 @@ export const MAPS: MapDef[] = [
       interactPrompt: "Press E to pick up clear tape roll",
       position: [41.5, 0.03, 47.5],
     },
+    // Server-rack light-placement-fix follow-up: a placeholder row of the
+    // three new decoration variants (shelf, shelf_alt, server_rack_red),
+    // alternating for visual comparison -- x=45 confirmed clear of every
+    // other Data Center entity (the desk grouping, the racks at x=49, and
+    // the scattered junk) via a script-parsed check, not assumed; rough
+    // placement only, expected to be rearranged by hand like every other
+    // furnishing entity in this room. Flagged, not silently changed: at a
+    // literal 1-unit Z step these share SERVER_RACK_SIZE's own 1.2 depth,
+    // so adjacent items overlap by ~0.2 units (the same spacing problem
+    // the original green server_rack row had before its own 1.25-step
+    // respacing) -- left as specified since this row is explicitly a
+    // testing/rearranging placeholder, not final placement, and none of
+    // shelf/shelf_alt carry collision (only server_rack_red does, and its
+    // neighbors on either side are always shelf/shelf_alt), so the overlap
+    // is a minor visual-only imperfection, not a collision-box conflict.
+    { id: "campaign_shelf_1", type: "decoration", variant: "shelf", position: [45, 0, 45] },
+    { id: "campaign_shelf_alt_1", type: "decoration", variant: "shelf_alt", position: [45, 0, 46] },
+    { id: "campaign_server_rack_red_1", type: "decoration", variant: "server_rack_red", position: [45, 0, 47] },
+    { id: "campaign_shelf_2", type: "decoration", variant: "shelf", position: [45, 0, 48] },
+    { id: "campaign_shelf_alt_2", type: "decoration", variant: "shelf_alt", position: [45, 0, 49] },
+    { id: "campaign_server_rack_red_2", type: "decoration", variant: "server_rack_red", position: [45, 0, 50] },
+    { id: "campaign_shelf_3", type: "decoration", variant: "shelf", position: [45, 0, 51] },
+    { id: "campaign_shelf_alt_3", type: "decoration", variant: "shelf_alt", position: [45, 0, 52] },
+    { id: "campaign_server_rack_red_3", type: "decoration", variant: "server_rack_red", position: [45, 0, 53] },
+    { id: "campaign_shelf_4", type: "decoration", variant: "shelf", position: [45, 0, 54] },
+    { id: "campaign_shelf_alt_4", type: "decoration", variant: "shelf_alt", position: [45, 0, 55] },
   ],
   },
 ];
