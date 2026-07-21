@@ -333,6 +333,12 @@ export class MapEntitySystem {
     // openPasswordLock) is injected rather than reached for directly.
     getPlayerPosition: () => { x: number; z: number },
     teleportPlayer: (x: number, z: number) => void,
+    // Data Center exit follow-up: fired only when campaign_lock_5's
+    // fingerprint scan actually opens campaign_door_6 (never on a
+    // rejection) -- the same injected-callback shape as
+    // openTerminal/openPasswordLock, since this core file has no business
+    // importing modes/Campaign.ts directly.
+    onFingerprintScanSuccess: () => void,
   ) {
     // Checkpoint 19 correction: reverted to local constructor variables --
     // Room 3's door is now opened by its own password_lock (the same
@@ -374,6 +380,20 @@ export class MapEntitySystem {
         terminalEntityById.set(entity.id, entity);
       }
     }
+
+    // Data Center exit follow-up: a single shared boolean, closed over by
+    // both createCoffeeCup() (sets it once the fingerprint is actually
+    // copied) and createFingerprintLock() (reads it live on every scan
+    // attempt). Passed around as a getter/setter closure pair rather than a
+    // class field, the same "cross-method shared mutable state" shape
+    // coffeeCupMeshesByTapeRollId already established with a Map -- a plain
+    // boolean doesn't need a Map, just two small closures over one local.
+    let fingerprintCopied = false;
+    const getFingerprintCopied = (): boolean => fingerprintCopied;
+    const setFingerprintCopied = (value: boolean): void => {
+      fingerprintCopied = value;
+    };
+    runManager.registerResettable(() => setFingerprintCopied(false));
 
     for (const entity of mapDef.entities) {
       if (entity.type === "door") {
@@ -427,7 +447,24 @@ export class MapEntitySystem {
       } else if (entity.type === "decoration") {
         this.createDecoration(entity);
       } else if (entity.type === "coffee_cup") {
-        this.createCoffeeCup(entity, tapeRollMeshById, coffeeCupMeshesByTapeRollId, raycastRegistry, gameState);
+        this.createCoffeeCup(
+          entity,
+          tapeRollMeshById,
+          coffeeCupMeshesByTapeRollId,
+          raycastRegistry,
+          gameState,
+          setFingerprintCopied,
+        );
+      } else if (entity.type === "fingerprint_lock") {
+        this.createFingerprintLock(
+          entity,
+          doorMeshById,
+          raycastRegistry,
+          onDoorStateChanged,
+          gameState,
+          getFingerprintCopied,
+          onFingerprintScanSuccess,
+        );
       }
     }
   }
@@ -724,12 +761,20 @@ export class MapEntitySystem {
   // than one coffee cup) so the matching tape_roll's own onInteract can
   // flip this mesh's interactPrompt the instant it's collected, rather than
   // this mesh only ever noticing on its own next interaction.
+  //
+  // Data Center exit follow-up: also flips the shared fingerprintCopied
+  // flag (via setFingerprintCopied) the instant a copy actually succeeds --
+  // campaign_lock_5 (createFingerprintLock() below) reads it live on every
+  // scan attempt. Set every time a successful copy happens, not just once,
+  // which is harmless (idempotent) since it's already gated on the tape
+  // roll being collected.
   private createCoffeeCup(
     entity: MapEntity,
     tapeRollMeshById: Map<string, THREE.Mesh>,
     coffeeCupMeshesByTapeRollId: Map<string, THREE.Mesh[]>,
     raycastRegistry: RaycastRegistry,
     gameState: GameState,
+    setFingerprintCopied: (value: boolean) => void,
   ): void {
     const mesh = new THREE.Mesh(
       new THREE.CylinderGeometry(
@@ -747,6 +792,7 @@ export class MapEntitySystem {
       const tapeMesh = entity.requiresItem ? tapeRollMeshById.get(entity.requiresItem) : undefined;
       const tapeCollected = tapeMesh !== undefined && !tapeMesh.visible;
       if (tapeCollected) {
+        setFingerprintCopied(true);
         gameState.showFeedback(COFFEE_CUP_COPIED_MESSAGE);
       } else {
         gameState.showFeedback(COFFEE_CUP_HINT_MESSAGE);
@@ -765,6 +811,63 @@ export class MapEntitySystem {
         coffeeCupMeshesByTapeRollId.set(entity.requiresItem, [mesh]);
       }
     }
+  }
+
+  // Data Center exit follow-up: deliberately NOT built on
+  // createPasswordLock() -- there's no text-input overlay here at all, just
+  // a direct world interact with two outcomes, mirroring
+  // createButton()/createCoffeeCup()'s shape (idempotency guard, a live
+  // gate check, gameState.showFeedback() on rejection) rather than
+  // password_lock's UI-opening one. getFingerprintCopied() is read live on
+  // every interaction, the same "look up the other entity's state, check
+  // it fresh" pattern requiresPart/requiresItem already established --
+  // never cached, so a mid-run fingerprint copy is reflected on the very
+  // next scan attempt with no extra wiring. onFingerprintScanSuccess fires
+  // only on an actual door-opening success (never on the "Access denied"
+  // rejection), the same "only call the injected callback on real success"
+  // shape openPasswordLock's onCorrectPassword already uses.
+  private createFingerprintLock(
+    entity: MapEntity,
+    doorMeshById: Map<string, THREE.Mesh>,
+    raycastRegistry: RaycastRegistry,
+    onDoorStateChanged: () => void,
+    gameState: GameState,
+    getFingerprintCopied: () => boolean,
+    onFingerprintScanSuccess: () => void,
+  ): void {
+    const door = entity.linkedTo ? doorMeshById.get(entity.linkedTo) : undefined;
+    if (!door) {
+      throw new Error(
+        `Fingerprint lock "${entity.id}" has no matching door for linkedTo "${entity.linkedTo}"`,
+      );
+    }
+
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(PASSWORD_LOCK_SIZE, PASSWORD_LOCK_SIZE, PASSWORD_LOCK_SIZE),
+      new THREE.MeshStandardMaterial({
+        color: PASSWORD_LOCK_COLOR,
+        emissive: PASSWORD_LOCK_EMISSIVE,
+      }),
+    );
+    mesh.position.set(...entity.position);
+    mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = "Press E to scan fingerprint";
+    mesh.userData.onInteract = (): void => {
+      if (!door.visible) return; // idempotent: door already open
+
+      if (!getFingerprintCopied()) {
+        gameState.showFeedback("Access denied");
+        return;
+      }
+
+      door.visible = false;
+      onDoorStateChanged();
+      onFingerprintScanSuccess();
+    };
+
+    this.group.add(mesh);
+    this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
   }
 
   private createWallBuy(

@@ -101,6 +101,14 @@ function startGame(selections: GameSelections): void {
     BLOCKED_COMMANDS,
     RESTRICTED_COMMANDS,
     CORE_COMMANDS,
+    // Data Center exit follow-up: narrow by construction -- only
+    // workstation_terminal's note.txt is requiresRoot anywhere in
+    // content/terminals.ts today, so this only ever fires for that one
+    // file. The filename check here is an extra, explicit layer of
+    // narrowness on top of that (see ui/Terminal.ts's own comment).
+    (filename) => {
+      if (filename === "note.txt") campaign.onNoteRead();
+    },
   );
   const passwordLock = new PasswordLock(
     () => playerController.controls.unlock(),
@@ -272,11 +280,18 @@ function startGame(selections: GameSelections): void {
           // id is its own entity id, "campaign_lock_2") triggers neither --
           // its only effect is the door opening, and the MAC-10 it guards
           // is granted separately by interacting with the wall-buy inside.
+          //
+          // Data Center exit follow-up: "room2_terminal" (Room 3's identity
+          // lock) used to call campaign.markComplete() here -- removed.
+          // Completion has moved later in the game (campaign_lock_5's
+          // fingerprint scan, wired below via MapEntitySystem's
+          // onFingerprintScanSuccess), so this success point no longer
+          // advances Campaign's stage at all; the status line just keeps
+          // showing "power_terminal"'s text until the note.txt trigger
+          // above advances it.
           if (terminalDef.id === "room1_terminal") {
             gameState.addScore(findById(WEAPONS, "mac10").cost);
             campaign.onDoorOneOpened();
-          } else if (terminalDef.id === "room2_terminal") {
-            campaign.markComplete();
           }
         },
         promptLabel,
@@ -290,6 +305,10 @@ function startGame(selections: GameSelections): void {
     // what calls it" shape openTerminal/openPasswordLock above already use.
     () => playerController.getPosition(),
     (x, z) => playerController.teleportTo(x, z),
+    // Data Center exit follow-up: the one true "complete" trigger now --
+    // fires only when campaign_lock_5's fingerprint scan actually opens
+    // campaign_door_6.
+    () => campaign.markComplete(),
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);

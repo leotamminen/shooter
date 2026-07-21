@@ -74,6 +74,10 @@ export class Terminal {
   private readonly onOpen: () => void;
   private readonly onClose: () => void;
   private readonly getVaultPin: () => string;
+  // Data Center exit follow-up: reintroduced -- see the constructor's own
+  // comment for how this differs from the removed onFileRead/openNoteDoor
+  // mechanism it superficially resembles.
+  private readonly onFileRead?: (filename: string) => void;
   // Checkpoint 19 correction: command-permission data injected as
   // constructor parameters (content/terminalCommands.ts's exports),
   // rather than imported directly here -- matching this project's
@@ -100,6 +104,20 @@ export class Terminal {
     blockedCommands: string[],
     restrictedCommands: string[],
     coreCommands: { name: string; description: string }[],
+    // Data Center exit follow-up: reintroduced after the Data Center
+    // entrance follow-up removed the original onFileRead/openNoteDoor pair
+    // (which opened campaign_door_5 as a narrative consequence of reading
+    // note.txt -- moot once that door became permanently passable). This is
+    // narrower than that removed mechanism ever needed to be: it only ever
+    // fires from a successful, permission-granted runCat() of a
+    // file.requiresRoot file (see runCat() below), and today exactly one
+    // such file exists in the whole game (workstation_terminal's note.txt)
+    // -- so despite being wired on the single shared Terminal instance used
+    // by every TerminalDef, it is narrow by construction of the content
+    // data, not a general command watcher reintroducing the removed
+    // onCommand pattern's problem (see CLAUDE.md's decisions log for why
+    // that one was wrong).
+    onFileRead?: (filename: string) => void,
   ) {
     this.onOpen = onOpen;
     this.onClose = onClose;
@@ -107,6 +125,7 @@ export class Terminal {
     this.blockedCommands = blockedCommands;
     this.restrictedCommands = restrictedCommands;
     this.coreCommands = coreCommands;
+    this.onFileRead = onFileRead;
 
     // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
     // ui/MainMenu.ts's own root), not just the small visible panel --
@@ -443,6 +462,14 @@ export class Terminal {
     const copyValue =
       password !== undefined && content.includes(password) ? password : undefined;
     this.appendLine(content, copyValue);
+
+    // Narrowly-scoped hook: fires only for a successful, permission-granted
+    // read of a requiresRoot file -- see the constructor's own comment for
+    // why this stays narrow despite living on the single shared Terminal
+    // instance.
+    if (file.requiresRoot) {
+      this.onFileRead?.(name);
+    }
   }
 
   // Checkpoint 19 correction: whoami no longer opens anything by itself

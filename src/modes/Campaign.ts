@@ -2,7 +2,7 @@ import type { GameMode } from "./GameMode";
 import type { RunManager } from "../core/RunManager";
 import { generateVaultPin } from "../core/utils/RandomPin";
 
-type CampaignStage = "find_password" | "power_terminal" | "complete";
+type CampaignStage = "find_password" | "power_terminal" | "unlock_data_center" | "complete";
 
 // Hardcoded per this project's mode-building rule -- the third GameMode
 // implementation, built directly against the already-extracted interface
@@ -11,6 +11,16 @@ type CampaignStage = "find_password" | "power_terminal" | "complete";
 // single objectiveComplete boolean into a 3-stage flow (Room 1 password ->
 // Room 2 terminal -> complete), since a boolean can no longer represent
 // "which of two remaining objectives is next" once there are two rooms.
+//
+// Data Center exit follow-up: a fourth stage, "unlock_data_center", is
+// inserted between "power_terminal" and "complete" -- completion moved
+// later in the game (campaign_lock_5's fingerprint scan opening
+// campaign_door_6), so Room 3's identity lock no longer advances the stage
+// at all (see onDoorOneOpened()/markComplete() below and the removed call
+// site in main.ts's openPasswordLock callback) -- the status line simply
+// keeps showing "power_terminal"'s text from Room 3 onward until
+// onNoteRead() advances it, rather than two different events both racing
+// to claim "complete".
 export class Campaign implements GameMode {
   private stage: CampaignStage = "find_password";
   private vaultPin = "";
@@ -45,6 +55,8 @@ export class Campaign implements GameMode {
         return "Objective: find the door password";
       case "power_terminal":
         return "Objective: power the terminal";
+      case "unlock_data_center":
+        return "Objective: unlock the data center main door";
       case "complete":
         return "Objective: complete";
     }
@@ -56,6 +68,8 @@ export class Campaign implements GameMode {
         return ["Objective incomplete -- Room 1 not yet opened"];
       case "power_terminal":
         return ["Objective incomplete -- Room 2 terminal not yet powered"];
+      case "unlock_data_center":
+        return ["Objective incomplete -- data center main door still locked"];
       case "complete":
         return ["Objective complete"];
     }
@@ -69,8 +83,22 @@ export class Campaign implements GameMode {
     this.stage = "power_terminal";
   }
 
-  // Called by main.ts's openPasswordLock callback when Room 3's identity
-  // lock (campaign_lock_3, secretField: "username") is solved.
+  // Data Center exit follow-up: called by main.ts's Terminal onFileRead
+  // callback, only for workstation_terminal's note.txt (see
+  // ui/Terminal.ts's own narrow-scoping comment). Room 3's identity lock
+  // (campaign_lock_3) used to call markComplete() directly at this point in
+  // the game -- it no longer advances the stage at all now that completion
+  // has moved later, so the status line simply keeps showing
+  // "power_terminal"'s text from Room 3 onward until this fires.
+  onNoteRead(): void {
+    this.stage = "unlock_data_center";
+  }
+
+  // Called by main.ts's createFingerprintLock success callback when
+  // campaign_lock_5's fingerprint scan opens campaign_door_6 -- this is now
+  // the one true "complete" trigger. (Previously called from Room 3's
+  // identity-lock success instead; that call site was removed once
+  // completion moved here, so nothing else can ever claim "complete".)
   markComplete(): void {
     this.stage = "complete";
   }

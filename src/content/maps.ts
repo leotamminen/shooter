@@ -203,14 +203,14 @@ export const MAPS: MapDef[] = [
     [1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1],
     [1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
-    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1],
-    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1],
-    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1],
-    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-    [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
-    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -459,6 +459,38 @@ export const MAPS: MapDef[] = [
       rotationY: 30,
       position: [35.5, 2, 44.7],
     },
+    // Data Center exit follow-up: the Data Center's north exit, leading
+    // onward to whatever comes next (not yet built) -- row 18/col 21 in
+    // this map's own grid (world x/z [42, 36]), the sole gap in an
+    // otherwise-solid wall segment (row 18 is walled across cols 17-25
+    // except this one cell), confirmed via the same script-parsed grid
+    // check every prior placement in this file has used rather than
+    // hand-counting. That cell was ALREADY open floor (0) before this
+    // task -- no grid edit was needed, unlike the usual "replace a wall
+    // marker with 0" case, since this exit was already a passable breach
+    // (like Room 3's west-wall gap before campaign_door_4 gated it), just
+    // not yet a real gated door. Unlike campaign_door_5 (a permanently
+    // passable door_prop decoration), this is a real "door" entity --
+    // normally closed, gated by campaign_lock_5 below, not passable until
+    // scanned.
+    {
+      id: "campaign_door_6",
+      type: "door",
+      position: [42, 1.5, 36],
+    },
+    // fingerprint_lock: no text-input overlay, just a direct world
+    // interact -- gated by the shared fingerprintCopied flag
+    // (MapEntitySystem's constructor scope), set by campaign_coffee_cup_1
+    // once its fingerprint is actually copied (requires
+    // campaign_tape_roll_1 collected first). Position is one cell south of
+    // the door, on the Data Center side the player is standing on when
+    // they reach it.
+    {
+      id: "campaign_lock_5",
+      type: "fingerprint_lock",
+      linkedTo: "campaign_door_6",
+      position: [42, 1.2, 38],
+    },
     // Data Center placeholder furnishing: rough placements only, the
     // player will rearrange all of this by hand afterward -- exact
     // positions don't matter beyond "inside the room and not overlapping
@@ -473,15 +505,28 @@ export const MAPS: MapDef[] = [
     // small gap, not touching) re-verified against a fresh script parse of
     // the live grid, confirmed open floor for all 9, not assumed from the
     // old comment's rough row/col estimate.
-    { id: "campaign_server_rack_1", type: "decoration", variant: "server_rack", position: [49, 0, 45.9] },
-    { id: "campaign_server_rack_2", type: "decoration", variant: "server_rack", position: [49, 0, 47.15] },
-    { id: "campaign_server_rack_3", type: "decoration", variant: "server_rack", position: [49, 0, 48.4] },
-    { id: "campaign_server_rack_4", type: "decoration", variant: "server_rack", position: [49, 0, 49.65] },
-    { id: "campaign_server_rack_5", type: "decoration", variant: "server_rack", position: [49, 0, 50.9] },
-    { id: "campaign_server_rack_6", type: "decoration", variant: "server_rack", position: [49, 0, 52.15] },
-    { id: "campaign_server_rack_7", type: "decoration", variant: "server_rack", position: [49, 0, 53.4] },
-    { id: "campaign_server_rack_8", type: "decoration", variant: "server_rack", position: [49, 0, 54.65] },
-    { id: "campaign_server_rack_9", type: "decoration", variant: "server_rack", position: [49, 0, 55.9] },
+    // server rack row 1
+    { id: "campaign_server_rack_row1_1", type: "decoration", variant: "server_rack", position: [50.6, 0, 45.9] },
+    { id: "campaign_server_rack_row1_2", type: "decoration", variant: "server_rack", position: [50.6, 0, 47.15] },
+    { id: "campaign_server_rack_row1_3", type: "decoration", variant: "server_rack", position: [50.6, 0, 48.4] },
+    { id: "campaign_server_rack_row1_4", type: "decoration", variant: "server_rack", position: [50.6, 0, 49.65] },
+    { id: "campaign_server_rack_row1_5", type: "decoration", variant: "server_rack", position: [50.6, 0, 50.9] },
+    { id: "campaign_server_rack_row1_6", type: "decoration", variant: "server_rack", position: [50.6, 0, 52.15] },
+    { id: "campaign_server_rack_row1_7", type: "decoration", variant: "server_rack_red", position: [50.6, 0, 53.4] },
+    { id: "campaign_server_rack_row1_8", type: "decoration", variant: "server_rack", position: [50.6, 0, 54.65] },
+    // { id: "campaign_server_rack_row1_9", type: "decoration", variant: "server_rack", position: [50.6, 0, 55.9] },
+
+    // server rack row 2
+    { id: "campaign_server_rack_row2_1", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 45.9] },
+    { id: "campaign_server_rack_row2_2", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 47.15] },
+    { id: "campaign_server_rack_row2_3", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 48.4] },
+    { id: "campaign_server_rack_row2_4", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 49.65] },
+    { id: "campaign_server_rack_row2_5", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 50.9] },
+    { id: "campaign_server_rack_row2_6", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 52.15] },
+    { id: "campaign_server_rack_row2_7", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 53.4] },
+    { id: "campaign_server_rack_row2_8", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 54.65] },
+    // { id: "campaign_server_rack_row2_9", type: "decoration", variant: "server_rack", rotationY: 180, position: [47.6, 0, 55.9] },
+
     // Desk/coffee-cup/terminal grouping, mirroring the existing Room 2
     // desk+terminal pairing (checkpoint 20): terminal and cup both rest
     // at the desk's own y=1.1 surface height. campaign_terminal_6 links
@@ -490,38 +535,58 @@ export const MAPS: MapDef[] = [
     // Center polish: variant is now "black_desk" (wider, collidable, its
     // own dark material -- see MapEntitySystem.ts's decisions log; Room
     // 2's own "desk" entity is untouched and still renders identically).
-    { id: "campaign_desk_2", type: "decoration", variant: "black_desk", position: [45, 0, 44] },
+    { id: "campaign_desk_2", type: "decoration", variant: "black_desk", position: [47, 0, 41] },
+    { id: "campaign_desk_3", type: "decoration", variant: "black_desk", position: [49.2, 0, 41] },
+    { id: "campaign_desk_4", type: "decoration", variant: "black_desk", rotationY: 90, position: [50.65, 0, 40.10] },
+
     // Data Center polish: promoted from a "decoration" to its own
     // "coffee_cup" MapEntity type, gated by the new campaign_tape_roll_1
     // pickup below (requiresItem) -- see MapEntitySystem.ts's
     // createCoffeeCup()/createTapeRoll() and the decisions log for the
     // narrowly-scoped live-prompt-update wiring between this specific
     // pair. Position/y unchanged from the prior decoration.
-    { id: "campaign_coffee_cup_1", type: "coffee_cup", requiresItem: "campaign_tape_roll_1", position: [45.3, 1.2, 44] },
+    { id: "campaign_coffee_cup_1", type: "coffee_cup", requiresItem: "campaign_tape_roll_1", position: [49.3, 1.15, 41] },
     {
       id: "campaign_terminal_6",
       type: "terminal",
       linkedTo: "data_center_terminal",
-      rotationY: 0,
-      position: [45, 1.1, 44],
+      rotationY: 180,
+      position: [47, 1.1, 41],
     },
     // Data Center polish: two always-off decorative computers flanking
     // campaign_terminal_6, plus a phone and a mouse -- all pure flavor,
     // zero interactivity, resting on the new wider black_desk (spans
     // x 43.8-46.2 at this desk's position/rotation).
-    { id: "campaign_computer_off_1", type: "decoration", variant: "computer_off", position: [44.25, 1.1, 44] },
-    { id: "campaign_computer_off_2", type: "decoration", variant: "computer_off", position: [45.75, 1.1, 44] },
-    { id: "campaign_phone_1", type: "decoration", variant: "phone", position: [44.6, 1.1, 43.85] },
-    { id: "campaign_computer_mouse_1", type: "decoration", variant: "computer_mouse", position: [45.35, 1.1, 43.85] },
+    { id: "campaign_computer_off_1", type: "decoration", variant: "computer_off", rotationY: 180, position: [46.25, 1.1, 41] },
+    { id: "campaign_computer_off_2", type: "decoration", variant: "computer_off", rotationY: 180, position: [47.75, 1.1, 41] },
+    { id: "campaign_phone_1", type: "decoration", variant: "phone", rotationY: 180, position: [46.6, 1.1, 40.85] },
+    { id: "campaign_computer_mouse_1", type: "decoration", variant: "computer_mouse", rotationY: 180, position: [47.35, 1.1, 40.85] },
+
+
+    // Maintenance corner:
+    // ID de-duplication follow-up: this section's own campaign_shelf_2/
+    // campaign_decoration_6/campaign_decoration_7 collided with ids used
+    // elsewhere in this room's furnishing (server rack row 3's own shelf --
+    // now renamed campaign_shelf_row3_2, see below -- and the Scattered-junk
+    // campaign_decoration_6 just below) -- both real duplicates, confirmed
+    // via a script scan of every id: field in this file rather than
+    // assumed, and confirmed neither is ever referenced via linkedTo/
+    // requiresItem/terminalId anywhere. Renamed to
+    // campaign_shelf_maintenance_1/campaign_decoration_8/9/10 --
+    // position/rotation/variant all unchanged, id-only.
+    { id: "campaign_shelf_maintenance_1", type: "decoration", variant: "shelf", rotationY: 270, position: [37.6, 0, 41] },
+    { id: "campaign_decoration_8", type: "decoration", variant: "debris", position: [38, 0.23, 41] },
+    { id: "campaign_decoration_9", type: "decoration", variant: "debris", position: [38, 0.8, 41] },
+    { id: "campaign_decoration_10", type: "decoration", variant: "debris", position: [38, 1.39, 41] },
+
+
     // Scattered junk. campaign_decoration_6's original rough spot ([52,
     // 0.3, 43]) landed on col 26 -- the map's own east border wall, not
     // open floor -- confirmed via a script-parsed grid check rather than
     // assumed; nudged to [50, 0.3, 44], confirmed open.
-    { id: "campaign_decoration_5", type: "decoration", variant: "crate", position: [43, 0.3, 52] },
-    { id: "campaign_decoration_6", type: "decoration", variant: "debris", position: [50, 0.3, 44] },
-    { id: "campaign_decoration_7", type: "decoration", variant: "crate", position: [41, 0.3, 48] },
+    { id: "campaign_decoration_6", type: "decoration", variant: "debris", position: [50.4, 0.2, 41] },
     // Data Center polish: gates campaign_coffee_cup_1 above (requiresItem).
-    // Placed loosely near the existing junk (campaign_decoration_7, a
+    // Placed loosely near the existing junk (campaign_decoration_9, a
     // crate) rather than in the open -- a placeholder position, confirmed
     // open floor via the same script-parsed grid check as everything else
     // in this room, expected to be moved by hand later.
@@ -529,7 +594,7 @@ export const MAPS: MapDef[] = [
       id: "campaign_tape_roll_1",
       type: "tape_roll",
       interactPrompt: "Press E to pick up clear tape roll",
-      position: [41.5, 0.03, 47.5],
+      position: [37.7, 0.67, 40.9],
     },
     // Server-rack light-placement-fix follow-up: a placeholder row of the
     // three new decoration variants (shelf, shelf_alt, server_rack_red),
@@ -548,15 +613,61 @@ export const MAPS: MapDef[] = [
     // collision, not just visuals.
     //{ id: "campaign_shelf_1", type: "decoration", variant: "shelf", position: [45, 0, 45] },
     //{ id: "campaign_shelf_alt_1", type: "decoration", variant: "shelf_alt", position: [45, 0, 46] },
-    { id: "campaign_server_rack_red_1", type: "decoration", variant: "server_rack_red", position: [45, 0, 45.9] },
-    { id: "campaign_shelf_2", type: "decoration", variant: "shelf", position: [45, 0, 47.15] },
-    { id: "campaign_shelf_alt_2", type: "decoration", variant: "shelf_alt", position: [45, 0, 48.4] },
-    { id: "campaign_server_rack_red_2", type: "decoration", variant: "server_rack_red", position: [45, 0, 49.65] },
-    { id: "campaign_shelf_3", type: "decoration", variant: "shelf", position: [45, 0, 50.9] },
-    { id: "campaign_shelf_alt_3", type: "decoration", variant: "shelf_alt", position: [45, 0, 52.15] },
-    { id: "campaign_server_rack_red_3", type: "decoration", variant: "server_rack_red", position: [45, 0, 53.4] },
-    { id: "campaign_shelf_4", type: "decoration", variant: "shelf", position: [45, 0, 54.65] },
-    { id: "campaign_shelf_alt_4", type: "decoration", variant: "shelf_alt", position: [45, 0, 55.9] },
+    // server rack row 3
+    { id: "campaign_server_rack_red_1", type: "decoration", variant: "server_rack_red", position: [46.8, 0, 45.9] },
+    { id: "campaign_shelf_row3_2", type: "decoration", variant: "shelf", position: [46.8, 0, 47.15] },
+    { id: "campaign_shelf_alt_2", type: "decoration", variant: "shelf_alt", position: [46.8, 0, 48.4] },
+    { id: "campaign_server_rack_red_2", type: "decoration", variant: "server_rack_red", position: [46.8, 0, 49.65] },
+    { id: "campaign_shelf_3", type: "decoration", variant: "shelf", position: [46.8, 0, 50.9] },
+    { id: "campaign_shelf_alt_3", type: "decoration", variant: "shelf_alt", position: [46.8, 0, 52.15] },
+    { id: "campaign_server_rack_red_3", type: "decoration", variant: "server_rack_red", position: [46.8, 0, 53.4] },
+    { id: "campaign_shelf_4", type: "decoration", variant: "shelf", position: [46.8, 0, 54.65] },
+    // { id: "campaign_shelf_alt_4", type: "decoration", variant: "shelf_alt", position: [46.8, 0, 55.9] },
+
+    // server rack row 4
+    { id: "campaign_server_rack_row4_1", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 45.9] },
+    { id: "campaign_server_rack_row4_2", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 47.15] },
+    { id: "campaign_server_rack_row4_3", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 48.4] },
+    { id: "campaign_server_rack_row4_4", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 49.65] },
+    { id: "campaign_server_rack_row4_5", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 50.9] },
+    { id: "campaign_server_rack_row4_6", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 52.15] },
+    { id: "campaign_server_rack_row4_7", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 53.4] },
+    { id: "campaign_server_rack_row4_8", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 54.65] },
+    // { id: "campaign_server_rack_row4_9", type: "decoration", variant: "server_rack", rotationY: 180, position: [43.8, 0, 55.9] },
+
+    // server rack row 5
+    { id: "campaign_server_rack_row5_1", type: "decoration", variant: "server_rack", position: [43, 0, 45.9] },
+    { id: "campaign_server_rack_row5_2", type: "decoration", variant: "server_rack", position: [43, 0, 47.15] },
+    { id: "campaign_server_rack_row5_3", type: "decoration", variant: "server_rack", position: [43, 0, 48.4] },
+    { id: "campaign_server_rack_row5_4", type: "decoration", variant: "server_rack", position: [43, 0, 49.65] },
+    { id: "campaign_server_rack_row5_5", type: "decoration", variant: "server_rack", position: [43, 0, 50.9] },
+    { id: "campaign_server_rack_row5_6", type: "decoration", variant: "server_rack", position: [43, 0, 52.15] },
+    { id: "campaign_server_rack_row5_7", type: "decoration", variant: "server_rack", position: [43, 0, 53.4] },
+    { id: "campaign_server_rack_row5_8", type: "decoration", variant: "server_rack", position: [43, 0, 54.65] },
+    // { id: "campaign_server_rack_row5_9", type: "decoration", variant: "server_rack", position: [43, 0, 55.9] },
+
+        // server rack row 6
+    { id: "campaign_server_rack_row6_1", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 45.9] },
+    { id: "campaign_server_rack_row6_2", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 47.15] },
+    { id: "campaign_server_rack_row6_3", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 48.4] },
+    { id: "campaign_server_rack_row6_4", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 49.65] },
+    { id: "campaign_server_rack_row6_5", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 50.9] },
+    { id: "campaign_server_rack_row6_6", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 52.15] },
+    { id: "campaign_server_rack_row6_7", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 53.4] },
+    { id: "campaign_server_rack_row6_8", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 54.65] },
+    // { id: "campaign_server_rack_row6_9", type: "decoration", variant: "server_rack", rotationY: 180, position: [40, 0, 55.9] },
+
+    // server rack row 7
+    { id: "campaign_server_rack_row7_1", type: "decoration", variant: "server_rack", position: [39.2, 0, 45.9] },
+    { id: "campaign_server_rack_row7_2", type: "decoration", variant: "server_rack", position: [39.2, 0, 47.15] },
+    { id: "campaign_server_rack_row7_3", type: "decoration", variant: "server_rack", position: [39.2, 0, 48.4] },
+    { id: "campaign_server_rack_row7_4", type: "decoration", variant: "server_rack", position: [39.2, 0, 49.65] },
+    { id: "campaign_server_rack_row7_5", type: "decoration", variant: "server_rack", position: [39.2, 0, 50.9] },
+    { id: "campaign_server_rack_row7_6", type: "decoration", variant: "server_rack", position: [39.2, 0, 52.15] },
+    { id: "campaign_server_rack_row7_7", type: "decoration", variant: "server_rack", position: [39.2, 0, 53.4] },
+    { id: "campaign_server_rack_row7_8", type: "decoration", variant: "server_rack", position: [39.2, 0, 54.65] },
+    // { id: "campaign_server_rack_row7_9", type: "decoration", variant: "server_rack", position: [39.2, 0, 55.9] },
+
   ],
   },
 ];

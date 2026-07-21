@@ -50,10 +50,16 @@ export interface MapEntity {
     // "decoration" variant has a zero-interactivity contract this no
     // longer fits, mirroring why "door_prop" stayed a decoration (still
     // zero interactivity) while this didn't.
-    | "tape_roll"; // Data Center polish: mirrors "computer_part"'s exact
+    | "tape_roll" // Data Center polish: mirrors "computer_part"'s exact
     // shape (interactable, idempotent pickup that hides the mesh, resettable,
     // registered in a lookup map by id) -- gates a "coffee_cup" the same way
     // computer_part already gates a "terminal", see MapEntity.requiresItem.
+    | "fingerprint_lock"; // Data Center exit follow-up: deliberately NOT
+    // built on "password_lock" -- this has no text-input overlay at all,
+    // just a direct world interact with two outcomes (locked/unlocked),
+    // gated by a shared MapEntitySystem-internal fingerprintCopied flag
+    // rather than anything checked against a TerminalDef. linkedTo is the
+    // door it opens (same convention as "button"/"password_lock").
   position: [number, number, number];
   linkedTo?: string; // a related entity's id (e.g. button -> door), or for
   // "wall_buy", a Weapon id in content/weapons.ts, or for "terminal", a
