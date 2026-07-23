@@ -1,4 +1,5 @@
 import type { MapDef } from "../types";
+import { RECORDS_HASH_SIGN_TEXT } from "./terminals";
 
 // test-grid: interior pillar at row 4, col 2 doubles as a line-of-sight
 // blocker for testing InteractSystem: it originally sat directly between the
@@ -490,6 +491,54 @@ export const MAPS: MapDef[] = [
       type: "fingerprint_lock",
       linkedTo: "campaign_door_6",
       position: [42, 1.2, 38],
+    },
+    // records-room entity placement follow-up: rough positions only, the
+    // player will rearrange all of this by hand afterward (same "confirmed
+    // open floor, exact placement doesn't matter" discipline as the Data
+    // Center furnishing below) -- inside the room north of campaign_door_6
+    // (rows 13-17/cols 19-25 in this map's own grid, world x 38-50/z 26-34),
+    // the very room campaign_door_6's own "leading onward to whatever comes
+    // next" comment already anticipated. All five positions confirmed open
+    // floor via a script-parsed grid check, not assumed. campaign_lock_6
+    // checks records_terminal's own password (the john-cracked plaintext,
+    // content/terminals.ts's RECORDS_TARGET_PLAINTEXT) via the default
+    // secretField: "password" -- no secretField override needed.
+    {
+      id: "campaign_desk_5",
+      type: "decoration",
+      variant: "black_desk",
+      position: [45, 0, 32],
+    },
+    {
+      id: "campaign_terminal_7",
+      type: "terminal",
+      linkedTo: "records_terminal",
+      rotationY: 180,
+      position: [45, 1.1, 32],
+    },
+    {
+      id: "campaign_sign_2",
+      type: "decoration",
+      variant: "sign",
+      text: RECORDS_HASH_SIGN_TEXT,
+      rotationY: 0,
+      position: [43, 1.3, 30],
+    },
+    {
+      id: "campaign_door_7",
+      type: "door",
+      position: [47, 1.5, 30],
+    },
+    // Positioned just south-east of the door, on the room-interior side the
+    // player is already standing on when arriving via campaign_door_6 --
+    // never trapped behind its own door, same discipline as every other
+    // lock in this file.
+    {
+      id: "campaign_lock_6",
+      type: "password_lock",
+      linkedTo: "campaign_door_7",
+      terminalId: "records_terminal",
+      position: [46.6, 1.2, 30.6],
     },
     // Data Center placeholder furnishing: rough placements only, the
     // player will rearrange all of this by hand afterward -- exact

@@ -17,6 +17,19 @@ export const RECORDS_TARGET_HASH =
   "5dbf877e8070fc9b6fa1f479bbd69cc4087ce4b5c432c91326ec712c712a361e";
 export const RECORDS_TARGET_PLAINTEXT = "731894";
 
+// records-room entity placement follow-up: the physical hash-length
+// reference sign this room's own puzzle text described (companion content
+// to records_terminal, given alongside it but not actually materialized as
+// an exported constant until this follow-up placed the entity that needed
+// it) -- content/maps.ts's campaign_sign_2 renders this via the "sign"
+// decoration variant's existing createSignDecoration()/MapEntity.text.
+export const RECORDS_HASH_SIGN_TEXT = `MD5 = 32 characters
+SHA-1 = 40 characters
+SHA-256 = 64 characters
+SHA-512 = 128 characters
+
+Put "raw-" in front of the type when cracking.`;
+
 export const TERMINALS: TerminalDef[] = [
   {
     id: "room1_terminal",
@@ -196,6 +209,12 @@ PS. Your subject ID is NIGHTFALL-07.
   // this file already uses -- see ui/Terminal.ts's findCopyValue().
   {
     id: "records_terminal",
+    // records-room entity placement follow-up: the room's own door code --
+    // the john-cracked plaintext (RECORDS_TARGET_PLAINTEXT), not a second,
+    // independently-chosen password. This is what campaign_lock_6's
+    // default secretField: "password" actually checks the player's input
+    // against; nothing hardcodes "731894" a second time anywhere.
+    password: RECORDS_TARGET_PLAINTEXT,
     unlockedCommands: ["grep", "john"],
     copyableSecrets: [RECORDS_TARGET_HASH],
     root: {
