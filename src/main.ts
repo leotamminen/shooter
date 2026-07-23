@@ -29,8 +29,13 @@ import { WEAPONS } from "./content/weapons";
 import { ENEMIES } from "./content/enemies";
 import { SOUNDS } from "./content/sounds";
 import { MAPS } from "./content/maps";
-import { TERMINALS } from "./content/terminals";
-import { BLOCKED_COMMANDS, RESTRICTED_COMMANDS, CORE_COMMANDS } from "./content/terminalCommands";
+import { TERMINALS, RECORDS_TARGET_HASH, RECORDS_TARGET_PLAINTEXT } from "./content/terminals";
+import {
+  BLOCKED_COMMANDS,
+  RESTRICTED_COMMANDS,
+  RESTRICTED_COMMAND_USAGE,
+  CORE_COMMANDS,
+} from "./content/terminalCommands";
 
 // Everything that used to run at module load now runs once, here, only
 // after the main menu's Start button fires with the player's choices.
@@ -101,12 +106,22 @@ function startGame(selections: GameSelections): void {
     BLOCKED_COMMANDS,
     RESTRICTED_COMMANDS,
     CORE_COMMANDS,
+    // records_terminal puzzle follow-up: RESTRICTED_COMMAND_USAGE (john's
+    // in-fiction usage hint, shown by ui/Terminal.ts's runHelp() only when
+    // the current terminal actually unlocks the command it names) and this
+    // room's fixed hash/plaintext pair, injected the same "define once in
+    // content/, pass in as data" way as everything else in this
+    // constructor call -- ui/Terminal.ts never imports content/terminals.ts
+    // directly.
+    RESTRICTED_COMMAND_USAGE,
+    RECORDS_TARGET_HASH,
+    RECORDS_TARGET_PLAINTEXT,
     // Data Center exit follow-up: narrow by construction -- only
     // workstation_terminal's note.txt is requiresRoot anywhere in
     // content/terminals.ts today, so this only ever fires for that one
     // file. The filename check here is an extra, explicit layer of
     // narrowness on top of that (see ui/Terminal.ts's own comment).
-    (filename) => {
+    (filename: string) => {
       if (filename === "note.txt") campaign.onNoteRead();
     },
   );

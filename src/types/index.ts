@@ -227,6 +227,12 @@ export interface TerminalFile {
   // framing, but at the individual-file level rather than the command
   // level -- the file itself is the gated resource, not any particular
   // command used to read it.
+  isBinary?: boolean; // records_terminal puzzle follow-up: when true,
+  // ui/Terminal.ts's runCat() prints "cat: <name>: cannot display binary
+  // file" instead of the file's actual content, regardless of requiresRoot
+  // -- mimics real cat's behavior on a non-text file. content is still
+  // required by the interface but is never actually shown for a binary
+  // file, so it's a harmless placeholder for these.
 }
 
 export interface TerminalDirectory {
@@ -272,6 +278,16 @@ export interface TerminalDef {
   // denied." regardless of what was typed, before ever reaching sudo/
   // dispatch(). Every terminal that doesn't set this behaves exactly as
   // before -- opt-in, same shape as connectMessage's own default-off field.
+  copyableSecrets?: string[]; // records_terminal puzzle follow-up: extra
+  // substrings (beyond password, which ui/Terminal.ts's runCat()/runGrep()
+  // already check for) that get a copy button when found in cat/grep
+  // output. Generalizes the same content.includes(...)-style detection
+  // password already used, for a terminal whose reveal target isn't a
+  // door-lock password at all (records_terminal's is a crackable hash
+  // embedded in a 100-row roster file, not a secret typed into a
+  // password_lock) -- password's own narrower role is completely
+  // unchanged, this is an additional list checked alongside it, not a
+  // replacement. Undefined for every terminal before this follow-up.
   root: TerminalDirectory;
 }
 

@@ -7,9 +7,24 @@ export const BLOCKED_COMMANDS = ["touch", "mkdir", "rm", "cp", "mv", "rmdir", "c
 // specific command in via TerminalDef.unlockedCommands -- the mechanism a
 // future checkpoint will use to make e.g. "ping" actually work in one
 // particular room's terminal without touching ui/Terminal.ts or this
-// file's BLOCKED_COMMANDS at all. No real behavior is implemented for any
-// of these yet even when unlocked -- see CLAUDE.md's future mechanics.
-export const RESTRICTED_COMMANDS = ["ping", "ifconfig", "grep", "nmap"];
+// file's BLOCKED_COMMANDS at all. records_terminal puzzle follow-up: "grep"
+// (unused since checkpoint 19) and the new "john" both get real behavior
+// now, in ui/Terminal.ts's runGrep()/runJohn() -- "ping"/"ifconfig"/"nmap"
+// remain inert even when unlocked, since nothing unlocks them yet.
+export const RESTRICTED_COMMANDS = ["ping", "ifconfig", "grep", "nmap", "john"];
+
+// records_terminal puzzle follow-up: a narrow, deliberate exception to
+// help's own "don't list restricted/blocked commands" rule (checkpoint 19) --
+// john's syntax has no real-world command a player could already know, so
+// without some in-game hint the puzzle would be unsolvable rather than
+// merely undiscovered, unlike grep (a real, widely-known command whose
+// syntax needs no in-game teaching). Only an entry for a command the
+// CURRENT terminal's own unlockedCommands actually includes is ever shown
+// (see ui/Terminal.ts's runHelp()) -- most restricted commands, including
+// grep, deliberately have no entry here at all.
+export const RESTRICTED_COMMAND_USAGE: Record<string, string> = {
+  john: "john --format=raw-<hash-type> <hash>",
+};
 
 // The commands ui/Terminal.ts actually implements -- used to drive help's
 // output so a future core command addition shows up there automatically,

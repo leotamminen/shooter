@@ -50,6 +50,17 @@ function randomFrom<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+// records_terminal puzzle follow-up: objective hash-length facts (not
+// per-puzzle content, so this stays a module constant here rather than
+// injected data), keyed by the format name WITHOUT a raw- prefix -- runJohn()
+// strips that prefix before looking a type up here.
+const HASH_FORMAT_LENGTHS: Record<string, number> = {
+  md5: 32,
+  sha1: 40,
+  sha256: 64,
+  sha512: 128,
+};
+
 // A DOM overlay for the checkpoint-17 hacking-terminal minigame: a tiny
 // fake filesystem (TerminalDef.root) navigable with ls/cd/cat, the same
 // plain-HTML/inline-style technique as ui/HUD.ts/ui/MainMenu.ts. Kept
@@ -87,6 +98,17 @@ export class Terminal {
   private readonly blockedCommands: string[];
   private readonly restrictedCommands: string[];
   private readonly coreCommands: { name: string; description: string }[];
+  // records_terminal puzzle follow-up: same injected-data shape as
+  // blockedCommands/restrictedCommands/coreCommands above -- content/
+  // terminalCommands.ts's RESTRICTED_COMMAND_USAGE, read by runHelp().
+  private readonly restrictedCommandUsage: Record<string, string>;
+  // records_terminal puzzle follow-up: this specific room's fixed
+  // hash/plaintext pair, injected the same way campaign.getVaultPin is --
+  // ui/Terminal.ts never imports content/terminals.ts directly, matching
+  // this file's established "pure presentation layer over injected data"
+  // rule.
+  private readonly johnTargetHash: string;
+  private readonly johnTargetPlaintext: string;
 
   private terminalDef: TerminalDef | null = null;
   private pathStack: TerminalDirectory[] = [];
@@ -104,6 +126,9 @@ export class Terminal {
     blockedCommands: string[],
     restrictedCommands: string[],
     coreCommands: { name: string; description: string }[],
+    restrictedCommandUsage: Record<string, string>,
+    johnTargetHash: string,
+    johnTargetPlaintext: string,
     // Data Center exit follow-up: reintroduced after the Data Center
     // entrance follow-up removed the original onFileRead/openNoteDoor pair
     // (which opened campaign_door_5 as a narrative consequence of reading
@@ -125,6 +150,9 @@ export class Terminal {
     this.blockedCommands = blockedCommands;
     this.restrictedCommands = restrictedCommands;
     this.coreCommands = coreCommands;
+    this.restrictedCommandUsage = restrictedCommandUsage;
+    this.johnTargetHash = johnTargetHash;
+    this.johnTargetPlaintext = johnTargetPlaintext;
     this.onFileRead = onFileRead;
 
     // Checkpoint 18 bugfix: root is now a full-screen backdrop (mirrors
@@ -380,11 +408,18 @@ export class Terminal {
             this.appendLine(`${command}: Permission denied`);
             break;
           }
-          // No functional handler exists for any restricted command yet --
-          // unlocked or not, this checkpoint always denies. The unlock
-          // check above is wired and read now so a future checkpoint only
-          // needs to add a real handler branch here, not touch the unlock
-          // plumbing.
+          // records_terminal puzzle follow-up: grep/john are the first two
+          // restricted commands to get real behavior once unlocked --
+          // ping/ifconfig/nmap still fall through to the same
+          // always-denied line below, since nothing unlocks them yet.
+          if (command === "grep") {
+            this.runGrep(args);
+            break;
+          }
+          if (command === "john") {
+            this.runJohn(args);
+            break;
+          }
           this.appendLine(`${command}: Permission denied`);
           break;
         }
@@ -453,15 +488,20 @@ export class Terminal {
       this.appendLine(`cat: ${name}: Permission denied`);
       return;
     }
+    // records_terminal puzzle follow-up: a small set of decoy files
+    // simulate real binary files cat can't meaningfully display -- mirrors
+    // real cat's own behavior on a non-text file, a realistic dead end with
+    // no actual content to leak either way.
+    if (file.isBinary) {
+      this.appendLine(`cat: ${name}: cannot display binary file`);
+      return;
+    }
     // Checkpoint 19: substituted against the LIVE current pin, never a
     // snapshot -- this Terminal instance persists across a run reset,
     // which regenerates Campaign's vault pin, so reading getVaultPin()
     // fresh on every cat is what keeps this correct after a respawn.
     const content = file.content.replaceAll("{{VAULT_PIN}}", this.getVaultPin());
-    const password = this.terminalDef?.password;
-    const copyValue =
-      password !== undefined && content.includes(password) ? password : undefined;
-    this.appendLine(content, copyValue);
+    this.appendLine(content, this.findCopyValue(content));
 
     // Narrowly-scoped hook: fires only for a successful, permission-granted
     // read of a requiresRoot file -- see the constructor's own comment for
@@ -470,6 +510,101 @@ export class Terminal {
     if (file.requiresRoot) {
       this.onFileRead?.(name);
     }
+  }
+
+  // records_terminal puzzle follow-up: generalizes runCat()'s original
+  // "does this content contain the current terminalDef's password"
+  // detection into a small list of candidate secrets, since a terminal's
+  // reveal target isn't always a door-lock password (records_terminal's is
+  // a crackable hash, not something typed into a password_lock).
+  // terminalDef.password's own narrower role (checked by ui/PasswordLock.ts)
+  // is completely unchanged -- this only widens what runCat()/runGrep() look
+  // for when deciding whether to attach a copy button, and only ever
+  // returns the specific matched substring (never the whole line/content)
+  // as the copy value, the same as the original password-only check always
+  // did.
+  private findCopyValue(content: string): string | undefined {
+    const candidates = [
+      ...(this.terminalDef?.password !== undefined ? [this.terminalDef.password] : []),
+      ...(this.terminalDef?.copyableSecrets ?? []),
+    ];
+    return candidates.find((candidate) => content.includes(candidate));
+  }
+
+  // records_terminal puzzle follow-up: grep's first real activation since
+  // checkpoint 19 (previously recognized-but-always-denied, like every
+  // other RESTRICTED_COMMANDS entry). Real grep semantics, scoped to what
+  // this puzzle needs: case-sensitive substring match per line, printing
+  // only matching lines -- no output at all on zero matches, matching real
+  // grep's own silent-exit-1 behavior rather than inventing a "no matches"
+  // message no other command here has an equivalent of. Each matching
+  // line gets the same findCopyValue() treatment runCat() uses, so a
+  // matched row containing a copyable secret gets a copy button exactly
+  // like cat-ing the whole file would, but scoped to just that one line.
+  private runGrep(args: string[]): void {
+    const [pattern, name] = args;
+    if (!pattern || !name) {
+      this.appendLine("grep: usage: grep <pattern> <file>");
+      return;
+    }
+    const file = this.currentDir.files.find((f) => f.name === name);
+    if (!file) {
+      this.appendLine(`grep: ${name}: No such file or directory`);
+      return;
+    }
+    if (file.isBinary) {
+      // Real grep can still match inside a binary file (printing a
+      // "binary file matches" notice, never the content) -- this project's
+      // binary decoys have no matchable content anyway, so this is
+      // realistic without needing any real search against them.
+      this.appendLine(`grep: ${name}: binary file matches`);
+      return;
+    }
+    const content = file.content.replaceAll("{{VAULT_PIN}}", this.getVaultPin());
+    const matches = content.split("\n").filter((line) => line.includes(pattern));
+    for (const line of matches) {
+      this.appendLine(line, this.findCopyValue(line));
+    }
+  }
+
+  // records_terminal puzzle follow-up: john's hash-crack simulation --
+  // fixed content for this one room's door code, not a generic
+  // crackable-hash system (no wordlist, no timing simulation). Format
+  // parsing is deliberately permissive: the raw- prefix taught by the
+  // room's own hash-length sign is accepted but not required, and the type
+  // itself is matched case-insensitively, mirroring this project's existing
+  // "teach the real form, accept reasonable variants" precedent (the
+  // command-dispatch case-insensitivity from the Room 3 puzzle).
+  private runJohn(args: string[]): void {
+    const formatArg = args.find((arg) => arg.startsWith("--format="));
+    const hash = args.find((arg) => !arg.startsWith("--format="));
+    if (!formatArg || !hash) {
+      this.appendLine("john: usage: john --format=<type> <hash>");
+      return;
+    }
+
+    const rawType = formatArg.slice("--format=".length).toLowerCase();
+    const normalizedType = rawType.startsWith("raw-") ? rawType.slice(4) : rawType;
+    const expectedLength = HASH_FORMAT_LENGTHS[normalizedType];
+    if (expectedLength === undefined) {
+      this.appendLine(`john: unknown hash format: ${rawType}`);
+      return;
+    }
+
+    if (hash.length !== expectedLength) {
+      this.appendLine(
+        `Error: hash length mismatch for format raw-${normalizedType} (expected ${expectedLength}, got ${hash.length})`,
+      );
+      return;
+    }
+
+    if (hash.toLowerCase() === this.johnTargetHash.toLowerCase()) {
+      this.appendLine(`${hash}:${this.johnTargetPlaintext}`, this.johnTargetPlaintext);
+      this.appendLine("1 password hash cracked, 0 left");
+      return;
+    }
+
+    this.appendLine("0 password hashes cracked, 1 left");
   }
 
   // Checkpoint 19 correction: whoami no longer opens anything by itself
@@ -515,6 +650,21 @@ export class Terminal {
     this.appendLine("bash 5.2.37 (simulated)");
     for (const command of this.coreCommands) {
       this.appendLine(`${command.name} - ${command.description}`);
+    }
+    // records_terminal puzzle follow-up: a narrow, deliberate exception --
+    // a restricted command CAN show its own usage line here, but only when
+    // (a) this specific terminal's own unlockedCommands actually includes
+    // it, and (b) content/terminalCommands.ts's RESTRICTED_COMMAND_USAGE
+    // has an entry for it (today, only "john" does -- grep, despite being
+    // unlocked on this same terminal, has no entry and so prints nothing
+    // here, same as every other restricted command). Without this, john's
+    // exact syntax would have no in-game source at all, making the puzzle
+    // unsolvable rather than merely undiscovered -- unlike grep, a real,
+    // widely-known command that needs no in-fiction teaching.
+    const unlockedCommands = this.terminalDef?.unlockedCommands ?? [];
+    for (const command of unlockedCommands) {
+      const usage = this.restrictedCommandUsage[command];
+      if (usage) this.appendLine(usage);
     }
   }
 
