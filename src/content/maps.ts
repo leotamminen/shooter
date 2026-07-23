@@ -490,7 +490,7 @@ export const MAPS: MapDef[] = [
       id: "campaign_lock_5",
       type: "fingerprint_lock",
       linkedTo: "campaign_door_6",
-      position: [42, 1.2, 38],
+      position: [43.4, 1.2, 37],
     },
     // records-room entity placement follow-up: rough positions only, the
     // player will rearrange all of this by hand afterward (same "confirmed
@@ -527,7 +527,7 @@ export const MAPS: MapDef[] = [
     {
       id: "campaign_door_7",
       type: "door",
-      position: [47, 1.5, 30],
+      position: [48, 1.5, 24],
     },
     // Positioned just south-east of the door, on the room-interior side the
     // player is already standing on when arriving via campaign_door_6 --
@@ -538,7 +538,7 @@ export const MAPS: MapDef[] = [
       type: "password_lock",
       linkedTo: "campaign_door_7",
       terminalId: "records_terminal",
-      position: [46.6, 1.2, 30.6],
+      position: [49.4, 1.2, 24.9],
     },
     // Data Center placeholder furnishing: rough placements only, the
     // player will rearrange all of this by hand afterward -- exact
