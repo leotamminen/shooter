@@ -17,12 +17,17 @@ export const RESTRICTED_COMMANDS = ["ping", "ifconfig", "grep", "nmap", "john"];
 // help's own "don't list restricted/blocked commands" rule (checkpoint 19) --
 // john's syntax has no real-world command a player could already know, so
 // without some in-game hint the puzzle would be unsolvable rather than
-// merely undiscovered, unlike grep (a real, widely-known command whose
-// syntax needs no in-game teaching). Only an entry for a command the
-// CURRENT terminal's own unlockedCommands actually includes is ever shown
-// (see ui/Terminal.ts's runHelp()) -- most restricted commands, including
-// grep, deliberately have no entry here at all.
+// merely undiscovered. Only an entry for a command the CURRENT terminal's
+// own unlockedCommands actually includes is ever shown (see
+// ui/Terminal.ts's runHelp()) -- most restricted commands still have no
+// entry here at all. sign/help-hints follow-up: grep also gets an entry
+// now -- it's a real, widely-known command, but records_terminal's own
+// puzzle design leans on the player actually trying it, and a short
+// in-game syntax reminder is no more of a spoiler than john's own entry
+// already is (this doesn't reveal WHAT to search for, only the command's
+// shape).
 export const RESTRICTED_COMMAND_USAGE: Record<string, string> = {
+  grep: "grep <text> <filename>",
   john: "john --format=raw-<hash-type> <hash>",
 };
 

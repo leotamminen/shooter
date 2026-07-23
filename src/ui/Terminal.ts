@@ -50,6 +50,26 @@ function randomFrom<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+// Quoted-argument fix: a general tokenizer, not a grep-specific patch --
+// every command's arguments go through this, so any of them (not just
+// grep) benefits. Matches either a double-quoted run, a single-quoted run,
+// or a plain whitespace-delimited run, per call, stripping the surrounding
+// quote characters the same way a real shell would before the argument
+// ever reaches a command. Deliberately doesn't handle partial/adjacent
+// quoting (foo"bar baz") or escaped quotes inside a quoted run -- real
+// shells' full quoting rules are far more than this project's simulated
+// terminal has ever needed; "strip a matching pair of surrounding quotes"
+// is the one behavior actually requested and reproducible.
+function tokenize(input: string): string[] {
+  const tokens: string[] = [];
+  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(input)) !== null) {
+    tokens.push(match[1] ?? match[2] ?? match[3]);
+  }
+  return tokens;
+}
+
 // records_terminal puzzle follow-up: objective hash-length facts (not
 // per-puzzle content, so this stays a module constant here rather than
 // injected data), keyed by the format name WITHOUT a raw- prefix -- runJohn()
@@ -347,8 +367,11 @@ export class Terminal {
     // "Ls", "CAT .bash_history" all work) -- only the command token itself
     // is normalized, never filenames/arguments, matching real Unix (a
     // case-sensitive filesystem) and this global change applies to every
-    // terminal in the game, not just room3_terminal.
-    const [rawCommand, ...rest] = input.split(/\s+/);
+    // terminal in the game, not just room3_terminal. Quoted-argument fix:
+    // tokenize() (not a plain whitespace split) strips matching surrounding
+    // quotes from every token, so `grep "NIGHTFALL" .subjects` and
+    // `grep NIGHTFALL .subjects` parse identically.
+    const [rawCommand, ...rest] = tokenize(input);
     const command = rawCommand.toLowerCase();
 
     // Privilege escalation: "sudo" is a prefix, not a command of its own --

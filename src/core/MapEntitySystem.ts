@@ -106,15 +106,36 @@ const CHAIR_LEG_OFFSETS: [number, number][] = [
 // reuse the same plain board color. Same generated-CanvasTexture technique
 // as ComputerMesh.ts's screen (an offscreen <canvas>, drawn once, not
 // per-frame).
-const SIGN_WIDTH = 0.6;
-const SIGN_HEIGHT = 0.35;
+// Sign text-overflow fix: the board and its texture both grew (was 0.6x0.35
+// at 256x128) once a real multi-line sign (the records-room hash-length
+// reference, 6 lines counting the blank spacer) proved the original size --
+// sized against a single short line, "Not everything is visible." -- didn't
+// have real headroom even for that one-liner, let alone several lines.
+// Texture resolution grew in step with the physical board so text stays
+// crisp rather than stretched-blurry at the new, larger size. Aspect ratio
+// (~1.64:1) is kept close to the original (~1.71:1), not matched exactly --
+// nothing in this file depends on it being precise.
+const SIGN_WIDTH = 0.9;
+const SIGN_HEIGHT = 0.55;
 const SIGN_DEPTH = 0.04;
 const SIGN_BOARD_COLOR = 0x4a3a2a;
-const SIGN_TEXTURE_WIDTH = 256;
-const SIGN_TEXTURE_HEIGHT = 128;
+const SIGN_TEXTURE_WIDTH = 512;
+const SIGN_TEXTURE_HEIGHT = 320;
 const SIGN_BACKGROUND_COLOR = "#1a1a1a";
 const SIGN_TEXT_COLOR = "#e8e4da";
-const SIGN_FONT = "16px monospace";
+const SIGN_FONT_FAMILY = "monospace";
+// Auto-fit, not a fixed size: createSignTexture() below shrinks from
+// SIGN_MAX_FONT_SIZE down to whatever actually fits both the line count
+// (vertically) and the longest line's real measured width (horizontally,
+// via ctx.measureText -- not a guessed average-char-width formula), stopping
+// at SIGN_MIN_FONT_SIZE regardless so text degrades toward "small but still
+// legible" rather than vanishing -- general behavior for any future sign's
+// text, short or long, not a one-off tuned for this specific wording.
+const SIGN_MAX_FONT_SIZE = 32;
+const SIGN_MIN_FONT_SIZE = 10;
+const SIGN_LINE_HEIGHT_SCALE = 1.25; // line pitch as a multiple of font size
+const SIGN_HORIZONTAL_MARGIN = 24; // px of the texture width reserved on each side
+const SIGN_VERTICAL_MARGIN = 16; // px of the texture height reserved top+bottom
 const TERMINAL_INTERACT_PROMPT = "Press E to use terminal";
 const TERMINAL_GATED_MESSAGE = "The screen is dark. It needs power.";
 const TERMINAL_BOOTING_MESSAGE = "Booting...";
@@ -1428,11 +1449,45 @@ export class MapEntitySystem {
     this.group.add(mesh);
   }
 
+  // Text-overflow fix: finds the largest font size (between
+  // SIGN_MAX_FONT_SIZE and SIGN_MIN_FONT_SIZE) at which every line -- split
+  // on "\n", the original single fillText() call never handled multi-line
+  // text at all, since canvas fillText() doesn't interpret embedded
+  // newlines -- fits both vertically (line count x line pitch within the
+  // texture's own height) and horizontally (the single longest line's real
+  // ctx.measureText() width within the texture's own width). Real measured
+  // width, not an estimated average-character-width formula, is what makes
+  // this correct for any text/font combination, not just the wording this
+  // fix was written against.
+  private computeSignFontSize(ctx: CanvasRenderingContext2D, lines: string[]): number {
+    const availableWidth = SIGN_TEXTURE_WIDTH - SIGN_HORIZONTAL_MARGIN * 2;
+    const availableHeight = SIGN_TEXTURE_HEIGHT - SIGN_VERTICAL_MARGIN * 2;
+    const longestLine = lines.reduce((a, b) => (b.length > a.length ? b : a), "");
+
+    // Vertical fit is a direct formula (line pitch scales linearly with font
+    // size); horizontal fit needs real measurement, so it's checked by
+    // shrinking one step at a time from whatever the vertical constraint
+    // already allows.
+    let fontSize = Math.min(
+      SIGN_MAX_FONT_SIZE,
+      availableHeight / (lines.length * SIGN_LINE_HEIGHT_SCALE),
+    );
+
+    while (fontSize > SIGN_MIN_FONT_SIZE) {
+      ctx.font = `${fontSize}px ${SIGN_FONT_FAMILY}`;
+      if (ctx.measureText(longestLine).width <= availableWidth) break;
+      fontSize -= 1;
+    }
+
+    return Math.max(fontSize, SIGN_MIN_FONT_SIZE);
+  }
+
   // Drawn once onto an offscreen <canvas>, not redrawn per frame -- same
   // "no animation loop, kept cheap" approach as ComputerMesh.ts's
-  // createScreenTexture(). Text is centered both axes via
-  // CanvasRenderingContext2D's own textAlign/textBaseline rather than
-  // hand-computed offsets.
+  // createScreenTexture(). Each line is centered horizontally via
+  // CanvasRenderingContext2D's own textAlign (unchanged from before this
+  // fix); the whole block of lines is centered vertically by hand, since
+  // textBaseline: "middle" alone only centers a single line.
   private createSignTexture(text: string): THREE.CanvasTexture {
     const canvas = document.createElement("canvas");
     canvas.width = SIGN_TEXTURE_WIDTH;
@@ -1445,11 +1500,20 @@ export class MapEntitySystem {
     ctx.fillStyle = SIGN_BACKGROUND_COLOR;
     ctx.fillRect(0, 0, SIGN_TEXTURE_WIDTH, SIGN_TEXTURE_HEIGHT);
 
+    const lines = text.split("\n");
+    const fontSize = this.computeSignFontSize(ctx, lines);
+    const lineHeight = fontSize * SIGN_LINE_HEIGHT_SCALE;
+
     ctx.fillStyle = SIGN_TEXT_COLOR;
-    ctx.font = SIGN_FONT;
+    ctx.font = `${fontSize}px ${SIGN_FONT_FAMILY}`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, SIGN_TEXTURE_WIDTH / 2, SIGN_TEXTURE_HEIGHT / 2);
+
+    const blockHeight = lineHeight * lines.length;
+    const firstLineY = SIGN_TEXTURE_HEIGHT / 2 - blockHeight / 2 + lineHeight / 2;
+    lines.forEach((line, index) => {
+      ctx.fillText(line, SIGN_TEXTURE_WIDTH / 2, firstLineY + index * lineHeight);
+    });
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
