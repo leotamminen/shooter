@@ -9,6 +9,25 @@ const MOVE_SPEED = 4; // units per second
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
 const COLLISION_PASSES = 3;
 
+// Mouse-look constants, matching PointerLockControls' own defaults exactly
+// (0.002 sensitivity, +-90 degree pitch clamp) -- this class replicates that
+// library's rotation math itself rather than relying on its built-in
+// mousemove handler, see the constructor's own comment for why.
+const MOUSE_SENSITIVITY = 0.002;
+const MAX_PITCH = Math.PI / 2;
+// Camera-stutter fix: clamps each mousemove event's raw movementX/movementY
+// before it's applied to rotation. Confirmed via a captured log from real
+// play (not a guess) -- an isolated event reported movementX: 301,
+// movementY: 60 with pointer lock continuously engaged the whole time (no
+// nearby pointerlockchange), against a normal 1-14px baseline for every
+// other event in the same window. This is a known, accepted characteristic
+// of the Pointer Lock API (occasional coalesced/oversized deltas), not a
+// bug in any of our own rotation-affecting systems -- see CLAUDE.md's
+// decisions log. 50 leaves comfortable headroom above the observed normal
+// baseline (topping out around 14) while still being far below the
+// confirmed anomalous spike (301).
+const MAX_MOUSE_DELTA = 50;
+
 interface MoveState {
   forward: boolean;
   backward: boolean;
@@ -38,6 +57,8 @@ export class PlayerController {
 
   private readonly camera: THREE.PerspectiveCamera;
   private readonly gameState: GameState;
+  private readonly domElement: HTMLElement;
+  private readonly euler = new THREE.Euler(0, 0, 0, "YXZ");
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -46,12 +67,54 @@ export class PlayerController {
   ) {
     this.camera = camera;
     this.gameState = gameState;
+    this.domElement = domElement;
     this.controls = new PointerLockControls(camera, domElement);
+    // Camera-stutter fix: PointerLockControls' own built-in mousemove
+    // listener (registered by its constructor) applies event.movementX/Y to
+    // camera rotation completely raw, with no way to clamp an anomalous
+    // single-event spike before it's applied. disconnect() removes that
+    // listener (and its pointerlockchange/pointerlockerror ones, both
+    // unused elsewhere in this codebase -- confirmed nothing reads
+    // controls.isLocked or listens for controls' own dispatched
+    // lock/unlock/change events; gameState.paused is driven by main.ts's
+    // own separate pointerlockchange listener) so handleMouseMove below --
+    // replicating the exact same rotation math, just with clamped input --
+    // is the only thing ever touching camera rotation. .lock()/.unlock()
+    // themselves are untouched by disconnect() (they call
+    // requestPointerLock()/exitPointerLock() directly, not through the
+    // connect/disconnect-managed listeners), so every existing
+    // playerController.controls.lock()/.unlock() call site elsewhere in
+    // this codebase keeps working exactly as before.
+    this.controls.disconnect();
     this.camera.position.set(0, EYE_HEIGHT, 0);
 
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
+    document.addEventListener("mousemove", this.handleMouseMove);
   }
+
+  // Replicates PointerLockControls' own onMouseMove exactly (same 0.002
+  // sensitivity, same YXZ-order Euler, same +-90 degree pitch clamp -- this
+  // project never customizes pointerSpeed/minPolarAngle/maxPolarAngle
+  // anywhere, confirmed via a repo-wide search, so replicating the library's
+  // hardcoded defaults here is not a behavior change), with one addition:
+  // each event's raw movementX/movementY is clamped to +-MAX_MOUSE_DELTA
+  // before use. Only engaged while pointer lock is actually held by this
+  // element -- checked directly against document.pointerLockElement, not a
+  // cached flag, so this can never go stale the way a disconnected
+  // library's own isLocked field would.
+  private readonly handleMouseMove = (event: MouseEvent): void => {
+    if (document.pointerLockElement !== this.domElement) return;
+
+    const movementX = THREE.MathUtils.clamp(event.movementX, -MAX_MOUSE_DELTA, MAX_MOUSE_DELTA);
+    const movementY = THREE.MathUtils.clamp(event.movementY, -MAX_MOUSE_DELTA, MAX_MOUSE_DELTA);
+
+    this.euler.setFromQuaternion(this.camera.quaternion);
+    this.euler.y -= movementX * MOUSE_SENSITIVITY;
+    this.euler.x -= movementY * MOUSE_SENSITIVITY;
+    this.euler.x = THREE.MathUtils.clamp(this.euler.x, -MAX_PITCH, MAX_PITCH);
+    this.camera.quaternion.setFromEuler(this.euler);
+  };
 
   setWallBoxes(wallBoxes: THREE.Box3[]): void {
     this.wallBoxes = wallBoxes;
