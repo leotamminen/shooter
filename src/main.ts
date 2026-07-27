@@ -27,6 +27,7 @@ import { GameState } from "./state/GameState";
 import { findById } from "./core/utils/Lookup";
 import { WEAPONS } from "./content/weapons";
 import { ENEMIES } from "./content/enemies";
+import { GUARDS } from "./content/guards";
 import { SOUNDS } from "./content/sounds";
 import { MAPS } from "./content/maps";
 import { TERMINALS, RECORDS_TARGET_HASH, RECORDS_TARGET_PLAINTEXT } from "./content/terminals";
@@ -86,6 +87,15 @@ function startGame(selections: GameSelections): void {
   const raycastRegistry = new RaycastRegistry();
   const audioSystem = new AudioSystem(sceneManager.camera);
 
+  // Pathfinding+Guard follow-up: also moved up from its original later
+  // position (still where loadMap()/getSpawnPosition() actually consume it,
+  // below) -- depends only on MAPS/selections.mapId, both already available
+  // at the top of this function, so bringing it forward is side-effect-free
+  // the same way raycastRegistry/audioSystem's own move already was.
+  // Campaign's constructor (right below) now needs mapDef.grid for
+  // GuardAI's pathfinding.
+  const mapDef = findById(MAPS, selections.mapId);
+
   // Checkpoint 17: constructed unconditionally here, before mapEntitySystem
   // — the same "always construct, branch on usage" pattern already used for
   // weaponSystem/mapEntitySystem (every run gets one regardless of mode).
@@ -111,6 +121,11 @@ function startGame(selections: GameSelections): void {
     playerState,
     raycastRegistry,
     findById(ENEMIES, "zombie"),
+    // Pathfinding+Guard follow-up: the base GuardDef and the active map's
+    // own grid, injected the same "define once in content/, resolve once
+    // in main.ts, pass in as data" way as enemyDef above.
+    findById(GUARDS, "guard"),
+    mapDef.grid,
   );
 
   // Checkpoint 17: constructed before mapEntitySystem so its open() methods
@@ -164,7 +179,9 @@ function startGame(selections: GameSelections): void {
   // this function now, alongside audioSystem -- see the M1911+alarm
   // follow-up comment there.)
 
-  const mapDef = findById(MAPS, selections.mapId);
+  // mapDef itself is resolved further up this function now, alongside
+  // raycastRegistry/audioSystem -- see the Pathfinding+Guard follow-up
+  // comment there.
   const map = loadMap(mapDef.grid, raycastRegistry);
   sceneManager.scene.add(map.group);
   // setWallBoxes() itself moved below, after mapEntitySystem is constructed
@@ -358,7 +375,19 @@ function startGame(selections: GameSelections): void {
     // [number,number,number][] positions into THREE.Vector3 instances here
     // (main.ts is the composition root; modes/Campaign.ts's spawnEnemies()
     // takes real Vector3s, matching ZombieSurvival's own spawnPoints shape).
-    (positions) => campaign.spawnEnemies(positions.map((p) => new THREE.Vector3(...p))),
+    // Pathfinding+Guard follow-up: branches on the entity's own resolved
+    // enemyType (defaulted to "zombie" by MapEntitySystem.ts's
+    // createAlarmButton() before it ever reaches this callback) to call
+    // spawnGuards() instead of spawnEnemies() -- MapEntitySystem itself
+    // has no idea either method exists.
+    (positions, enemyType) => {
+      const vectors = positions.map((p) => new THREE.Vector3(...p));
+      if (enemyType === "guard") {
+        campaign.spawnGuards(vectors);
+      } else {
+        campaign.spawnEnemies(vectors);
+      }
+    },
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);

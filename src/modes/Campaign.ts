@@ -2,11 +2,12 @@ import * as THREE from "three";
 import type { GameMode } from "./GameMode";
 import type { RunManager } from "../core/RunManager";
 import { EnemyAI } from "../core/EnemyAI";
+import { GuardAI } from "../core/GuardAI";
 import type { AudioSystem } from "../core/AudioSystem";
 import type { PlayerState } from "../core/PlayerState";
 import type { RaycastRegistry } from "../core/RaycastRegistry";
 import type { GameState } from "../state/GameState";
-import type { EnemyDef } from "../types";
+import type { EnemyDef, GuardDef } from "../types";
 import { generateVaultPin } from "../core/utils/RandomPin";
 
 type CampaignStage = "find_password" | "power_terminal" | "unlock_data_center" | "complete";
@@ -38,6 +39,12 @@ export class Campaign implements GameMode {
   // just accumulates for the life of the run and is cleared wholesale on
   // reset.
   private activeEnemies: EnemyAI[] = [];
+  // Pathfinding+Guard follow-up: a second, parallel accumulator, the exact
+  // same "grows for the life of the run, wiped wholesale on reset" shape
+  // as activeEnemies above -- kept as its own list rather than folded into
+  // activeEnemies since EnemyAI/GuardAI are deliberately separate classes
+  // with no shared base type to store them under uniformly.
+  private activeGuards: GuardAI[] = [];
 
   private readonly scene: THREE.Scene;
   private readonly camera: THREE.Camera;
@@ -52,6 +59,15 @@ export class Campaign implements GameMode {
   // composition root that owns every content/ lookup) rather than this
   // file importing content/enemies.ts directly.
   private readonly enemyDef: EnemyDef;
+  // Pathfinding+Guard follow-up: the base GuardDef, injected the identical
+  // way -- see content/guards.ts's own single "guard" entry.
+  private readonly guardDef: GuardDef;
+  // Pathfinding+Guard follow-up: the active map's own wall/floor grid,
+  // needed by GuardAI's pathfinding (core/utils/Pathfinding.ts's
+  // findPath() operates directly on this same number[][] shape) -- not
+  // needed by spawnEnemies()/EnemyAI at all, only carried here for
+  // spawnGuards() to hand to each GuardAI instance it constructs.
+  private readonly grid: number[][];
 
   constructor(
     runManager: RunManager,
@@ -62,6 +78,8 @@ export class Campaign implements GameMode {
     playerState: PlayerState,
     raycastRegistry: RaycastRegistry,
     enemyDef: EnemyDef,
+    guardDef: GuardDef,
+    grid: number[][],
   ) {
     this.scene = scene;
     this.camera = camera;
@@ -70,6 +88,8 @@ export class Campaign implements GameMode {
     this.playerState = playerState;
     this.raycastRegistry = raycastRegistry;
     this.enemyDef = enemyDef;
+    this.guardDef = guardDef;
+    this.grid = grid;
     this.resetState();
     runManager.registerResettable(() => this.resetState());
   }
@@ -81,11 +101,15 @@ export class Campaign implements GameMode {
   // of sync. M1911+alarm follow-up: also destroys every active enemy and
   // clears the list, the same "wipe the board on a new run" behavior
   // ZombieSurvival.resetRun() already has for its own activeEnemies.
+  // Pathfinding+Guard follow-up: does the identical destroy-and-clear for
+  // activeGuards alongside activeEnemies.
   private resetState(): void {
     this.stage = "find_password";
     this.vaultPin = generateVaultPin();
     for (const enemy of this.activeEnemies) enemy.destroy();
     this.activeEnemies = [];
+    for (const guard of this.activeGuards) guard.destroy();
+    this.activeGuards = [];
   }
 
   start(): void {
@@ -99,6 +123,8 @@ export class Campaign implements GameMode {
     // as every frame before this follow-up, since activeEnemies stays
     // empty until spawnEnemies() is ever called.
     for (const enemy of this.activeEnemies) enemy.update();
+    // Pathfinding+Guard follow-up: identical treatment for activeGuards.
+    for (const guard of this.activeGuards) guard.update();
   }
 
   getStatusLine(): string {
@@ -180,6 +206,30 @@ export class Campaign implements GameMode {
         this.raycastRegistry,
       );
       this.activeEnemies.push(enemy);
+    });
+  }
+
+  // Pathfinding+Guard follow-up: the parallel spawnEnemies() for the new
+  // enemy type -- called by main.ts's alarm_button spawnEnemyWave callback
+  // when the triggering entity's enemyType is "guard" instead of the
+  // default "zombie". Same "base def's own plain stats, no round scaling"
+  // reasoning as spawnEnemies() above: Campaign has no round/wave concept
+  // for either enemy type to scale against.
+  spawnGuards(positions: THREE.Vector3[]): void {
+    positions.forEach((position, index) => {
+      const guard = new GuardAI(
+        `campaign-guard-${index}`,
+        this.guardDef,
+        position,
+        this.grid,
+        this.scene,
+        this.camera,
+        this.audioSystem,
+        this.gameState,
+        this.playerState,
+        this.raycastRegistry,
+      );
+      this.activeGuards.push(guard);
     });
   }
 

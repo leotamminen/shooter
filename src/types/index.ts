@@ -29,6 +29,25 @@ export interface EnemyDef {
   model?: string;
 }
 
+// Pathfinding+Guard follow-up: deliberately a separate interface from
+// EnemyDef, not a shared "Enemy" type with a pile of optional fields --
+// zombies and guards have different enough shapes (a guard has no melee
+// stats or growl sound at all; a zombie has no fire range/cooldown/miss
+// chance) that forcing one interface to cover both would mean every
+// consumer has to guess which optional fields actually apply to which
+// enemy type. See core/GuardAI.ts and content/guards.ts.
+export interface GuardDef {
+  id: string;
+  name: string;
+  health: number;
+  moveSpeed: number;
+  fireRange: number; // max distance it will attempt to shoot from
+  damage: number; // per hit -- deliberately low, this enemy should not be a major threat
+  fireCooldownMin: number; // seconds; "max once per 2s" per spec
+  fireCooldownMax: number; // adds variance so it doesn't fire on a robotic fixed interval
+  missChance: number; // 0-1, chance a shot deliberately doesn't land even when fired
+}
+
 export interface MapEntity {
   id: string;
   type:
@@ -217,6 +236,10 @@ export interface MapEntity {
   // enemies at, carried directly on the entity rather than reusing
   // "enemy_spawn"/ZombieSurvival's round-cycling machinery -- this is a
   // single fixed encounter, not a wave system with a spawn-point rotation.
+  enemyType?: "zombie" | "guard"; // "alarm_button" only (Pathfinding+Guard
+  // follow-up): which kind of enemy this wave spawns. Defaults to "zombie"
+  // when absent, so the existing combat-corridor encounter (campaign_alarm_
+  // button_1) is completely unaffected -- it doesn't set this field at all.
 }
 
 export interface MapDef {

@@ -376,8 +376,13 @@ export class MapEntitySystem {
     // door-opening success (never a rejection), with that entity's own
     // spawnPositions -- the same "core file stays ignorant of
     // modes/Campaign.ts, main.ts wires the actual effect" shape as
-    // onFingerprintScanSuccess above.
-    spawnEnemyWave: (positions: [number, number, number][]) => void,
+    // onFingerprintScanSuccess above. Pathfinding+Guard follow-up: gained a
+    // second parameter, the entity's own resolved enemyType (defaulted to
+    // "zombie" by createAlarmButton() below, never undefined by the time it
+    // reaches here) -- main.ts branches on it to call campaign.spawnEnemies()
+    // or campaign.spawnGuards() as appropriate; this file has no idea either
+    // method exists.
+    spawnEnemyWave: (positions: [number, number, number][], enemyType: "zombie" | "guard") => void,
   ) {
     // Checkpoint 19 correction: reverted to local constructor variables --
     // Room 3's door is now opened by its own password_lock (the same
@@ -690,20 +695,26 @@ export class MapEntitySystem {
   // createButton() (idempotent on the door's own visible state, no cost),
   // but the same successful interact that opens the door also triggers a
   // one-time enemy spawn via the injected spawnEnemyWave callback --
-  // main.ts wires this to campaign.spawnEnemies(), the same
-  // "core file stays ignorant of modes/Campaign.ts" shape
-  // onFingerprintScanSuccess already established. No resettable of its own
-  // is needed: the linked door already resets to closed via createDoor()'s
-  // own resettable, and the idempotency check below (door already open ->
-  // no-op) is what makes pressing it again after a reset correctly
-  // re-trigger a fresh wave, since Campaign's own reset already cleared
-  // activeEnemies by the time that happens.
+  // main.ts wires this to campaign.spawnEnemies()/spawnGuards() (see the
+  // Pathfinding+Guard follow-up below), the same "core file stays ignorant
+  // of modes/Campaign.ts" shape onFingerprintScanSuccess already
+  // established. No resettable of its own is needed: the linked door
+  // already resets to closed via createDoor()'s own resettable, and the
+  // idempotency check below (door already open -> no-op) is what makes
+  // pressing it again after a reset correctly re-trigger a fresh wave,
+  // since Campaign's own reset already cleared activeEnemies/activeGuards
+  // by the time that happens.
+  //
+  // Pathfinding+Guard follow-up: entity.enemyType picks which enemy type
+  // this wave spawns, defaulted to "zombie" here (not left undefined) so
+  // every existing alarm_button entity -- none of which set this new
+  // field -- is completely unaffected.
   private createAlarmButton(
     entity: MapEntity,
     doorMeshById: Map<string, THREE.Mesh>,
     raycastRegistry: RaycastRegistry,
     onDoorStateChanged: () => void,
-    spawnEnemyWave: (positions: [number, number, number][]) => void,
+    spawnEnemyWave: (positions: [number, number, number][], enemyType: "zombie" | "guard") => void,
   ): void {
     const door = entity.linkedTo ? doorMeshById.get(entity.linkedTo) : undefined;
     if (!door) {
@@ -715,6 +726,7 @@ export class MapEntitySystem {
       throw new Error(`Alarm button "${entity.id}" has no spawnPositions`);
     }
     const spawnPositions = entity.spawnPositions;
+    const enemyType = entity.enemyType ?? "zombie";
 
     const mesh = new THREE.Mesh(
       new THREE.BoxGeometry(BUTTON_SIZE, BUTTON_SIZE, BUTTON_SIZE),
@@ -731,7 +743,7 @@ export class MapEntitySystem {
 
       door.visible = false;
       onDoorStateChanged();
-      spawnEnemyWave(spawnPositions);
+      spawnEnemyWave(spawnPositions, enemyType);
     };
 
     this.group.add(mesh);

@@ -39,3 +39,32 @@ export class Raycast {
     return { point: hit.point, distance: hit.distance, object: hit.object };
   }
 }
+
+// Pathfinding+Guard follow-up: a generic "is there a clear line of sight
+// from origin to target" check, the same shape EnemyAI.ts's own private
+// hasLineOfSight() method already implements inline (raycast toward the
+// target, excluding the caller's own mesh by reference so a ray starting
+// at that mesh's center can't immediately re-intersect its own geometry).
+// core/GuardAI.ts is the first consumer of this shared version --
+// EnemyAI.ts's own copy is deliberately left exactly as it was rather than
+// refactored to depend on this too, since this task's explicit scope is
+// "the existing zombie EnemyAI is untouched, purely additive." That leaves
+// a small, known duplication between the two; see CLAUDE.md's decisions
+// log for why that trade-off was made deliberately rather than by
+// oversight.
+export function hasLineOfSight(
+  raycast: Raycast,
+  origin: THREE.Vector3,
+  target: THREE.Vector3,
+  candidates: THREE.Object3D[],
+  excludeObject: THREE.Object3D,
+): boolean {
+  const toTarget = new THREE.Vector3().subVectors(target, origin);
+  const distance = toTarget.length();
+  if (distance < 1e-6) return true;
+
+  const direction = toTarget.normalize();
+  const targets = candidates.filter((object) => object !== excludeObject);
+  const hit = raycast.fromOrigin(origin, direction, targets, distance);
+  return hit === null;
+}
