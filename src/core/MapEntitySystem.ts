@@ -17,6 +17,18 @@ const PICKUP_COLOR = 0x22aacc;
 const PICKUP_EMISSIVE = 0x003344;
 const PICKUP_SIZE = 0.4;
 const PICKUP_AMMO_AMOUNT = 24;
+// Campaign combat follow-up: a weapon pickup reuses PICKUP_SIZE's own
+// geometry (same shape as an ammo pickup) but a distinct color -- a plain
+// metallic gray reads as "a weapon lying here," deliberately not
+// WALL_BUY_COLOR's gold, which carries a "this costs points" association
+// this pickup doesn't have.
+const WEAPON_PICKUP_COLOR = 0xcccccc;
+const WEAPON_PICKUP_EMISSIVE = 0x333333;
+// Campaign combat follow-up: reuses BUTTON_SIZE's own geometry (same
+// free-door-opening shape as a regular button) but a distinct orange,
+// reading as "alarm" rather than a regular door button's red.
+const ALARM_BUTTON_COLOR = 0xff6600;
+const ALARM_BUTTON_EMISSIVE = 0x552200;
 const WALL_BUY_COLOR = 0xffd700;
 const WALL_BUY_EMISSIVE = 0x554400;
 const WALL_BUY_SIZE = 0.5;
@@ -360,6 +372,12 @@ export class MapEntitySystem {
     // openTerminal/openPasswordLock, since this core file has no business
     // importing modes/Campaign.ts directly.
     onFingerprintScanSuccess: () => void,
+    // Campaign combat follow-up: fired only from a real alarm_button
+    // door-opening success (never a rejection), with that entity's own
+    // spawnPositions -- the same "core file stays ignorant of
+    // modes/Campaign.ts, main.ts wires the actual effect" shape as
+    // onFingerprintScanSuccess above.
+    spawnEnemyWave: (positions: [number, number, number][]) => void,
   ) {
     // Checkpoint 19 correction: reverted to local constructor variables --
     // Room 3's door is now opened by its own password_lock (the same
@@ -486,6 +504,10 @@ export class MapEntitySystem {
           getFingerprintCopied,
           onFingerprintScanSuccess,
         );
+      } else if (entity.type === "weapon_pickup") {
+        this.createWeaponPickup(entity, weapons, weaponSystem, runManager, raycastRegistry);
+      } else if (entity.type === "alarm_button") {
+        this.createAlarmButton(entity, doorMeshById, raycastRegistry, onDoorStateChanged, spawnEnemyWave);
       }
     }
   }
@@ -612,6 +634,102 @@ export class MapEntitySystem {
     runManager.registerResettable(() => {
       mesh.visible = true;
     });
+  }
+
+  // Campaign combat follow-up: mirrors createPickup() almost exactly
+  // (idempotent, hides on interact, resettable) but grants a weapon
+  // instead of ammo -- linkedTo resolves a Weapon id the same way
+  // createWallBuy() already does, but deliberately a separate type from
+  // "wall_buy" rather than an optional "free" flag on it: no cost, no
+  // spendPoints() call, no "For N points" prompt text.
+  private createWeaponPickup(
+    entity: MapEntity,
+    weapons: Weapon[],
+    weaponSystem: WeaponSystem,
+    runManager: RunManager,
+    raycastRegistry: RaycastRegistry,
+  ): void {
+    if (!entity.linkedTo) {
+      throw new Error(`Weapon pickup "${entity.id}" has no linkedTo weapon id`);
+    }
+    const weapon = findById(weapons, entity.linkedTo);
+
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(PICKUP_SIZE, PICKUP_SIZE, PICKUP_SIZE),
+      new THREE.MeshStandardMaterial({
+        color: WEAPON_PICKUP_COLOR,
+        emissive: WEAPON_PICKUP_EMISSIVE,
+      }),
+    );
+    mesh.position.set(...entity.position);
+    mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = `Press E to pick up ${weapon.name}`;
+    mesh.userData.onInteract = (): void => {
+      if (!mesh.visible) return; // idempotent: already collected
+      weaponSystem.pickupWeapon(weapon);
+      mesh.visible = false;
+    };
+
+    this.group.add(mesh);
+    this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
+
+    runManager.registerResettable(() => {
+      mesh.visible = true;
+    });
+  }
+
+  // Campaign combat follow-up: the same free door-opening shape as
+  // createButton() (idempotent on the door's own visible state, no cost),
+  // but the same successful interact that opens the door also triggers a
+  // one-time enemy spawn via the injected spawnEnemyWave callback --
+  // main.ts wires this to campaign.spawnEnemies(), the same
+  // "core file stays ignorant of modes/Campaign.ts" shape
+  // onFingerprintScanSuccess already established. No resettable of its own
+  // is needed: the linked door already resets to closed via createDoor()'s
+  // own resettable, and the idempotency check below (door already open ->
+  // no-op) is what makes pressing it again after a reset correctly
+  // re-trigger a fresh wave, since Campaign's own reset already cleared
+  // activeEnemies by the time that happens.
+  private createAlarmButton(
+    entity: MapEntity,
+    doorMeshById: Map<string, THREE.Mesh>,
+    raycastRegistry: RaycastRegistry,
+    onDoorStateChanged: () => void,
+    spawnEnemyWave: (positions: [number, number, number][]) => void,
+  ): void {
+    const door = entity.linkedTo ? doorMeshById.get(entity.linkedTo) : undefined;
+    if (!door) {
+      throw new Error(
+        `Alarm button "${entity.id}" has no matching door for linkedTo "${entity.linkedTo}"`,
+      );
+    }
+    if (!entity.spawnPositions || entity.spawnPositions.length === 0) {
+      throw new Error(`Alarm button "${entity.id}" has no spawnPositions`);
+    }
+    const spawnPositions = entity.spawnPositions;
+
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(BUTTON_SIZE, BUTTON_SIZE, BUTTON_SIZE),
+      new THREE.MeshStandardMaterial({
+        color: ALARM_BUTTON_COLOR,
+        emissive: ALARM_BUTTON_EMISSIVE,
+      }),
+    );
+    mesh.position.set(...entity.position);
+    mesh.userData.interactable = true;
+    mesh.userData.interactPrompt = "Press E to trigger alarm";
+    mesh.userData.onInteract = (): void => {
+      if (!door.visible) return; // idempotent: door already open (and this wave already spawned)
+
+      door.visible = false;
+      onDoorStateChanged();
+      spawnEnemyWave(spawnPositions);
+    };
+
+    this.group.add(mesh);
+    this.interactables.push(mesh);
+    raycastRegistry.register(mesh);
   }
 
   // Traces a flat, inward-winding spiral (shrinking radius each turn, like

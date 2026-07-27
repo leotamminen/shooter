@@ -54,12 +54,26 @@ export interface MapEntity {
     // shape (interactable, idempotent pickup that hides the mesh, resettable,
     // registered in a lookup map by id) -- gates a "coffee_cup" the same way
     // computer_part already gates a "terminal", see MapEntity.requiresItem.
-    | "fingerprint_lock"; // Data Center exit follow-up: deliberately NOT
+    | "fingerprint_lock" // Data Center exit follow-up: deliberately NOT
     // built on "password_lock" -- this has no text-input overlay at all,
     // just a direct world interact with two outcomes (locked/unlocked),
     // gated by a shared MapEntitySystem-internal fingerprintCopied flag
     // rather than anything checked against a TerminalDef. linkedTo is the
     // door it opens (same convention as "button"/"password_lock").
+    | "weapon_pickup" // Campaign combat follow-up: mirrors "pickup" almost
+    // exactly (idempotent, hides on interact, resettable) but grants a
+    // weapon instead of ammo -- linkedTo is a Weapon id (like "wall_buy"),
+    // but deliberately a separate type from "wall_buy" rather than an
+    // optional "free" flag on it: no cost, no purchase framing, no "For N
+    // points" prompt text, just a plain "Press E to pick up <name>".
+    | "alarm_button"; // Campaign combat follow-up: the same free
+    // door-opening shape as "button" (idempotent on the door's own visible
+    // state, no cost), but the same successful interact that opens the
+    // door also triggers a one-time enemy spawn at this entity's own
+    // spawnPositions. Deliberately does NOT reuse ZombieSurvival's
+    // enemy_spawn/round-cycling machinery -- this is a single fixed
+    // encounter, not a wave system, so the exact spawn positions live
+    // directly on the entity instead.
   position: [number, number, number];
   linkedTo?: string; // a related entity's id (e.g. button -> door), or for
   // "wall_buy", a Weapon id in content/weapons.ts, or for "terminal", a
@@ -198,6 +212,11 @@ export interface MapEntity {
   // MapEntitySystem.createTerminal() resolves the paired entity's own
   // position live and computes the offset at interact time. See
   // CLAUDE.md's decisions log for why a fixed target was rejected.
+  spawnPositions?: [number, number, number][]; // "alarm_button" only
+  // (Campaign combat follow-up): the exact world positions to spawn
+  // enemies at, carried directly on the entity rather than reusing
+  // "enemy_spawn"/ZombieSurvival's round-cycling machinery -- this is a
+  // single fixed encounter, not a wave system with a spawn-point rotation.
 }
 
 export interface MapDef {

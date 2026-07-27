@@ -1,5 +1,12 @@
+import * as THREE from "three";
 import type { GameMode } from "./GameMode";
 import type { RunManager } from "../core/RunManager";
+import { EnemyAI } from "../core/EnemyAI";
+import type { AudioSystem } from "../core/AudioSystem";
+import type { PlayerState } from "../core/PlayerState";
+import type { RaycastRegistry } from "../core/RaycastRegistry";
+import type { GameState } from "../state/GameState";
+import type { EnemyDef } from "../types";
 import { generateVaultPin } from "../core/utils/RandomPin";
 
 type CampaignStage = "find_password" | "power_terminal" | "unlock_data_center" | "complete";
@@ -24,8 +31,45 @@ type CampaignStage = "find_password" | "power_terminal" | "unlock_data_center" |
 export class Campaign implements GameMode {
   private stage: CampaignStage = "find_password";
   private vaultPin = "";
+  // Campaign's first combat encounter (M1911+alarm follow-up): a flat list
+  // of whatever EnemyAI instances the current run's single fixed fight has
+  // spawned -- there's no round/wave concept here, so unlike
+  // ZombieSurvival's activeEnemies (rebuilt fresh every startRound()) this
+  // just accumulates for the life of the run and is cleared wholesale on
+  // reset.
+  private activeEnemies: EnemyAI[] = [];
 
-  constructor(runManager: RunManager) {
+  private readonly scene: THREE.Scene;
+  private readonly camera: THREE.Camera;
+  private readonly audioSystem: AudioSystem;
+  private readonly gameState: GameState;
+  private readonly playerState: PlayerState;
+  private readonly raycastRegistry: RaycastRegistry;
+  // The base zombie EnemyDef, injected from main.ts the same way
+  // ZombieSurvival receives its own enemyDef -- Campaign has exactly one
+  // enemy type for its one fixed encounter, so there's no per-selection
+  // choice to make, but the dependency still comes from main.ts (the
+  // composition root that owns every content/ lookup) rather than this
+  // file importing content/enemies.ts directly.
+  private readonly enemyDef: EnemyDef;
+
+  constructor(
+    runManager: RunManager,
+    scene: THREE.Scene,
+    camera: THREE.Camera,
+    audioSystem: AudioSystem,
+    gameState: GameState,
+    playerState: PlayerState,
+    raycastRegistry: RaycastRegistry,
+    enemyDef: EnemyDef,
+  ) {
+    this.scene = scene;
+    this.camera = camera;
+    this.audioSystem = audioSystem;
+    this.gameState = gameState;
+    this.playerState = playerState;
+    this.raycastRegistry = raycastRegistry;
+    this.enemyDef = enemyDef;
     this.resetState();
     runManager.registerResettable(() => this.resetState());
   }
@@ -34,10 +78,14 @@ export class Campaign implements GameMode {
   // how ZombieSurvival.startRound() is already called from both start()
   // and resetRun() -- both need to (re)establish the exact same initial
   // state, and duplicating it in two places would risk them drifting out
-  // of sync.
+  // of sync. M1911+alarm follow-up: also destroys every active enemy and
+  // clears the list, the same "wipe the board on a new run" behavior
+  // ZombieSurvival.resetRun() already has for its own activeEnemies.
   private resetState(): void {
     this.stage = "find_password";
     this.vaultPin = generateVaultPin();
+    for (const enemy of this.activeEnemies) enemy.destroy();
+    this.activeEnemies = [];
   }
 
   start(): void {
@@ -46,7 +94,11 @@ export class Campaign implements GameMode {
   }
 
   update(_deltaTime: number): void {
-    // No per-frame logic -- Campaign has no rounds, timers, or AI to drive.
+    // M1911+alarm follow-up: drives whichever enemies the alarm encounter
+    // has spawned so far -- a no-op for the entire rest of the game, same
+    // as every frame before this follow-up, since activeEnemies stays
+    // empty until spawnEnemies() is ever called.
+    for (const enemy of this.activeEnemies) enemy.update();
   }
 
   getStatusLine(): string {
@@ -101,6 +153,34 @@ export class Campaign implements GameMode {
   // completion moved here, so nothing else can ever claim "complete".)
   markComplete(): void {
     this.stage = "complete";
+  }
+
+  // Called by main.ts's alarm_button spawnEnemyWave callback (converted
+  // from the entity's own [number,number,number][] positions into
+  // THREE.Vector3 there, before reaching here). Campaign's first and only
+  // combat encounter -- a single fixed fight, not a wave/round system, so
+  // this deliberately does NOT reuse ZombieSurvival's round-scaling
+  // machinery (healthForRound(), zombiesForRound(), the round-transition
+  // Countdown, spawn-point cycling): there is no round to scale against and
+  // no next wave to transition into, just one enemy per given position at
+  // the base EnemyDef's own plain, unscaled health. See CLAUDE.md's
+  // decisions log for the fuller reasoning.
+  spawnEnemies(positions: THREE.Vector3[]): void {
+    positions.forEach((position, index) => {
+      const enemy = new EnemyAI(
+        `campaign-alarm-${index}`,
+        this.enemyDef,
+        this.enemyDef.health,
+        position,
+        this.scene,
+        this.camera,
+        this.audioSystem,
+        this.gameState,
+        this.playerState,
+        this.raycastRegistry,
+      );
+      this.activeEnemies.push(enemy);
+    });
   }
 
   // An arrow-function class field, not a regular method -- deliberately,

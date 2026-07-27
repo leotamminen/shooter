@@ -76,6 +76,16 @@ function startGame(selections: GameSelections): void {
   });
   const runManager = new RunManager(gameState, playerState);
 
+  // M1911+alarm follow-up: moved up from their original later positions in
+  // this function (see those spots below, still where loadMap()/WeaponSystem
+  // etc. actually consume them) -- both have no dependency on anything else
+  // in this function beyond sceneManager.camera (already constructed above),
+  // so bringing them forward is side-effect-free, and Campaign's own
+  // constructor (right below) now needs both to build EnemyAI instances for
+  // its combat encounter.
+  const raycastRegistry = new RaycastRegistry();
+  const audioSystem = new AudioSystem(sceneManager.camera);
+
   // Checkpoint 17: constructed unconditionally here, before mapEntitySystem
   // — the same "always construct, branch on usage" pattern already used for
   // weaponSystem/mapEntitySystem (every run gets one regardless of mode).
@@ -85,7 +95,23 @@ function startGame(selections: GameSelections): void {
   // in this function at checkpoint 16 so weaponSystem's onMeleeAttack
   // callback could reference it directly (see CLAUDE.md's checkpoint-16
   // decisions log for that precedent).
-  const campaign = new Campaign(runManager);
+  //
+  // M1911+alarm follow-up: gained the same six EnemyAI-construction
+  // dependencies ZombieSurvival already takes (scene, camera, audioSystem,
+  // gameState, playerState, raycastRegistry), plus the base zombie EnemyDef
+  // -- Campaign's first real combat encounter (see modes/Campaign.ts's
+  // spawnEnemies()) needs to build EnemyAI instances the same way
+  // ZombieSurvival does.
+  const campaign = new Campaign(
+    runManager,
+    sceneManager.scene,
+    sceneManager.camera,
+    audioSystem,
+    gameState,
+    playerState,
+    raycastRegistry,
+    findById(ENEMIES, "zombie"),
+  );
 
   // Checkpoint 17: constructed before mapEntitySystem so its open() methods
   // can be referenced by the openTerminal/openPasswordLock callbacks passed
@@ -134,8 +160,9 @@ function startGame(selections: GameSelections): void {
   // solid or interactable object (walls, doors, buttons, pickups, wall_buys,
   // enemies) registers itself here once, and every raycasting system
   // (WeaponSystem's fire, EnemyAI's line-of-sight, InteractSystem's interact
-  // ray, HUD's label occlusion) reads the same list.
-  const raycastRegistry = new RaycastRegistry();
+  // ray, HUD's label occlusion) reads the same list. (Constructed further up
+  // this function now, alongside audioSystem -- see the M1911+alarm
+  // follow-up comment there.)
 
   const mapDef = findById(MAPS, selections.mapId);
   const map = loadMap(mapDef.grid, raycastRegistry);
@@ -147,7 +174,9 @@ function startGame(selections: GameSelections): void {
   const spawnPosition = getSpawnPosition(mapDef);
   playerController.setSpawn(spawnPosition.x, spawnPosition.z);
 
-  const audioSystem = new AudioSystem(sceneManager.camera);
+  // audioSystem itself is constructed further up this function now,
+  // alongside raycastRegistry -- see the M1911+alarm follow-up comment
+  // there. Preloading still happens here, unaffected.
   void audioSystem.load(findById(SOUNDS, "pistol_fire"));
   // Checkpoint 23 fix: MAC-10/AK-47's own real fire-sound recordings --
   // without these preloads, AudioSystem.play() would silently no-op for
@@ -324,6 +353,12 @@ function startGame(selections: GameSelections): void {
     // fires only when campaign_lock_5's fingerprint scan actually opens
     // campaign_door_6.
     () => campaign.markComplete(),
+    // M1911+alarm follow-up: fires only from a real alarm_button
+    // door-opening success -- converts the entity's own raw
+    // [number,number,number][] positions into THREE.Vector3 instances here
+    // (main.ts is the composition root; modes/Campaign.ts's spawnEnemies()
+    // takes real Vector3s, matching ZombieSurvival's own spawnPoints shape).
+    (positions) => campaign.spawnEnemies(positions.map((p) => new THREE.Vector3(...p))),
   );
   sceneManager.scene.add(mapEntitySystem.group);
   playerController.setDoors(mapEntitySystem.doors);
