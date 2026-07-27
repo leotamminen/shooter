@@ -663,7 +663,14 @@ export class MapEntitySystem {
     );
     mesh.position.set(...entity.position);
     mesh.userData.interactable = true;
-    mesh.userData.interactPrompt = `Press E to pick up ${weapon.name}`;
+    // Combat-corridor placement follow-up: honors an authored
+    // entity.interactPrompt override when present (falls back to the
+    // original hardcoded default otherwise), the same "content can
+    // override, MapEntitySystem supplies a sane default" shape
+    // createTapeRoll() already established -- this previously always used
+    // the hardcoded string, silently ignoring any interactPrompt a content
+    // author set.
+    mesh.userData.interactPrompt = entity.interactPrompt ?? `Press E to pick up ${weapon.name}`;
     mesh.userData.onInteract = (): void => {
       if (!mesh.visible) return; // idempotent: already collected
       weaponSystem.pickupWeapon(weapon);

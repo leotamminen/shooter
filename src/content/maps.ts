@@ -717,6 +717,51 @@ export const MAPS: MapDef[] = [
     { id: "campaign_server_rack_row7_8", type: "decoration", variant: "server_rack", position: [39.2, 0, 54.65] },
     // { id: "campaign_server_rack_row7_9", type: "decoration", variant: "server_rack", position: [39.2, 0, 55.9] },
 
+    // M1911+alarm combat follow-up: the corridor's desk/M1911/ammo grouping
+    // and its door/alarm-button pair -- all five positions confirmed open
+    // floor via a script-parsed grid check, not assumed, per this file's
+    // established discipline. campaign_weapon_pickup_1's position was
+    // adjusted from the given [45.3, 0, 16]: at y=0 the pickup's own
+    // PICKUP_SIZE box (0.4) would sit half-embedded in the floor (every
+    // other floor-resting pickup in this file uses y=0.3, not 0), and at
+    // z=16 it fell inside campaign_desk_6's own collidable footprint
+    // (BLACK_DESK_TABLETOP_SIZE spans z 15.7-16.3 at this desk's position) --
+    // since black_desk is a solid, collidable box with no real gap under it
+    // (Data Center polish), anything placed fully inside that footprint
+    // would be functionally unreachable, not just visually clipped: the
+    // player's own collision with the desk would keep them too far away to
+    // ever raycast-interact with it. Moved to z=16.6 (0.3 past the desk's
+    // own back edge, clear of its collision box with margin) and y=0.3
+    // (matching every other floor pickup's height) -- reads as tucked in
+    // behind the desk from the corridor approach, confirmed via a rendered
+    // screenshot.
+    { id: "campaign_desk_6", type: "decoration", variant: "black_desk", position: [45, 0, 16] },
+    {
+      id: "campaign_weapon_pickup_1",
+      type: "weapon_pickup",
+      linkedTo: "pistol",
+      interactPrompt: "Press E to pick up M1911",
+      position: [45.3, 0.3, 16.6],
+    },
+    { id: "campaign_pickup_3", type: "pickup", position: [44, 0.3, 16] },
+    { id: "campaign_door_8", type: "door", position: [48, 1.5, 10] },
+    // campaign_alarm_button_1 sits one cell before the door (z=11, the
+    // corridor side the player approaches from, per this file's own "never
+    // trapped behind its own door" discipline) -- spawnPositions are the
+    // fixed 4-zombie encounter's exact world positions, confirmed open
+    // floor the same way every position in this batch was.
+    {
+      id: "campaign_alarm_button_1",
+      type: "alarm_button",
+      linkedTo: "campaign_door_8",
+      position: [48, 0.3, 11],
+      spawnPositions: [
+        [35, 0.9, 7],
+        [31, 0.9, 14],
+        [27, 0.9, 12],
+        [20, 0.9, 7],
+      ],
+    },
   ],
   },
 ];
