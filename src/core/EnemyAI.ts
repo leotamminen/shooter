@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { Raycast } from "./utils/Raycast";
 import { StateMachine } from "./utils/StateMachine";
 import { applyDamage } from "./utils/Health";
+import { FREEZE_ENEMIES } from "./devConfig";
 import type { AudioSystem } from "./AudioSystem";
 import type { PlayerState } from "./PlayerState";
 import type { RaycastRegistry } from "./RaycastRegistry";
@@ -104,6 +105,30 @@ export class EnemyAI {
   update(): void {
     const delta = this.clock.getDelta();
     if (this.dead) return;
+
+    // Dev tool (core/devConfig.ts's FREEZE_ENEMIES): skips all
+    // movement/attack transitions below, leaving this instance idle
+    // wherever it currently is (e.g. its own spawn point, if checked right
+    // after an alarm triggers) -- health/damage/death are completely
+    // unaffected, since takeDamage()/onDeath() are driven externally via
+    // mesh.userData.onHit, never from anything in this method. If
+    // core/GuardAI.ts (not built yet) ever exists, its own update() should
+    // get this identical check -- this flag is meant to freeze every enemy
+    // type, not just EnemyAI specifically. The HUD health label still needs
+    // gameState.enemyHealth synced every frame regardless, so that's kept.
+    if (FREEZE_ENEMIES) {
+      this.stateMachine.transition("idle");
+      this.gameState.enemyHealth[this.id] = {
+        current: this.health,
+        max: this.maxHealth,
+        position: {
+          x: this.mesh.position.x,
+          y: this.mesh.position.y + LABEL_HEIGHT_OFFSET,
+          z: this.mesh.position.z,
+        },
+      };
+      return;
+    }
 
     const distance = this.mesh.position.distanceTo(this.camera.position);
     const hasLineOfSight = this.hasLineOfSight();

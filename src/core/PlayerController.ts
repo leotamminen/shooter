@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { PointerLockControls } from "three/addons/controls/PointerLockControls.js";
+import { NOCLIP } from "./devConfig";
 import type { GameState } from "../state/GameState";
 import type { DoorEntry } from "./MapEntitySystem";
 
@@ -184,9 +185,15 @@ export class PlayerController {
     let x = prevX + this.moveDirection.x * step;
     let z = prevZ + this.moveDirection.z * step;
 
-    for (let pass = 0; pass < COLLISION_PASSES; pass++) {
-      for (const box of this.collisionBoxes) {
-        ({ x, z } = this.resolveAgainstBox(x, z, box));
+    // Dev tool (core/devConfig.ts's NOCLIP): skips collision resolution
+    // entirely when enabled -- free movement through walls/doors/
+    // decorations. Movement speed/controls above and below this block are
+    // completely unaffected either way.
+    if (!NOCLIP) {
+      for (let pass = 0; pass < COLLISION_PASSES; pass++) {
+        for (const box of this.collisionBoxes) {
+          ({ x, z } = this.resolveAgainstBox(x, z, box));
+        }
       }
     }
 
