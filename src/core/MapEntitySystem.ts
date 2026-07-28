@@ -744,6 +744,14 @@ export class MapEntitySystem {
       door.visible = false;
       onDoorStateChanged();
       spawnEnemyWave(spawnPositions, enemyType);
+      // Mixed-wave follow-up: a second, independent spawn call from the
+      // same trigger/idempotency guard above -- guardSpawnPositions always
+      // routes to "guard" regardless of this entity's own enemyType, so a
+      // single alarm can spawn zombies (spawnPositions) and a guard
+      // (guardSpawnPositions) together.
+      if (entity.guardSpawnPositions && entity.guardSpawnPositions.length > 0) {
+        spawnEnemyWave(entity.guardSpawnPositions, "guard");
+      }
     };
 
     this.group.add(mesh);

@@ -240,6 +240,14 @@ export interface MapEntity {
   // follow-up): which kind of enemy this wave spawns. Defaults to "zombie"
   // when absent, so the existing combat-corridor encounter (campaign_alarm_
   // button_1) is completely unaffected -- it doesn't set this field at all.
+  guardSpawnPositions?: [number, number, number][]; // "alarm_button" only
+  // (mixed-wave follow-up): a second, independent list of positions that
+  // always spawns guards, fired from the SAME interact as spawnPositions
+  // (gated by the same door.visible idempotency check) rather than a
+  // second trigger -- lets one alarm spawn zombies and a guard together.
+  // spawnPositions/enemyType are unchanged and stay zombie-only for
+  // backward compatibility; every alarm_button that doesn't set this new
+  // field is completely unaffected.
 }
 
 export interface MapDef {

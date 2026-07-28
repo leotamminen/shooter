@@ -749,7 +749,12 @@ export const MAPS: MapDef[] = [
     // corridor side the player approaches from, per this file's own "never
     // trapped behind its own door" discipline) -- spawnPositions are the
     // fixed 4-zombie encounter's exact world positions, confirmed open
-    // floor the same way every position in this batch was.
+    // floor the same way every position in this batch was. guardSpawnPositions
+    // (mixed-wave follow-up) adds one Guard to the same trigger -- world
+    // [18, 0.9, 10] is row 5/col 9 of this map's own grid, confirmed open
+    // floor (value 0) via a script-parsed grid dump, with clearance on
+    // every side and no overlap with the zombie spawn points, the door, or
+    // the button itself.
     {
       id: "campaign_alarm_button_1",
       type: "alarm_button",
@@ -760,6 +765,9 @@ export const MAPS: MapDef[] = [
         [31, 0.9, 14],
         [27, 0.9, 12],
         [20, 0.9, 7],
+      ],
+      guardSpawnPositions: [
+        [18, 0.9, 10],
       ],
     },
   ],
