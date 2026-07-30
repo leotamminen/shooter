@@ -24,6 +24,11 @@ const MODE_OPTIONS: { id: ModeId; label: string }[] = [
   { id: "campaign", label: "Campaign" },
 ];
 
+// Bumped by hand for real milestones -- the auto-incrementing "-f{N}" build
+// suffix (total git commit count, see vite.config.ts/src/vite-env.d.ts) is
+// the only automatic part of the version string below.
+const GAME_VERSION = "1.0";
+
 const SELECTED_BORDER = "#4a9eff";
 const UNSELECTED_BORDER = "#666";
 const SELECTED_BACKGROUND = "#1c3a5c";
@@ -104,7 +109,7 @@ export class MainMenu {
     });
 
     const heading = createDiv({ fontSize: "32px", fontWeight: "bold", letterSpacing: "0.1em" });
-    heading.textContent = "SHOOTER";
+    heading.textContent = `NIGHTFALL v${GAME_VERSION}-f${__BUILD_NUMBER__}`;
     this.root.appendChild(heading);
 
     const modeGroup = this.buildGroup(
