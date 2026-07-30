@@ -10,9 +10,9 @@ export const SHOW_DEV_COORDINATES = true;
 // core/GuardAI.ts (not built yet) ever exists, its update() should get the
 // identical check -- this flag is meant to freeze every enemy type, not
 // just EnemyAI specifically.
-export const FREEZE_ENEMIES = true;
+export const FREEZE_ENEMIES = false;
 
 // core/PlayerController.ts's update() checks this and skips its collision
 // resolution entirely when true -- free movement through walls/doors/
 // decorations, movement speed/controls otherwise unchanged.
-export const NOCLIP = true;
+export const NOCLIP = false;
