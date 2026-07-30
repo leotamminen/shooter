@@ -21,6 +21,7 @@ import { Campaign } from "./modes/Campaign";
 import { HUD } from "./ui/HUD";
 import { MainMenu } from "./ui/MainMenu";
 import type { GameSelections } from "./ui/MainMenu";
+import { PauseMenu } from "./ui/PauseMenu";
 import { Terminal } from "./ui/Terminal";
 import { PasswordLock } from "./ui/PasswordLock";
 import { GameState } from "./state/GameState";
@@ -140,9 +141,23 @@ function startGame(selections: GameSelections): void {
   // case, opening Room 3's door on "whoami", are both gone now that Room
   // 3's door has its own password_lock instead, so there's no longer any
   // reason for a second, otherwise-identical Terminal instance to exist).
+  // Pause-menu follow-up: tracks whether a Terminal/PasswordLock overlay is
+  // currently open, so the new pause overlay (setVisible() below) never
+  // shows stacked on top of one -- both already set gameState.paused to
+  // true via controls.unlock(), which the pause overlay would otherwise
+  // key off of directly. A plain local boolean, not a GameState field:
+  // this is purely composition-root bookkeeping about which UI overlay is
+  // open, not simulation state.
+  let uiOverlayOpen = false;
   const terminal = new Terminal(
-    () => playerController.controls.unlock(),
-    () => playerController.controls.lock(),
+    () => {
+      uiOverlayOpen = true;
+      playerController.controls.unlock();
+    },
+    () => {
+      uiOverlayOpen = false;
+      playerController.controls.lock();
+    },
     campaign.getVaultPin,
     BLOCKED_COMMANDS,
     RESTRICTED_COMMANDS,
@@ -167,8 +182,14 @@ function startGame(selections: GameSelections): void {
     },
   );
   const passwordLock = new PasswordLock(
-    () => playerController.controls.unlock(),
-    () => playerController.controls.lock(),
+    () => {
+      uiOverlayOpen = true;
+      playerController.controls.unlock();
+    },
+    () => {
+      uiOverlayOpen = false;
+      playerController.controls.lock();
+    },
   );
 
   // The single shared "what can be hit/occluded by a ray" registry — every
@@ -253,11 +274,12 @@ function startGame(selections: GameSelections): void {
     // checkpoint 21 narrows this to only Zombie Survival/Shooting Range;
     // Campaign now starts with no ranged weapon at all (null), so the
     // player begins genuinely empty-handed (see core/HandsViewmodel.ts) and
-    // must find a wall-buy. The main menu's Weapon selection
-    // (selections.weaponId) still doesn't determine the starting loadout in
-    // either case -- confirmed with the user at checkpoint 15, unchanged
-    // since. See CLAUDE.md's checkpoint-15/21 decisions log and future
-    // mechanics.
+    // must find a wall-buy. There is no starting-weapon selection anywhere
+    // in ui/MainMenu.ts at all as of the terminal-style menu redesign --
+    // the old Weapon group never determined the starting loadout in either
+    // case (confirmed with the user at checkpoint 15) and was removed
+    // outright rather than kept around inert. See CLAUDE.md's
+    // checkpoint-15/21 decisions log and the menu-redesign entry.
     selections.modeId === "campaign" ? null : findById(WEAPONS, "pistol"),
     // Checkpoint 16: the knife is always the starting/default melee weapon
     // -- there is no menu selection for melee (only one option exists), and
@@ -422,7 +444,13 @@ function startGame(selections: GameSelections): void {
   // checkpoint-9/15-era ternary no longer reads cleanly with a third branch.
   if (selections.modeId === "zombie") {
     gameMode = new ZombieSurvival(
-      findById(ENEMIES, selections.enemyId),
+      // Terminal-style menu redesign: Enemy selection is gone from
+      // ui/MainMenu.ts entirely (content/enemies.ts has exactly one real
+      // entry, "zombie" -- nothing to choose between) -- resolved directly
+      // here the same way modes/Campaign.ts's own enemyDef already is,
+      // rather than threading a selection through GameSelections for a
+      // choice that never existed in practice.
+      findById(ENEMIES, "zombie"),
       enemySpawnPoints,
       sceneManager.scene,
       sceneManager.camera,
@@ -460,10 +488,14 @@ function startGame(selections: GameSelections): void {
     playerController.controls.lock();
   }
 
-  // "Main Menu" is still a placeholder alias for startNewRun() — this
-  // checkpoint's menu is load-time only; a mid-session return to
-  // ui/MainMenu.ts is deliberately not built yet (see CLAUDE.md future
-  // mechanics).
+  // Death panel's "Main Menu" button is left as a startNewRun() alias,
+  // unchanged -- the death panel already accomplishes a clean state reset
+  // by itself, and death is a much lower-stakes moment to return to the
+  // main menu from than an active run. A real mid-session return now DOES
+  // exist (see pauseMenu below, wired to window.location.reload()) but is
+  // deliberately not used here; flagged as a real choice, not an
+  // oversight, per this task's own instruction. Revisit if a reload ever
+  // turns out to feel more correct here too.
   const hud = new HUD(
     gameState,
     gameMode,
@@ -485,6 +517,33 @@ function startGame(selections: GameSelections): void {
     gameState.paused = document.pointerLockElement !== canvas;
   });
 
+  // Pause-menu follow-up: the previously-deferred real mid-session return.
+  // pauseMenu itself has no GameState dependency -- every frame, animate()
+  // below tells it exactly whether it should be visible via one already-
+  // computed boolean, matching the injected-callback composition-root
+  // pattern this file already uses for Terminal/PasswordLock's
+  // unlock/lock callbacks.
+  const pauseMenu = new PauseMenu(
+    () => playerController.controls.lock(),
+    () => window.location.reload(),
+  );
+
+  // Escape/pointer-lock-loss already sets gameState.paused via the
+  // pointerlockchange listener above. These two are the task's explicit
+  // second trigger ("the window losing focus or the mouse leaving the
+  // game area") -- both simply request the same pointer-lock release
+  // Escape already causes, rather than setting gameState.paused directly,
+  // so there is still exactly one place (the pointerlockchange listener)
+  // that ever assigns it. Calling unlock() when nothing is locked (e.g.
+  // mouseleave firing while a terminal is already open, or before the
+  // player has ever clicked to lock) is a harmless no-op.
+  window.addEventListener("blur", () => {
+    playerController.controls.unlock();
+  });
+  canvas.addEventListener("mouseleave", () => {
+    playerController.controls.unlock();
+  });
+
   const modeClock = new THREE.Clock();
 
   function animate(): void {
@@ -496,7 +555,19 @@ function startGame(selections: GameSelections): void {
     // the frame gameplay resumes after death would report one huge deltaTime
     // spike (elapsed dead-screen time) into whichever mode is active.
     const delta = modeClock.getDelta();
-    if (gameState.playerState === "alive") {
+    // Pause-menu follow-up: gated on !gameState.paused too, not just
+    // playerState -- a "real" pause has to actually stop the world, not
+    // just show an overlay while zombies/guards keep fighting behind it.
+    // meleeSequencer/reloadSequencer freezing mid-animation while paused is
+    // harmless and correct: both simply resume from wherever they left off
+    // once unpaused, the same "gameplay continues exactly where it left
+    // off" property Resume is supposed to have. This also means opening a
+    // Terminal/PasswordLock (which already sets paused via controls.
+    // unlock()) now also freezes enemy AI for its duration -- a
+    // correctness improvement in the same spirit as checkpoint 8.5's
+    // original playerState-based gating, not a change to any mode's own
+    // logic.
+    if (gameState.playerState === "alive" && !gameState.paused) {
       gameMode.update(delta);
       // Checkpoint 22: driven every alive frame regardless of phase -- a
       // no-op while idle (StateMachine's "idle" phase has no onUpdate).
@@ -507,6 +578,10 @@ function startGame(selections: GameSelections): void {
       reloadSequencer.update(delta);
     }
     hud.update(delta);
+    // Shown only while genuinely paused mid-run: alive (not covered by the
+    // death panel instead), paused, and no Terminal/PasswordLock overlay
+    // already occupying the screen (uiOverlayOpen, tracked above).
+    pauseMenu.setVisible(gameState.playerState === "alive" && gameState.paused && !uiOverlayOpen);
     sceneManager.render();
     // Checkpoint 22: exactly one of the three viewmodels renders per frame.
     // While meleeSequencer is idle, this is unchanged from checkpoint 21 --
@@ -552,7 +627,7 @@ function startGame(selections: GameSelections): void {
   animate();
 }
 
-const mainMenu = new MainMenu(WEAPONS, ENEMIES, MAPS, (selections) => {
+const mainMenu = new MainMenu(MAPS, (selections) => {
   mainMenu.destroy();
   startGame(selections);
 });
