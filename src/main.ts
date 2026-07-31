@@ -488,20 +488,18 @@ function startGame(selections: GameSelections): void {
     playerController.controls.lock();
   }
 
-  // Death panel's "Main Menu" button is left as a startNewRun() alias,
-  // unchanged -- the death panel already accomplishes a clean state reset
-  // by itself, and death is a much lower-stakes moment to return to the
-  // main menu from than an active run. A real mid-session return now DOES
-  // exist (see pauseMenu below, wired to window.location.reload()) but is
-  // deliberately not used here; flagged as a real choice, not an
-  // oversight, per this task's own instruction. Revisit if a reload ever
-  // turns out to feel more correct here too.
+  // Death panel's "Main Menu" button follow-up: now calls
+  // window.location.reload(), the same mechanism the pause menu's own
+  // "Main Menu" button already uses, instead of startNewRun() -- the two
+  // buttons previously did the exact same thing (a run reset), which read
+  // as a real "Main Menu" once the pause menu's version started actually
+  // leaving the run. "Respawn" is unchanged, still startNewRun().
   const hud = new HUD(
     gameState,
     gameMode,
     sceneManager.camera,
     startNewRun,
-    startNewRun,
+    () => window.location.reload(),
     raycastRegistry,
     // Dev tool (core/devConfig.ts's SHOW_DEV_COORDINATES): reuses
     // PlayerController's own getPosition(), the exact accessor built for
