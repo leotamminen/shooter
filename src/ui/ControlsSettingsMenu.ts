@@ -93,7 +93,16 @@ export class ControlsSettingsMenu {
   private readonly navigableMenu: NavigableMenu;
   private readonly modeButtons = new Map<string, HTMLButtonElement>();
   private readonly mapButtons = new Map<string, HTMLButtonElement>();
-  private selectedModeId: ModeId = MODE_OPTIONS[0].id;
+  // Bug-fix follow-up (not yet assigned a checkpoint number): the real
+  // default was previously MODE_OPTIONS[0]/maps[0] (Zombie Survival/Test
+  // Grid, an accident of array order, not a deliberate choice) -- Campaign
+  // is the actual intended default, matching ui/MainMenu.ts's own "Start
+  // Game" shortcut and this screen's own visual design (a collapsed
+  // summary showing the one selection that's supposed to already be
+  // correct). Hardcoded as the literal "campaign" id rather than
+  // MODE_OPTIONS[0].id specifically so reordering MODE_OPTIONS (a display
+  // concern) can never silently change which mode this defaults to again.
+  private selectedModeId: ModeId = "campaign";
   private selectedMapId: string;
 
   // Menu-fixes follow-up: collapsed by default, and reset to collapsed
@@ -112,7 +121,14 @@ export class ControlsSettingsMenu {
     onLaunch?: (selections: GameSelections) => void,
   ) {
     this.maps = maps;
-    this.selectedMapId = maps && maps.length > 0 ? maps[0].id : "";
+    // Same bug-fix follow-up as selectedModeId above -- the default map is
+    // whichever map actually opts into Campaign (mirrors ui/MainMenu.ts's
+    // own `maps.find((m) => m.supportedModes?.includes("campaign"))`
+    // resolution for its "Start Game" shortcut), falling back to maps[0]
+    // only if no map declares that (shouldn't happen given the real
+    // content, but avoids ever landing on an empty selectedMapId).
+    const campaignMap = (maps ?? []).find((map) => map.supportedModes?.includes("campaign"));
+    this.selectedMapId = campaignMap ? campaignMap.id : maps && maps.length > 0 ? maps[0].id : "";
 
     this.element = createDiv({
       display: "flex",
