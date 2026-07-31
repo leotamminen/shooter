@@ -1,7 +1,7 @@
 import type { MapDef } from "../types";
 import { NavigableMenu, type NavigableMenuItem } from "./NavigableMenu";
 import { MODE_OPTIONS, type ModeId, type GameSelections } from "./gameSelections";
-import { TERMINAL_TEXT, TERMINAL_BORDER } from "./terminalTheme";
+import { TERMINAL_TEXT, TERMINAL_DIM_TEXT, TERMINAL_BORDER } from "./terminalTheme";
 
 interface SelectableOption {
   id: string;
@@ -46,17 +46,39 @@ function createOptionButton(label: string, onClick: () => void): HTMLButtonEleme
   return button;
 }
 
-// Pulled directly from what core/PlayerController.ts, core/WeaponSystem.ts,
-// and core/InteractSystem.ts actually bind (KeyW/A/S/D, mousedown button 0,
-// KeyR, KeyV, KeyE, Digit1-9 + wheel) rather than guessed -- see CLAUDE.md's
-// decisions log for the exact grep this was checked against.
-const CONTROLS_REFERENCE: [string, string][] = [
+function createControlLine(key: string, action: string): HTMLDivElement {
+  const line = createDiv({ display: "flex", gap: "16px" });
+  const keyEl = createDiv({ minWidth: "140px", fontWeight: "bold" });
+  keyEl.textContent = key;
+  const actionEl = createDiv({});
+  actionEl.textContent = action;
+  line.appendChild(keyEl);
+  line.appendChild(actionEl);
+  return line;
+}
+
+// Menu-fixes follow-up: pulled directly from what core/PlayerController.ts,
+// core/WeaponSystem.ts, and core/InteractSystem.ts actually bind (KeyW/A/S/D,
+// mousedown button 0, KeyR, KeyV, KeyE, Digit1-9 + wheel), re-confirmed via
+// the same grep this file's original controls reference was checked
+// against, not just reformatted blind. Escape has no dedicated listener of
+// its own anywhere in this codebase -- it's the browser's native
+// Pointer-Lock-exit behavior (which the pause-menu follow-up's
+// pointerlockchange listener reacts to) while playing, and each modal
+// overlay's (Terminal/PasswordLock/NavigableMenu-hosted screens) own
+// explicit close/back handling while one is open -- "Pause game / close
+// menu" describes both correctly without overclaiming a single handler.
+const GENERAL_CONTROLS: [string, string][] = [
+  ["ESC", "Pause game / close menu"],
   ["WASD", "move"],
   ["Mouse", "look"],
+  ["E", "interact"],
+];
+
+const COMBAT_CONTROLS: [string, string][] = [
   ["Left Click", "fire"],
   ["R", "reload"],
   ["V", "melee"],
-  ["E", "interact"],
   ["1-9 / Scroll", "switch weapon"],
 ];
 
@@ -73,6 +95,16 @@ export class ControlsSettingsMenu {
   private readonly mapButtons = new Map<string, HTMLButtonElement>();
   private selectedModeId: ModeId = MODE_OPTIONS[0].id;
   private selectedMapId: string;
+
+  // Menu-fixes follow-up: collapsed by default, and reset to collapsed
+  // every time show() runs -- this screen deliberately never remembers
+  // being expanded from a previous visit (see show() below).
+  private expanded = false;
+  private modeSummaryEl: HTMLDivElement | null = null;
+  private mapSummaryEl: HTMLDivElement | null = null;
+  private modeGroupEl: HTMLDivElement | null = null;
+  private mapGroupEl: HTMLDivElement | null = null;
+  private toggleItemIndex = -1;
 
   constructor(
     maps: MapDef[] | null,
@@ -101,15 +133,23 @@ export class ControlsSettingsMenu {
       gap: "4px",
       fontSize: "14px",
     });
-    for (const [key, action] of CONTROLS_REFERENCE) {
-      const line = createDiv({ display: "flex", gap: "16px" });
-      const keyEl = createDiv({ minWidth: "140px", fontWeight: "bold" });
-      keyEl.textContent = key;
-      const actionEl = createDiv({});
-      actionEl.textContent = action;
-      line.appendChild(keyEl);
-      line.appendChild(actionEl);
-      referenceBlock.appendChild(line);
+    for (const [key, action] of GENERAL_CONTROLS) {
+      referenceBlock.appendChild(createControlLine(key, action));
+    }
+    // Menu-fixes follow-up: "Combat:" reads as a sub-heading the same way
+    // "ADVANCED" already does relative to the main "CONTROLS & SETTINGS"
+    // heading -- smaller/dimmer than the surrounding text, with a small gap
+    // above it separating it from the general controls group.
+    const combatHeading = createDiv({
+      fontSize: "12px",
+      color: TERMINAL_DIM_TEXT,
+      letterSpacing: "0.08em",
+      marginTop: "6px",
+    });
+    combatHeading.textContent = "Combat:";
+    referenceBlock.appendChild(combatHeading);
+    for (const [key, action] of COMBAT_CONTROLS) {
+      referenceBlock.appendChild(createControlLine(key, action));
     }
     this.element.appendChild(referenceBlock);
 
@@ -137,27 +177,43 @@ export class ControlsSettingsMenu {
       advancedHeading.textContent = "ADVANCED";
       advanced.appendChild(advancedHeading);
 
-      const modeGroup = this.buildGroup(
+      // Menu-fixes follow-up: collapsed-state summary lines, shown instead
+      // of the full button rows by default -- see updateExpandedVisibility()
+      // for how the two are swapped.
+      this.modeSummaryEl = createDiv({ textAlign: "center" });
+      advanced.appendChild(this.modeSummaryEl);
+
+      this.modeGroupEl = this.buildGroup(
         "Mode",
         MODE_OPTIONS,
         this.selectedModeId,
         this.modeButtons,
         (id) => this.selectMode(id as ModeId),
       );
-      advanced.appendChild(modeGroup);
+      advanced.appendChild(this.modeGroupEl);
+
+      this.mapSummaryEl = createDiv({ textAlign: "center" });
+      advanced.appendChild(this.mapSummaryEl);
 
       const mapOptions: SelectableOption[] = maps.map((map) => ({ id: map.id, label: map.name }));
-      const mapGroup = this.buildGroup(
+      this.mapGroupEl = this.buildGroup(
         "Map",
         mapOptions,
         this.selectedMapId,
         this.mapButtons,
         (id) => this.selectMap(id),
       );
-      advanced.appendChild(mapGroup);
+      advanced.appendChild(this.mapGroupEl);
 
       this.updateMapAvailability(this.selectedModeId);
+      this.updateSummaries();
       this.element.appendChild(advanced);
+
+      // The collapse toggle is just another navigable item, per this
+      // task's own instruction -- arrow keys/mouse both reach it exactly
+      // like Launch/Back, no separate interaction model.
+      this.toggleItemIndex = navigableItems.length;
+      navigableItems.push({ label: "▸ more options", onActivate: () => this.toggleExpanded() });
 
       navigableItems.push({
         label: "Launch",
@@ -168,9 +224,17 @@ export class ControlsSettingsMenu {
     navigableItems.push({ label: "Back", onActivate: onBack });
     this.navigableMenu = new NavigableMenu(navigableItems, onBack);
     this.element.appendChild(this.navigableMenu.element);
+
+    if (this.toggleItemIndex >= 0) this.updateExpandedVisibility();
   }
 
   show(): void {
+    // Menu-fixes follow-up: always resets back to collapsed, never
+    // remembers a previous visit's expanded state.
+    if (this.toggleItemIndex >= 0 && this.expanded) {
+      this.expanded = false;
+      this.updateExpandedVisibility();
+    }
     this.element.style.display = "flex";
     this.navigableMenu.attach();
   }
@@ -178,6 +242,35 @@ export class ControlsSettingsMenu {
   hide(): void {
     this.element.style.display = "none";
     this.navigableMenu.detach();
+  }
+
+  private toggleExpanded(): void {
+    this.expanded = !this.expanded;
+    this.updateExpandedVisibility();
+  }
+
+  private updateExpandedVisibility(): void {
+    if (this.modeSummaryEl) this.modeSummaryEl.style.display = this.expanded ? "none" : "block";
+    if (this.mapSummaryEl) this.mapSummaryEl.style.display = this.expanded ? "none" : "block";
+    if (this.modeGroupEl) this.modeGroupEl.style.display = this.expanded ? "flex" : "none";
+    if (this.mapGroupEl) this.mapGroupEl.style.display = this.expanded ? "flex" : "none";
+    if (this.toggleItemIndex >= 0) {
+      this.navigableMenu.setItemLabel(
+        this.toggleItemIndex,
+        this.expanded ? "▾ fewer options" : "▸ more options",
+      );
+    }
+  }
+
+  private updateSummaries(): void {
+    if (this.modeSummaryEl) {
+      const mode = MODE_OPTIONS.find((option) => option.id === this.selectedModeId);
+      this.modeSummaryEl.textContent = `Mode: ${mode?.label ?? this.selectedModeId}`;
+    }
+    if (this.mapSummaryEl) {
+      const map = (this.maps ?? []).find((m) => m.id === this.selectedMapId);
+      this.mapSummaryEl.textContent = `Map: ${map?.name ?? this.selectedMapId}`;
+    }
   }
 
   private buildGroup(
@@ -222,11 +315,13 @@ export class ControlsSettingsMenu {
     this.selectedModeId = modeId;
     this.applySelection(this.modeButtons, modeId);
     this.updateMapAvailability(modeId);
+    this.updateSummaries();
   }
 
   private selectMap(mapId: string): void {
     this.selectedMapId = mapId;
     this.applySelection(this.mapButtons, mapId);
+    this.updateSummaries();
   }
 
   // Ported unchanged from the pre-redesign ui/MainMenu.ts (checkpoint-18

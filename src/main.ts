@@ -22,6 +22,7 @@ import { HUD } from "./ui/HUD";
 import { MainMenu } from "./ui/MainMenu";
 import type { GameSelections } from "./ui/MainMenu";
 import { PauseMenu } from "./ui/PauseMenu";
+import { ClickToPlayPrompt } from "./ui/ClickToPlayPrompt";
 import { Terminal } from "./ui/Terminal";
 import { PasswordLock } from "./ui/PasswordLock";
 import { GameState } from "./state/GameState";
@@ -511,8 +512,19 @@ function startGame(selections: GameSelections): void {
     playerController.controls.lock();
   });
 
+  // Menu-fixes follow-up (not yet assigned a checkpoint number):
+  // distinguishes "never yet locked pointer this session" from "was
+  // playing, lost lock" -- gameState.paused starts true (see
+  // state/GameState.ts) purely as an unconnected default, not because the
+  // player has actually paused anything yet, so it alone can't tell the two
+  // apart. hasEverLocked flips true the first (and every) time a lock
+  // genuinely succeeds and never flips back -- animate() below reads it to
+  // decide between showing clickToPlayPrompt (never locked yet) or the full
+  // pauseMenu (was playing, paused).
+  let hasEverLocked = false;
   document.addEventListener("pointerlockchange", () => {
     gameState.paused = document.pointerLockElement !== canvas;
+    if (document.pointerLockElement === canvas) hasEverLocked = true;
   });
 
   // Pause-menu follow-up: the previously-deferred real mid-session return.
@@ -525,6 +537,9 @@ function startGame(selections: GameSelections): void {
     () => playerController.controls.lock(),
     () => window.location.reload(),
   );
+  // Menu-fixes follow-up: shown instead of pauseMenu for the very first
+  // paused instant, before hasEverLocked is ever true (see animate()).
+  const clickToPlayPrompt = new ClickToPlayPrompt();
 
   // Escape/pointer-lock-loss already sets gameState.paused via the
   // pointerlockchange listener above. These two are the task's explicit
@@ -576,10 +591,17 @@ function startGame(selections: GameSelections): void {
       reloadSequencer.update(delta);
     }
     hud.update(delta);
-    // Shown only while genuinely paused mid-run: alive (not covered by the
-    // death panel instead), paused, and no Terminal/PasswordLock overlay
-    // already occupying the screen (uiOverlayOpen, tracked above).
-    pauseMenu.setVisible(gameState.playerState === "alive" && gameState.paused && !uiOverlayOpen);
+    // Menu-fixes follow-up: the shared "would a pause-ish overlay make
+    // sense right now at all" condition, then split between the two
+    // possible overlays by hasEverLocked -- clickToPlayPrompt for the very
+    // first paused instant (never locked yet, so there's no run to pause),
+    // pauseMenu for every pause after the player has actually been playing.
+    // Alive (not covered by the death panel instead), paused, and no
+    // Terminal/PasswordLock overlay already occupying the screen
+    // (uiOverlayOpen, tracked above).
+    const showPauseLikeOverlay = gameState.playerState === "alive" && gameState.paused && !uiOverlayOpen;
+    pauseMenu.setVisible(showPauseLikeOverlay && hasEverLocked);
+    clickToPlayPrompt.setVisible(showPauseLikeOverlay && !hasEverLocked);
     sceneManager.render();
     // Checkpoint 22: exactly one of the three viewmodels renders per frame.
     // While meleeSequencer is idle, this is unchanged from checkpoint 21 --

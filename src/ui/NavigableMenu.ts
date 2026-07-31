@@ -89,6 +89,16 @@ export class NavigableMenu {
     this.render();
   }
 
+  // Menu-fixes follow-up (not yet assigned a checkpoint number): lets a
+  // caller update one item's own label in place -- ControlsSettingsMenu's
+  // Mode/Map collapse toggle needs this to flip its text between
+  // "> more options <"/"> fewer options <" without rebuilding the whole
+  // NavigableMenu (which would also lose the current highlightedIndex).
+  setItemLabel(index: number, label: string): void {
+    this.items[index].label = label;
+    this.render();
+  }
+
   // Re-attaches its own window-level keydown listener and resets the
   // highlight back to the first item -- called every time a screen becomes
   // visible, so reopening (e.g. Controls & Settings a second time) always
