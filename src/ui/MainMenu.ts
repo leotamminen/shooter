@@ -4,6 +4,7 @@ import { ControlsSettingsMenu } from "./ControlsSettingsMenu";
 import { CreditsScreen } from "./CreditsScreen";
 import type { GameSelections } from "./gameSelections";
 import { TERMINAL_TEXT, TERMINAL_DIM_TEXT, TERMINAL_MENU_BACKGROUND } from "./terminalTheme";
+import { GAME_NAME } from "../content/gameInfo";
 
 export type { GameSelections, ModeId } from "./gameSelections";
 
@@ -58,13 +59,13 @@ export class MainMenu {
     });
 
     const heading = createDiv({ fontSize: "32px", fontWeight: "bold", letterSpacing: "0.1em" });
-    heading.textContent = `NIGHTFALL v${GAME_VERSION}-f${__BUILD_NUMBER__}`;
+    heading.textContent = `${GAME_NAME} v${GAME_VERSION}-f${__BUILD_NUMBER__}`;
     this.root.appendChild(heading);
 
     // A small fake-prompt flourish -- tasteful, not a full fake shell, per
     // this task's own explicit caution. Purely decorative, no real input.
     const prompt = createDiv({ fontSize: "13px", color: TERMINAL_DIM_TEXT });
-    prompt.textContent = "guest@nightfall:~$ ./launch";
+    prompt.textContent = `guest@${GAME_NAME.toLowerCase()}:~$ ./launch`;
     this.root.appendChild(prompt);
 
     this.topLevelView = createDiv({

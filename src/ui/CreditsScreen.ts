@@ -1,5 +1,6 @@
 import { NavigableMenu } from "./NavigableMenu";
 import { TERMINAL_TEXT, TERMINAL_DIM_TEXT } from "./terminalTheme";
+import { GAME_NAME } from "../content/gameInfo";
 
 function createDiv(styles: Partial<CSSStyleDeclaration>): HTMLDivElement {
   const el = document.createElement("div");
@@ -29,7 +30,7 @@ export class CreditsScreen {
     this.element.appendChild(heading);
 
     const gameName = createDiv({ fontSize: "16px", fontWeight: "bold" });
-    gameName.textContent = "NIGHTFALL";
+    gameName.textContent = GAME_NAME;
     this.element.appendChild(gameName);
 
     const line = createDiv({ fontSize: "13px", color: TERMINAL_DIM_TEXT });

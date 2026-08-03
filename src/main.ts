@@ -39,6 +39,13 @@ import {
   RESTRICTED_COMMAND_USAGE,
   CORE_COMMANDS,
 } from "./content/terminalCommands";
+import { GAME_NAME } from "./content/gameInfo";
+
+// Set immediately at module load, before the main menu (or anything else)
+// ever renders -- index.html's own <title> is a generic placeholder
+// specifically so this one assignment is the single source of truth for
+// the browser tab title, matching every other on-screen use of the name.
+document.title = GAME_NAME;
 
 // Everything that used to run at module load now runs once, here, only
 // after the main menu's Start button fires with the player's choices.
