@@ -312,6 +312,55 @@ const PHONE_SIZE: [number, number, number] = [0.16, 0.05, 0.08];
 const COMPUTER_MOUSE_COLOR = 0x2a2a2a;
 const COMPUTER_MOUSE_SIZE: [number, number, number] = [0.06, 0.03, 0.1];
 
+// Building-facade wall panels (north grid extension follow-up): tall,
+// collidable, modular decoration objects for constructing exterior building
+// walls (a library, per the player's own plan) in the new north area -- see
+// content/maps.ts/CLAUDE.md's own entry for that grid extension. Deliberately
+// its own constant, independent of MapLoader.ts's WALL_HEIGHT (the ordinary
+// grid-wall height) -- these are free-standing decorations, the same
+// category as server_rack/black_desk, not part of the map's wall grid, and
+// must never be confused with or derived from it. Roughly double
+// WALL_HEIGHT (3) specifically so a building facade placed anywhere near an
+// ordinary map wall unmistakably reads as taller/different, per the task's
+// own explicit goal.
+const BUILDING_WALL_HEIGHT = 6;
+// Length (the horizontal span along the wall line a panel covers) -- 3 grid
+// cells' worth, so a content author placing a row of these can reason about
+// spacing in the same CELL_SIZE units the grid itself uses, even though
+// these panels don't touch the grid at all.
+const BUILDING_WALL_LENGTH = 3 * CELL_SIZE;
+const BUILDING_WALL_THICKNESS = 0.18; // same order of magnitude as DOOR_PROP_DEPTH's thin-slab thickness
+const BUILDING_WALL_PANEL_SIZE: [number, number, number] = [
+  BUILDING_WALL_LENGTH,
+  BUILDING_WALL_HEIGHT,
+  BUILDING_WALL_THICKNESS,
+];
+const BUILDING_WALL_COLOR = 0x6b6459;
+// Insets are flat painted-on patches, not real openings -- a second, thin
+// box sitting just proud of the panel's own +Z face (the same "front" side
+// convention createSignDecoration()'s own board texture and
+// createTerminal()'s default-rotationY screen already use), never a hole
+// cut into the panel itself. A small fixed proud offset (matching
+// createServerRackDecoration()'s own "flush against, and slightly proud of"
+// light placement) avoids z-fighting against the panel's own face.
+const BUILDING_WALL_INSET_THICKNESS = 0.03;
+const BUILDING_WALL_INSET_Z =
+  BUILDING_WALL_THICKNESS / 2 + BUILDING_WALL_INSET_THICKNESS / 2 - 0.005;
+const BUILDING_WALL_WINDOW_COLOR = 0x9fc9e0;
+// wall_window_1: one large centered window, upper-middle of the panel.
+const BUILDING_WALL_WINDOW_1_SIZE: [number, number] = [2.0, 3.0];
+const BUILDING_WALL_WINDOW_1_Y = BUILDING_WALL_HEIGHT * 0.55;
+// wall_window_2: two smaller windows side by side -- a different position/
+// size/count from wall_window_1 specifically so alternating the two along a
+// wall doesn't look identical/repetitive.
+const BUILDING_WALL_WINDOW_2_SIZE: [number, number] = [1.1, 1.6];
+const BUILDING_WALL_WINDOW_2_Y = BUILDING_WALL_HEIGHT * 0.55;
+const BUILDING_WALL_WINDOW_2_X_OFFSET = 1.5;
+// wall_door: a dark inset near the base suggesting a doorway -- door-like
+// proportions, bottom edge flush with the floor (not centered on the panel).
+const BUILDING_WALL_DOOR_COLOR = 0x1c1a17;
+const BUILDING_WALL_DOOR_SIZE: [number, number] = [1.4, 2.4];
+
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
 // some locks have no real terminal/filesystem behind them, so this
@@ -1436,6 +1485,22 @@ export class MapEntitySystem {
       this.createBlackDeskDecoration(entity);
       return;
     }
+    if (entity.variant === "wall_plain") {
+      this.createBuildingWallDecoration(entity, "plain");
+      return;
+    }
+    if (entity.variant === "wall_window_1") {
+      this.createBuildingWallDecoration(entity, "window1");
+      return;
+    }
+    if (entity.variant === "wall_window_2") {
+      this.createBuildingWallDecoration(entity, "window2");
+      return;
+    }
+    if (entity.variant === "wall_door") {
+      this.createBuildingWallDecoration(entity, "door");
+      return;
+    }
     if (entity.variant === "computer_off") {
       this.createComputerOffDecoration(entity);
       return;
@@ -1768,6 +1833,63 @@ export class MapEntitySystem {
     }
 
     group.position.set(...entity.position);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
+
+    this.collidableDecorationBoxes.push(computeCollisionBox(group));
+  }
+
+  // Building-facade wall panels (north grid extension follow-up): one
+  // shared method for all four variants -- "plain"/"window1"/"window2"/
+  // "door" only ever differ in which inset(s), if any, sit on top of the
+  // same base panel, the same "one parameterized method, not near-duplicate
+  // methods" precedent createShelfDecoration()'s own shelf/shelf_alt split
+  // already established. Floor-anchored like createDoorPropDecoration()
+  // (the group's own Y is always 0, ignoring entity.position[1] entirely --
+  // the panel box itself is centered at BUILDING_WALL_HEIGHT/2 within the
+  // group), and collidable like server_rack/black_desk/shelf (one bounding
+  // box over the whole group, computed once).
+  private createBuildingWallDecoration(
+    entity: MapEntity,
+    kind: "plain" | "window1" | "window2" | "door",
+  ): void {
+    const group = new THREE.Group();
+    this.addDecorationBox(
+      group,
+      BUILDING_WALL_PANEL_SIZE,
+      [0, BUILDING_WALL_HEIGHT / 2, 0],
+      BUILDING_WALL_COLOR,
+    );
+
+    if (kind === "window1") {
+      const [w, h] = BUILDING_WALL_WINDOW_1_SIZE;
+      this.addDecorationBox(
+        group,
+        [w, h, BUILDING_WALL_INSET_THICKNESS],
+        [0, BUILDING_WALL_WINDOW_1_Y, BUILDING_WALL_INSET_Z],
+        BUILDING_WALL_WINDOW_COLOR,
+      );
+    } else if (kind === "window2") {
+      const [w, h] = BUILDING_WALL_WINDOW_2_SIZE;
+      for (const x of [-BUILDING_WALL_WINDOW_2_X_OFFSET, BUILDING_WALL_WINDOW_2_X_OFFSET]) {
+        this.addDecorationBox(
+          group,
+          [w, h, BUILDING_WALL_INSET_THICKNESS],
+          [x, BUILDING_WALL_WINDOW_2_Y, BUILDING_WALL_INSET_Z],
+          BUILDING_WALL_WINDOW_COLOR,
+        );
+      }
+    } else if (kind === "door") {
+      const [w, h] = BUILDING_WALL_DOOR_SIZE;
+      this.addDecorationBox(
+        group,
+        [w, h, BUILDING_WALL_INSET_THICKNESS],
+        [0, h / 2, BUILDING_WALL_INSET_Z], // bottom edge flush with the floor
+        BUILDING_WALL_DOOR_COLOR,
+      );
+    }
+
+    group.position.set(entity.position[0], 0, entity.position[2]);
     group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
     this.group.add(group);
 

@@ -184,8 +184,24 @@ export interface MapEntity {
   // Room 2 still uses it, "computer_off" reuses utils/ComputerMesh.ts's
   // createComputerMesh(false) purely as static decoration (no interaction
   // of any kind, unlike the gated terminals that can power on),
-  // "phone"/"computer_mouse" are trivial small boxes, no interactivity. No
-  // gameplay meaning either way. Absent defaults to "crate".
+  // "phone"/"computer_mouse" are trivial small boxes, no interactivity.
+  // "wall_plain"/"wall_window_1"/"wall_window_2"/"wall_door" (north grid
+  // extension follow-up) are tall, collidable building-facade panels for
+  // constructing exterior walls in the new north area (see
+  // BUILDING_WALL_HEIGHT below) -- deliberately independent of WALL_HEIGHT/
+  // CELL_SIZE-driven grid-wall geometry entirely, since these are
+  // free-standing decoration objects (the same category as
+  // server_rack/black_desk's own collision treatment), not part of the
+  // map's wall grid. "wall_plain" is a bare panel; "wall_window_1"/
+  // "wall_window_2" add one large window or two smaller ones (visibly
+  // distinct from each other so alternating them along a wall doesn't
+  // repeat); "wall_door" adds a dark inset near the base suggesting a
+  // doorway -- all three insets are flat painted-on patches (a second,
+  // thin, differently-colored box proud of the panel's own +Z face), not
+  // real openings; none of these buildings are enterable. No placement
+  // anywhere yet -- the actual building layout is a separate, upcoming
+  // hand-built task. No gameplay meaning either way. Absent defaults to
+  // "crate".
     | "crate"
     | "debris"
     | "desk"
@@ -200,7 +216,11 @@ export interface MapEntity {
     | "black_desk"
     | "computer_off"
     | "phone"
-    | "computer_mouse";
+    | "computer_mouse"
+    | "wall_plain"
+    | "wall_window_1"
+    | "wall_window_2"
+    | "wall_door";
   rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
   // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
   // hand-edited content file), defaulting to 0 (unchanged facing) when
