@@ -15,4 +15,4 @@ export const FREEZE_ENEMIES = false;
 // core/PlayerController.ts's update() checks this and skips its collision
 // resolution entirely when true -- free movement through walls/doors/
 // decorations, movement speed/controls otherwise unchanged.
-export const NOCLIP = false;
+export const NOCLIP = true;
