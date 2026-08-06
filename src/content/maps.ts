@@ -790,6 +790,15 @@ export const MAPS: MapDef[] = [
         [18, 0.9, 50],
       ],
     },
+    // North grid extension preview: one of each new building-facade wall
+    // variant, rough placement only (exact positions confirmed open floor,
+    // including each panel's full 6-unit footprint, via a script-parsed
+    // grid check -- not assumed) so the real library layout can be planned
+    // around seeing them in-game. Expected to be rearranged by hand.
+    { id: "campaign_wall_sample_1", type: "decoration", variant: "wall_plain", position: [24, 0, 30] },
+    { id: "campaign_wall_sample_2", type: "decoration", variant: "wall_window_1", position: [30, 0, 30] },
+    { id: "campaign_wall_sample_3", type: "decoration", variant: "wall_window_2", position: [36, 0, 30] },
+    { id: "campaign_wall_sample_4", type: "decoration", variant: "wall_door", position: [42, 0, 30] },
   ],
   },
 ];
