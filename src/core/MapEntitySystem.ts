@@ -360,6 +360,28 @@ const BUILDING_WALL_WINDOW_2_X_OFFSET = 1.5;
 // proportions, bottom edge flush with the floor (not centered on the panel).
 const BUILDING_WALL_DOOR_COLOR = 0x1c1a17;
 const BUILDING_WALL_DOOR_SIZE: [number, number] = [1.4, 2.4];
+// Window mullions (detail polish follow-up): a classic 4-pane cross, two
+// thin bars per pane -- dark frame color, distinct from both the glass and
+// the panel itself. Sit proud of the glass the same "proud of the prior
+// surface by a small fixed offset" way the glass itself sits proud of the
+// panel (BUILDING_WALL_INSET_Z's own technique, one layer further out).
+const BUILDING_WALL_MULLION_COLOR = 0x2a2620;
+const BUILDING_WALL_MULLION_THICKNESS = 0.04;
+const BUILDING_WALL_MULLION_DEPTH = 0.02;
+const BUILDING_WALL_MULLION_Z =
+  BUILDING_WALL_INSET_Z + BUILDING_WALL_INSET_THICKNESS / 2 + BUILDING_WALL_MULLION_DEPTH / 2 - 0.005;
+// Door handle (detail polish follow-up): one small protruding box near the
+// door inset's own right edge (inset half-width is BUILDING_WALL_DOOR_SIZE[0]
+// / 2 = 0.7), at roughly waist height -- the same restrained "simple
+// recognizable shape" treatment as PHONE_SIZE/COMPUTER_MOUSE_SIZE above, not
+// a modeled handle. Proud of the door inset's own face by the same
+// "one layer further out" technique the mullions above already use.
+const BUILDING_WALL_HANDLE_COLOR = 0x8a8a8a;
+const BUILDING_WALL_HANDLE_SIZE: [number, number, number] = [0.04, 0.18, 0.05];
+const BUILDING_WALL_HANDLE_Y = 1.0;
+const BUILDING_WALL_HANDLE_X = BUILDING_WALL_DOOR_SIZE[0] / 2 - 0.15;
+const BUILDING_WALL_HANDLE_Z =
+  BUILDING_WALL_INSET_Z + BUILDING_WALL_INSET_THICKNESS / 2 + BUILDING_WALL_HANDLE_SIZE[2] / 2 - 0.005;
 
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
@@ -1849,6 +1871,28 @@ export class MapEntitySystem {
   // the panel box itself is centered at BUILDING_WALL_HEIGHT/2 within the
   // group), and collidable like server_rack/black_desk/shelf (one bounding
   // box over the whole group, computed once).
+  // Detail polish follow-up: one horizontal + one vertical bar crossing at
+  // (x, y), sized to the pane's own width/height -- a classic 4-pane divider
+  // read at a glance, not a real muntin grid. Shared by both window kinds
+  // below (identical technique, only the pane's own x/y/w/h differ), the
+  // same "one small helper, not duplicated inline" precedent
+  // addDecorationBox() itself already established for every decoration
+  // variant in this file.
+  private addWindowMullions(group: THREE.Group, x: number, y: number, w: number, h: number): void {
+    this.addDecorationBox(
+      group,
+      [w, BUILDING_WALL_MULLION_THICKNESS, BUILDING_WALL_MULLION_DEPTH],
+      [x, y, BUILDING_WALL_MULLION_Z],
+      BUILDING_WALL_MULLION_COLOR,
+    );
+    this.addDecorationBox(
+      group,
+      [BUILDING_WALL_MULLION_THICKNESS, h, BUILDING_WALL_MULLION_DEPTH],
+      [x, y, BUILDING_WALL_MULLION_Z],
+      BUILDING_WALL_MULLION_COLOR,
+    );
+  }
+
   private createBuildingWallDecoration(
     entity: MapEntity,
     kind: "plain" | "window1" | "window2" | "door",
@@ -1869,6 +1913,7 @@ export class MapEntitySystem {
         [0, BUILDING_WALL_WINDOW_1_Y, BUILDING_WALL_INSET_Z],
         BUILDING_WALL_WINDOW_COLOR,
       );
+      this.addWindowMullions(group, 0, BUILDING_WALL_WINDOW_1_Y, w, h);
     } else if (kind === "window2") {
       const [w, h] = BUILDING_WALL_WINDOW_2_SIZE;
       for (const x of [-BUILDING_WALL_WINDOW_2_X_OFFSET, BUILDING_WALL_WINDOW_2_X_OFFSET]) {
@@ -1878,6 +1923,7 @@ export class MapEntitySystem {
           [x, BUILDING_WALL_WINDOW_2_Y, BUILDING_WALL_INSET_Z],
           BUILDING_WALL_WINDOW_COLOR,
         );
+        this.addWindowMullions(group, x, BUILDING_WALL_WINDOW_2_Y, w, h);
       }
     } else if (kind === "door") {
       const [w, h] = BUILDING_WALL_DOOR_SIZE;
@@ -1886,6 +1932,12 @@ export class MapEntitySystem {
         [w, h, BUILDING_WALL_INSET_THICKNESS],
         [0, h / 2, BUILDING_WALL_INSET_Z], // bottom edge flush with the floor
         BUILDING_WALL_DOOR_COLOR,
+      );
+      this.addDecorationBox(
+        group,
+        BUILDING_WALL_HANDLE_SIZE,
+        [BUILDING_WALL_HANDLE_X, BUILDING_WALL_HANDLE_Y, BUILDING_WALL_HANDLE_Z],
+        BUILDING_WALL_HANDLE_COLOR,
       );
     }
 
