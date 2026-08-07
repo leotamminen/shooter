@@ -198,10 +198,29 @@ export interface MapEntity {
   // repeat); "wall_door" adds a dark inset near the base suggesting a
   // doorway -- all three insets are flat painted-on patches (a second,
   // thin, differently-colored box proud of the panel's own +Z face), not
-  // real openings; none of these buildings are enterable. No placement
-  // anywhere yet -- the actual building layout is a separate, upcoming
-  // hand-built task. No gameplay meaning either way. Absent defaults to
-  // "crate".
+  // real openings; none of these buildings are enterable. No gameplay
+  // meaning either way.
+  // "house_small"/"house_medium"/"house_large" (perimeter bump-house
+  // follow-up) replace what used to be built from several of the above
+  // wall panels assembled into a U-shaped bump (side walls + a back wall +
+  // corner connectors) -- after three separate attempts to fix a visible
+  // seam at the assembly's own internal joints, the assembly approach was
+  // abandoned entirely in favor of one single, genuinely solid box mesh per
+  // house (see createHouseDecoration() below): a single continuous
+  // BoxGeometry cannot have an internal seam, by construction, so there is
+  // nothing left to misalign. All three are collidable (the same
+  // server_rack/black_desk/wall_* treatment) and share the wall panels' own
+  // BUILDING_WALL_COLOR. They differ only in size (small roughly matches
+  // the footprint the old bump assembly used to occupy; medium is
+  // noticeably wider; large is wider still and, uniquely, taller than
+  // BUILDING_WALL_HEIGHT) and in how many painted-on windows each one's
+  // front face gets (1/2/3 respectively, always a visibly different
+  // count/arrangement between the three) -- every window/door inset reuses
+  // the exact same "thin box proud of the front face" technique the wall_*
+  // variants already established, so these overlays can never reintroduce
+  // a seam, since there's no structural joint underneath them to begin
+  // with. Each has exactly one door. No gameplay meaning; none are
+  // enterable.
     | "crate"
     | "debris"
     | "desk"
@@ -220,7 +239,10 @@ export interface MapEntity {
     | "wall_plain"
     | "wall_window_1"
     | "wall_window_2"
-    | "wall_door";
+    | "wall_door"
+    | "house_small"
+    | "house_medium"
+    | "house_large";
   rotationY?: number; // checkpoint 20 (corrected same checkpoint): a
   // generic Y-axis facing, in DEGREES (not radians -- friendlier for a
   // hand-edited content file), defaulting to 0 (unchanged facing) when

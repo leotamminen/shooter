@@ -853,9 +853,16 @@ export const MAPS: MapDef[] = [
     // overlaps beyond the expected small flush corner-join footprint.
     { id: "campaign_perimeter_wall_1", type: "decoration", variant: "wall_window_1", rotationY: 90, position: [-1, 0, 38] },
     { id: "campaign_perimeter_wall_2", type: "decoration", variant: "wall_plain", rotationY: 90, position: [-1, 0, 32] },
-    { id: "campaign_perimeter_wall_3", type: "decoration", variant: "wall_plain", rotationY: 0, position: [2, 0, 29] },
-    { id: "campaign_perimeter_wall_4", type: "decoration", variant: "wall_door", rotationY: 90, position: [4.88, 0, 26] },
-    { id: "campaign_perimeter_wall_5", type: "decoration", variant: "wall_plain", rotationY: 0, position: [2, 0, 23] },
+    // House-bump follow-up: campaign_perimeter_wall_3/4/5 (the west bump's
+    // connector-in/back-wall/connector-out trio) are replaced by a single
+    // house_small box, campaign_house_1 -- see the file-level comment above
+    // and CLAUDE.md's decisions log for why (three panel-alignment fixes
+    // all left a visible seam; a single box has no internal seam by
+    // construction). Position/rotation script-computed (not hand-guessed)
+    // so the house's own back edge overlaps -- never gaps -- the main
+    // perimeter line at x=-1, and its width comfortably spans the exact
+    // z=[23,29] gap the old trio used to fill between wall_2 and wall_6.
+    { id: "campaign_house_1", type: "decoration", variant: "house_small", rotationY: 90, position: [1.95, 0, 26] },
     { id: "campaign_perimeter_wall_6", type: "decoration", variant: "wall_plain", rotationY: 90, position: [-1, 0, 20] },
     { id: "campaign_perimeter_wall_7", type: "decoration", variant: "wall_plain", rotationY: 90, position: [-1, 0, 14] },
     { id: "campaign_perimeter_wall_8", type: "decoration", variant: "wall_plain", rotationY: 90, position: [-1, 0, 8] },
@@ -863,9 +870,11 @@ export const MAPS: MapDef[] = [
     { id: "campaign_perimeter_wall_10", type: "decoration", variant: "wall_plain", rotationY: 0, position: [2, 0, -1] },
     { id: "campaign_perimeter_wall_11", type: "decoration", variant: "wall_plain", rotationY: 0, position: [8, 0, -1] },
     { id: "campaign_perimeter_wall_12", type: "decoration", variant: "wall_window_2", rotationY: 0, position: [14, 0, -1] },
-    { id: "campaign_perimeter_wall_13", type: "decoration", variant: "wall_plain", rotationY: 90, position: [17, 0, 2] },
-    { id: "campaign_perimeter_wall_14", type: "decoration", variant: "wall_door", rotationY: 0, position: [20, 0, 4.88] },
-    { id: "campaign_perimeter_wall_15", type: "decoration", variant: "wall_plain", rotationY: 90, position: [23, 0, 2] },
+    // House-bump follow-up: the north bump's own trio (wall_13/14/15)
+    // replaced by campaign_house_2, house_small -- same reasoning as
+    // campaign_house_1 above. Covers the exact x=[17,23] gap between
+    // wall_12 and wall_16, back edge overlapping the main line at z=-1.
+    { id: "campaign_house_2", type: "decoration", variant: "house_small", rotationY: 0, position: [20, 0, 1.95] },
     { id: "campaign_perimeter_wall_16", type: "decoration", variant: "wall_plain", rotationY: 0, position: [26, 0, -1] },
     { id: "campaign_perimeter_wall_17", type: "decoration", variant: "wall_plain", rotationY: 0, position: [32, 0, -1] },
     { id: "campaign_perimeter_wall_18", type: "decoration", variant: "wall_plain", rotationY: 0, position: [38, 0, -1] },
@@ -874,18 +883,23 @@ export const MAPS: MapDef[] = [
     { id: "campaign_perimeter_wall_21", type: "decoration", variant: "wall_plain", rotationY: 270, position: [53, 0, 2] },
     { id: "campaign_perimeter_wall_22", type: "decoration", variant: "wall_plain", rotationY: 270, position: [53, 0, 8] },
     { id: "campaign_perimeter_wall_23", type: "decoration", variant: "wall_plain", rotationY: 270, position: [53, 0, 14] },
-    { id: "campaign_perimeter_wall_24", type: "decoration", variant: "wall_plain", rotationY: 0, position: [50, 0, 17] },
-    { id: "campaign_perimeter_wall_25", type: "decoration", variant: "wall_window_1", rotationY: 270, position: [47.12, 0, 20] },
-    { id: "campaign_perimeter_wall_26", type: "decoration", variant: "wall_door", rotationY: 270, position: [47.12, 0, 26] },
-    { id: "campaign_perimeter_wall_27", type: "decoration", variant: "wall_plain", rotationY: 0, position: [50, 0, 29] },
+    // House-bump follow-up: the east bump's own quartet (wall_24/25/26/27
+    // -- this was the widest bump, bumpLen=2, two back-wall panels)
+    // replaced by campaign_house_3, house_large -- the widest/tallest of
+    // the 3 house variants, matching this being the widest original bump.
+    // Covers the exact z=[17,29] gap between wall_23 and wall_28, back
+    // edge overlapping the main line at x=53.
+    { id: "campaign_house_3", type: "decoration", variant: "house_large", rotationY: 270, position: [48.85, 0, 23] },
     { id: "campaign_perimeter_wall_28", type: "decoration", variant: "wall_window_1", rotationY: 270, position: [53, 0, 32] },
     { id: "campaign_perimeter_wall_29", type: "decoration", variant: "wall_plain", rotationY: 270, position: [53, 0, 38] },
     { id: "campaign_perimeter_wall_30", type: "decoration", variant: "wall_plain", rotationY: 180, position: [50, 0, 41] },
     { id: "campaign_perimeter_wall_31", type: "decoration", variant: "wall_plain", rotationY: 180, position: [44, 0, 41] },
     { id: "campaign_perimeter_wall_32", type: "decoration", variant: "wall_window_1", rotationY: 180, position: [38, 0, 41] },
-    { id: "campaign_perimeter_wall_33", type: "decoration", variant: "wall_plain", rotationY: 90, position: [35, 0, 38] },
-    { id: "campaign_perimeter_wall_34", type: "decoration", variant: "wall_door", rotationY: 180, position: [32, 0, 35.12] },
-    { id: "campaign_perimeter_wall_35", type: "decoration", variant: "wall_plain", rotationY: 90, position: [29, 0, 38] },
+    // House-bump follow-up: the south bump's own trio (wall_33/34/35)
+    // replaced by campaign_house_4, house_medium. Covers the exact
+    // x=[29,35] gap between wall_32 and wall_36, back edge overlapping the
+    // main line at z=41.
+    { id: "campaign_house_4", type: "decoration", variant: "house_medium", rotationY: 180, position: [32, 0, 37.6] },
     { id: "campaign_perimeter_wall_36", type: "decoration", variant: "wall_plain", rotationY: 180, position: [26, 0, 41] },
     { id: "campaign_perimeter_wall_37", type: "decoration", variant: "wall_plain", rotationY: 180, position: [20, 0, 41] },
     { id: "campaign_perimeter_wall_38", type: "decoration", variant: "wall_plain", rotationY: 180, position: [14, 0, 41] },

@@ -383,6 +383,85 @@ const BUILDING_WALL_HANDLE_X = BUILDING_WALL_DOOR_SIZE[0] / 2 - 0.15;
 const BUILDING_WALL_HANDLE_Z =
   BUILDING_WALL_INSET_Z + BUILDING_WALL_INSET_THICKNESS / 2 + BUILDING_WALL_HANDLE_SIZE[2] / 2 - 0.005;
 
+// Perimeter bump-house follow-up: "house_small"/"house_medium"/"house_large"
+// replace what used to be a U-shaped assembly of several BUILDING_WALL_*
+// panels (two side "connector" panels + a back wall, joined at corners) --
+// three separate attempts to fix a visible seam at those internal joints
+// all failed, so the assembly approach itself was abandoned. Each house is
+// now exactly one THREE.Group holding one single solid box (the entire
+// structural shell, added via addDecorationBox() the same way every other
+// multi-box decoration here is built) plus purely decorative window/door
+// overlays on top -- a single continuous BoxGeometry cannot have an
+// internal seam, so there is nothing left to misalign. Every size is
+// [width, height, depth]: width runs along the wall line (matching the old
+// bump's connector-to-connector span), height is vertical, depth is how far
+// the house pokes inward from the main perimeter line (matching the old
+// bump's own connector length). All three share BUILDING_WALL_COLOR, the
+// same material family as the plain wall panels around them.
+const HOUSE_COLOR = BUILDING_WALL_COLOR;
+// "small" roughly matches the old bump assembly's own footprint (the old
+// back wall was BUILDING_WALL_LENGTH long, poking in by one panel's own
+// BUILDING_WALL_LENGTH-ish depth, at BUILDING_WALL_HEIGHT) -- widened
+// slightly past a bare 6/6 so its own edges comfortably overlap (never
+// gap against) the straight run panels it sits between, the same
+// "prefer overlap over gaps" principle the perimeter-wall alignment fixes
+// already established.
+const HOUSE_SMALL_SIZE: [number, number, number] = [6.2, BUILDING_WALL_HEIGHT, 6.1];
+// "medium" is noticeably wider than small (not just a size bump -- wide
+// enough that it comfortably overlaps *into* its straight-run neighbors on
+// either side rather than merely touching them, which is fine: overlapping
+// solid geometry with solid geometry is invisible, only a gap would be a
+// problem) and a little taller/deeper too, for a clearer size step.
+const HOUSE_MEDIUM_SIZE: [number, number, number] = [9, 6.5, 7];
+// "large" is wider still, and -- uniquely among the three -- taller than
+// BUILDING_WALL_HEIGHT itself, per the task's own explicit requirement.
+// Sized to roughly match the widest original bump (the old east-side bump
+// spanned two BUILDING_WALL_LENGTH back-wall panels, ~12 units).
+const HOUSE_LARGE_SIZE: [number, number, number] = [13, 9, 8.5];
+
+interface HouseWindowSpec {
+  x: number;
+  size: [number, number];
+}
+interface HouseSpec {
+  size: [number, number, number];
+  doorX: number;
+  doorSize: [number, number];
+  windows: HouseWindowSpec[];
+}
+// Door/window layout is deliberately hand-placed per house, not derived
+// from a formula -- each variant's own width dictates how much room there
+// is, and the window COUNT itself (1/2/3) is what makes each variant read
+// as visibly distinct from the other two, per the task's own requirement,
+// not merely "the same layout at a different scale."
+const HOUSE_SPECS: Record<"small" | "medium" | "large", HouseSpec> = {
+  small: {
+    size: HOUSE_SMALL_SIZE,
+    doorX: -1.8,
+    doorSize: [1.4, 2.4],
+    windows: [{ x: 1.2, size: [1.8, 2.6] }],
+  },
+  medium: {
+    size: HOUSE_MEDIUM_SIZE,
+    doorX: -3.2,
+    doorSize: [1.4, 2.6],
+    windows: [
+      { x: -0.3, size: [1.6, 2.2] },
+      { x: 2.4, size: [1.6, 2.2] },
+    ],
+  },
+  large: {
+    size: HOUSE_LARGE_SIZE,
+    doorX: -5,
+    doorSize: [1.6, 2.6],
+    windows: [
+      { x: -1.8, size: [1.8, 2.6] },
+      { x: 1.2, size: [1.8, 2.6] },
+      { x: 4.3, size: [1.8, 2.6] },
+    ],
+  },
+};
+
 // Checkpoint 19: a placeholder TerminalDirectory for a password lock's
 // synthetic TerminalDef (see createPasswordLock()'s "vaultPin" branch) --
 // some locks have no real terminal/filesystem behind them, so this
@@ -1523,6 +1602,18 @@ export class MapEntitySystem {
       this.createBuildingWallDecoration(entity, "door");
       return;
     }
+    if (entity.variant === "house_small") {
+      this.createHouseDecoration(entity, "small");
+      return;
+    }
+    if (entity.variant === "house_medium") {
+      this.createHouseDecoration(entity, "medium");
+      return;
+    }
+    if (entity.variant === "house_large") {
+      this.createHouseDecoration(entity, "large");
+      return;
+    }
     if (entity.variant === "computer_off") {
       this.createComputerOffDecoration(entity);
       return;
@@ -1878,17 +1969,22 @@ export class MapEntitySystem {
   // same "one small helper, not duplicated inline" precedent
   // addDecorationBox() itself already established for every decoration
   // variant in this file.
-  private addWindowMullions(group: THREE.Group, x: number, y: number, w: number, h: number): void {
+  // z is a parameter (perimeter bump-house follow-up), not the fixed
+  // BUILDING_WALL_MULLION_Z constant -- createHouseDecoration()'s own boxes
+  // are far deeper than the thin wall panels this method was originally
+  // built for, so each caller supplies its own "one layer proud of my own
+  // window inset" offset rather than this method assuming the panel's.
+  private addWindowMullions(group: THREE.Group, x: number, y: number, w: number, h: number, z: number): void {
     this.addDecorationBox(
       group,
       [w, BUILDING_WALL_MULLION_THICKNESS, BUILDING_WALL_MULLION_DEPTH],
-      [x, y, BUILDING_WALL_MULLION_Z],
+      [x, y, z],
       BUILDING_WALL_MULLION_COLOR,
     );
     this.addDecorationBox(
       group,
       [BUILDING_WALL_MULLION_THICKNESS, h, BUILDING_WALL_MULLION_DEPTH],
-      [x, y, BUILDING_WALL_MULLION_Z],
+      [x, y, z],
       BUILDING_WALL_MULLION_COLOR,
     );
   }
@@ -1913,7 +2009,7 @@ export class MapEntitySystem {
         [0, BUILDING_WALL_WINDOW_1_Y, BUILDING_WALL_INSET_Z],
         BUILDING_WALL_WINDOW_COLOR,
       );
-      this.addWindowMullions(group, 0, BUILDING_WALL_WINDOW_1_Y, w, h);
+      this.addWindowMullions(group, 0, BUILDING_WALL_WINDOW_1_Y, w, h, BUILDING_WALL_MULLION_Z);
     } else if (kind === "window2") {
       const [w, h] = BUILDING_WALL_WINDOW_2_SIZE;
       for (const x of [-BUILDING_WALL_WINDOW_2_X_OFFSET, BUILDING_WALL_WINDOW_2_X_OFFSET]) {
@@ -1923,7 +2019,7 @@ export class MapEntitySystem {
           [x, BUILDING_WALL_WINDOW_2_Y, BUILDING_WALL_INSET_Z],
           BUILDING_WALL_WINDOW_COLOR,
         );
-        this.addWindowMullions(group, x, BUILDING_WALL_WINDOW_2_Y, w, h);
+        this.addWindowMullions(group, x, BUILDING_WALL_WINDOW_2_Y, w, h, BUILDING_WALL_MULLION_Z);
       }
     } else if (kind === "door") {
       const [w, h] = BUILDING_WALL_DOOR_SIZE;
@@ -1940,6 +2036,62 @@ export class MapEntitySystem {
         BUILDING_WALL_HANDLE_COLOR,
       );
     }
+
+    group.position.set(entity.position[0], 0, entity.position[2]);
+    group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
+    this.group.add(group);
+
+    this.collidableDecorationBoxes.push(computeCollisionBox(group));
+  }
+
+  // Perimeter bump-house follow-up: replaces what a U-shaped assembly of
+  // BUILDING_WALL_* panels used to build (see the HOUSE_SPECS comment
+  // above for the full "why" -- three panel-alignment fixes failed, so a
+  // single box replaces the whole assembly). The shell itself is exactly
+  // one addDecorationBox() call -- one real box, no joints -- floor-
+  // anchored the same way createBuildingWallDecoration()'s own panel is
+  // (group Y always 0, box centered at its own height/2). Window/door
+  // insets reuse the exact same "thin box proud of the front face" +
+  // addWindowMullions()/handle technique that method already established,
+  // just re-based onto this house's own depth (BUILDING_WALL_INSET_Z was
+  // derived from the thin panel's own BUILDING_WALL_THICKNESS -- a real
+  // box's depth is much larger, so each house computes its own inset/
+  // mullion/handle Z the identical way, one layer further out each time).
+  private createHouseDecoration(entity: MapEntity, kind: "small" | "medium" | "large"): void {
+    const spec = HOUSE_SPECS[kind];
+    const [width, height, depth] = spec.size;
+    const insetZ = depth / 2 + BUILDING_WALL_INSET_THICKNESS / 2 - 0.005;
+    const mullionZ = insetZ + BUILDING_WALL_INSET_THICKNESS / 2 + BUILDING_WALL_MULLION_DEPTH / 2 - 0.005;
+    const handleZ = insetZ + BUILDING_WALL_INSET_THICKNESS / 2 + BUILDING_WALL_HANDLE_SIZE[2] / 2 - 0.005;
+
+    const group = new THREE.Group();
+    this.addDecorationBox(group, [width, height, depth], [0, height / 2, 0], HOUSE_COLOR);
+
+    for (const window of spec.windows) {
+      const [w, h] = window.size;
+      const y = height * 0.55;
+      this.addDecorationBox(
+        group,
+        [w, h, BUILDING_WALL_INSET_THICKNESS],
+        [window.x, y, insetZ],
+        BUILDING_WALL_WINDOW_COLOR,
+      );
+      this.addWindowMullions(group, window.x, y, w, h, mullionZ);
+    }
+
+    const [doorW, doorH] = spec.doorSize;
+    this.addDecorationBox(
+      group,
+      [doorW, doorH, BUILDING_WALL_INSET_THICKNESS],
+      [spec.doorX, doorH / 2, insetZ], // bottom edge flush with the floor
+      BUILDING_WALL_DOOR_COLOR,
+    );
+    this.addDecorationBox(
+      group,
+      BUILDING_WALL_HANDLE_SIZE,
+      [spec.doorX + doorW / 2 - 0.15, BUILDING_WALL_HANDLE_Y, handleZ],
+      BUILDING_WALL_HANDLE_COLOR,
+    );
 
     group.position.set(entity.position[0], 0, entity.position[2]);
     group.rotation.y = THREE.MathUtils.degToRad(entity.rotationY ?? 0);
