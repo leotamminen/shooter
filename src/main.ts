@@ -40,6 +40,7 @@ import {
   CORE_COMMANDS,
 } from "./content/terminalCommands";
 import { GAME_NAME } from "./content/gameInfo";
+import { DEV_MODE, toggleNoclip } from "./core/devConfig";
 
 // Set immediately at module load, before the main menu (or anything else)
 // ever renders -- index.html's own <title> is a generic placeholder
@@ -562,6 +563,17 @@ function startGame(selections: GameSelections): void {
   });
   canvas.addEventListener("mouseleave", () => {
     playerController.controls.unlock();
+  });
+
+  // NOCLIP hotkey follow-up: DEV_MODE is checked fresh on every keypress
+  // (not cached in a variable at startup), so flipping it to false in
+  // core/devConfig.ts fully disables this hotkey with no other change
+  // needed here. Purely a runtime, in-memory toggle -- toggleNoclip() only
+  // mutates the NOCLIP binding, nothing is ever written to disk, so this
+  // never persists across a reload.
+  window.addEventListener("keydown", (event) => {
+    if (!DEV_MODE) return;
+    if (event.code === "KeyN") toggleNoclip();
   });
 
   const modeClock = new THREE.Clock();

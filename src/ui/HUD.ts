@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Raycast } from "../core/utils/Raycast";
 import { Countdown } from "../core/utils/Countdown";
-import { SHOW_DEV_COORDINATES } from "../core/devConfig";
+import { SHOW_DEV_COORDINATES, NOCLIP } from "../core/devConfig";
 import type { GameState } from "../state/GameState";
 import type { GameMode } from "../modes/GameMode";
 import type { RaycastRegistry } from "../core/RaycastRegistry";
@@ -68,6 +68,16 @@ export class HUD {
   // hidden via CSS, whenever the flag is off -- no element is ever created,
   // so there's nothing left over to accidentally show, style, or query.
   private readonly devCoordinatesEl: HTMLDivElement | null;
+  // NOCLIP hotkey follow-up: devCoordinatesEl above is now just the panel
+  // wrapper -- devCoordinatesTextEl (coords/yaw, unchanged pink) and
+  // devNoclipEl (a separate child line, its own color set independently
+  // every frame: green/red) are two children within it, so the NOCLIP
+  // status reads as part of the one dev overlay rather than a second
+  // standalone box, while still letting the two lines' colors diverge --
+  // something a single shared textContent string on the wrapper itself
+  // couldn't do.
+  private readonly devCoordinatesTextEl: HTMLDivElement | null;
+  private readonly devNoclipEl: HTMLDivElement | null;
   private readonly getPlayerPosition: () => { x: number; z: number };
 
   private readonly enemyLabels = new Map<string, HTMLDivElement>();
@@ -254,15 +264,19 @@ export class HUD {
         bottom: "12px",
         fontFamily: "monospace",
         fontSize: "12px",
-        color: "#ff33cc",
         background: "rgba(0, 0, 0, 0.55)",
         padding: "4px 8px",
         borderRadius: "4px",
-        whiteSpace: "pre-line",
       });
+      this.devCoordinatesTextEl = createDiv({ whiteSpace: "pre-line", color: "#ff33cc" });
+      this.devNoclipEl = createDiv({ whiteSpace: "pre-line" });
+      this.devCoordinatesEl.appendChild(this.devCoordinatesTextEl);
+      this.devCoordinatesEl.appendChild(this.devNoclipEl);
       root.appendChild(this.devCoordinatesEl);
     } else {
       this.devCoordinatesEl = null;
+      this.devCoordinatesTextEl = null;
+      this.devNoclipEl = null;
     }
 
     document.body.appendChild(root);
@@ -432,15 +446,23 @@ export class HUD {
   // no use for y, this project has no verticality) -- not a second way to
   // read x/z, just the one axis getPosition() doesn't cover.
   private updateDevCoordinates(): void {
-    if (!this.devCoordinatesEl) return;
+    if (!this.devCoordinatesEl || !this.devCoordinatesTextEl || !this.devNoclipEl) return;
 
     const { x, z } = this.getPlayerPosition();
     const y = this.camera.position.y;
     const yawDegrees = this.computeYawDegrees();
 
-    this.devCoordinatesEl.textContent =
+    this.devCoordinatesTextEl.textContent =
       `[DEV] x: ${x.toFixed(2)}  y: ${y.toFixed(2)}  z: ${z.toFixed(2)}\n` +
       `yaw: ${yawDegrees.toFixed(0)}°`;
+
+    // NOCLIP hotkey follow-up: read live every frame (NOCLIP is a mutable
+    // `let` binding, toggled at runtime by main.ts's N-key handler via
+    // toggleNoclip()) -- an ES module import of a `let` export is a live
+    // binding, so this always reflects the current value, never a stale
+    // snapshot taken at HUD construction time.
+    this.devNoclipEl.textContent = `NOCLIP: ${NOCLIP ? "ON" : "OFF"}`;
+    this.devNoclipEl.style.color = NOCLIP ? "#33ff66" : "#ff3333";
   }
 
   // Decomposes the camera's quaternion with an explicit YXZ Euler order --
